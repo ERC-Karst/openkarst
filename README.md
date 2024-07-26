@@ -6,7 +6,7 @@ openKARST is a Python package for modeling and simulating flow in karst networks
 
 - Steady-state and transient flow simulation in karst networks using the Saint-Venant equation (dynamic wave equation) 
 - Dynamic switching between free surface and pressurized flows
-- Laminar and turbulent flow dyanmics
+- Laminar and turbulent flow dynamics
 - Support for circular conduits and free surface channels
 - Data loader for ERC KARST cave network files
 - PyVista 3D visualization tool
