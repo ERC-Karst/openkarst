@@ -1,0 +1,46 @@
+site_name: openKARST Documentation
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - Examples: examples.md
+  - Contributing: contributing.md
+  - API Reference:
+      - openkarst: reference/openkarst.md
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_source: true
+            show_signature: false
+            show_submodules: true
+            group_by_category: true
+            show_if_no_docstring: true
+            docstring_style: google
+            render_module_header: true
+            show_root_full_path: false
+            heading_level: 3
+            filters: []
+
+markdown_extensions:
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  
+theme:
+  name: material
+  features:
+    - content.tabs.link
+  
+
+extra:
+  paths:
+    - src

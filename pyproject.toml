@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openkarst"
+version = "0.1.0"
+description = "A package for simulating flow in karst conduit networks"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+    { name = "Jannes Kordilla", email = "jannes.kordilla@idaea.csic.es" }
+]
+urls = { "Homepage" = "https://github.com/ERC-Karst/openkarst" }
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Development Status :: 4 - Beta",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering",
+    "Intended Audience :: Science/Research"
+]
+requires-python = ">=3.11"
+dependencies = [
+    "numpy",
+    "scipy",
+    "matplotlib",
+    "networkx",
+    "openpnm",
+    "imageio-ffmpeg",
+    "pyvista",
+    "termcolor"
+]
+
+[project.optional-dependencies]
+dev = [
+    "mkdocs",
+    "mkdocs-material"
+]
+
+
