@@ -6,5 +6,6 @@ This site will provide you with information on how to use openKARST. At this poi
 
 - [Installation](installation.md)
 - [Examples](examples.md)
+- [Parameter Reference](parameter_reference.md)
 - [Contributing](contributing.md)
 - [API Reference](reference/openkarst.md)
