@@ -9,6 +9,7 @@ openKARST is a Python package for modeling and simulating flow in karst networks
 - Laminar and turbulent flow dynamics
 - Support for circular conduits and free surface channels
 - Data loader for ERC KARST cave network files
+- Data exporter for VTK files
 - PyVista 3D visualization tool
 - Compatibility with OpenPNM for network creation and manipulation
 
