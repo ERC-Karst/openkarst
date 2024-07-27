@@ -9,3 +9,4 @@ Created on Fri Jul 19 11:41:26 2024
 
 from .results_handling import initialize_results_container, store_results
 from .cave_data_loader import CaveDataLoader
+from .vtk_data_exporter import VtkDataExporter
