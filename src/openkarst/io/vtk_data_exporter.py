@@ -69,10 +69,11 @@ class VtkDataExporter:
                 polydata.cell_data[self.vtk_safe('Epsilon roughness')] = cn_geometry['throat.epsilon']
             if 'throat.diameters' in cn_geometry:
                 polydata.cell_data[self.vtk_safe('Diameter')] = cn_geometry['throat.diameters']
+                
+            # Add time as field data
+            polydata.field_data['Time'] = np.array([t], dtype=float)
             
             filename = os.path.join(self.output_dir, f'output_timestep_{i:04d}.vtk')
             polydata.save(filename)
             
-            # Save the time information
-            with open(os.path.join(self.output_dir, 'time_info.txt'), 'a') as time_file:
-                time_file.write(f"{i:04d} {t}\n")
+          
