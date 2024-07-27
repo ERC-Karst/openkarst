@@ -699,3 +699,28 @@ This means that the depth at the outfall is adjusted so that the flow reaches a 
 **WARNING:**  The currently implemented computation of the critical depth is inefficient and does not use lookup tables. Using this boundary condition can double computation times. From my experience a constant water depth boundary yields nearly the same results, especially when being close to zero (i.e. a free outfall).
 
 ---
+
+## Exporting to VTK
+
+With the VtkDataExporter class simulation results can be exported to VTK files, which can be used for advanced visualization and post-processing in tools like ParaView. The following example demonstrates how to use the VtkDataExporter class to save the flow rates, water depths, and time history data to VTK files. In addition the conduit roughness and diameters are obtained from the geometry object and exported to the VTK files:
+
+```python
+
+# Run simulation and store results
+    results = flow_network.run_simulation(desired_outputs = output_settings)
+    
+    # Get arrays from results container
+    Q_history = results['flowrates']
+    y_history = results['water_depths']
+    t_history = results['time']
+    
+    # Save VTK files to a specified directory within the current working directory
+    output_dir = os.path.join(os.getcwd(), 'vtk_output')
+    
+    # Create an instance of the VTKExporter
+    vtk_exporter = VtkDataExporter(output_dir)
+    
+    # Export the results
+    vtk_exporter.export(cn_geometry, Q_history, y_history, t_history)
+    
+```
