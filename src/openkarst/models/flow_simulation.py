@@ -1129,8 +1129,8 @@ class FlowSimulation:
         Compute the hydraulic radius of conduits based on flow conditions.
 
         This method calculates the hydraulic radius for conduits considering both 
-        free surface and pressurized flow conditions. It handles special cases for
-        channels used in specific experiments.
+        free surface and pressurized flow conditions. It handles cases where open
+        channels are considered instead of conduits.
 
         Args:
             flow_depths (numpy.ndarray): Array of flow depths in the conduits.
@@ -1245,12 +1245,13 @@ class FlowSimulation:
                   
     def _compute_flows(self, a1, a2, a_mid_upwtd, r_mid_upwtd, r_mid,
                       h1, h2, alpha, v_mid):
-        """
+	"""
         Compute the flow rates in conduits based on various physical parameters.
 
         This method calculates the flow rates in conduits by considering pressure terms,
-        inertial terms, and friction factors. It uses different calculations for pressurized
-        and free-surface flow conditions.
+        inertial terms, and friction factors. It uses the Manning equation for free surface flows
+        and the Churchill equation for pressurized flows. The Darcy-Weisbach equation forms the 
+        foundation for calculating friction losses in both cases.
 
         Args:
             a1 (numpy.ndarray): Areas at the first end of the conduits.
@@ -1266,7 +1267,7 @@ class FlowSimulation:
         Returns:
             None: This method updates the instance attribute `self.Q_new` directly.
         """
-        
+                
         # Initialize arrays
         f = np.zeros(self.network.Nt, dtype=float)
         dQ_friction = np.zeros(self.network.Nt, dtype=float)
@@ -1357,8 +1358,7 @@ class FlowSimulation:
         This method calculates the change in water depths at each node based on 
         flow rates and boundary conditions, then updates the water depths using 
         under-relaxation. It accounts for positive and negative flows, applies 
-        inflow and fixed head boundary conditions, and adjusts for critical 
-        depths where necessary.
+        inflow, fixed head, and critical depth boundary conditions.
 
         Args:
             n_surface_a (numpy.ndarray): Array of surface areas for each node.
