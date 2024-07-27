@@ -12,7 +12,7 @@
         <link rel="prev" href="../installation/">
       
       
-        <link rel="next" href="../contributing/">
+        <link rel="next" href="../parameter_reference/">
       
       
       <link rel="icon" href="../assets/images/favicon.png">
@@ -314,10 +314,39 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#exporting-to-vtk" class="md-nav__link">
+    <span class="md-ellipsis">
+      Exporting to VTK
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
       
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../parameter_reference/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Parameter Reference
+  </span>
+  
+
+      </a>
     </li>
   
 
@@ -356,10 +385,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
         
           
-          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
             
   
   <span class="md-ellipsis">
@@ -370,8 +399,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             API Reference
           </label>
@@ -462,6 +491,15 @@
   <a href="#boundary-conditions" class="md-nav__link">
     <span class="md-ellipsis">
       Boundary conditions
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exporting-to-vtk" class="md-nav__link">
+    <span class="md-ellipsis">
+      Exporting to VTK
     </span>
   </a>
   
@@ -1084,6 +1122,25 @@ As in <a href="#example-1-basic-setup">Example 1</a> we use the FlowSimulation c
 <hr />
 <p><strong>WARNING:</strong>  The currently implemented computation of the critical depth is inefficient and does not use lookup tables. Using this boundary condition can double computation times. From my experience a constant water depth boundary yields nearly the same results, especially when being close to zero (i.e. a free outfall).</p>
 <hr />
+<h2 id="exporting-to-vtk">Exporting to VTK</h2>
+<p>With the VtkDataExporter class simulation results can be exported to VTK files, which can be used for advanced visualization and post-processing in tools like ParaView. The following example demonstrates how to use the VtkDataExporter class to save the flow rates, water depths, and time history data to VTK files. In addition the conduit roughness and diameters are obtained from the geometry object and exported to the VTK files:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Run simulation and store results</span>
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>    <span class="n">results</span> <span class="o">=</span> <span class="n">flow_network</span><span class="o">.</span><span class="n">run_simulation</span><span class="p">(</span><span class="n">desired_outputs</span> <span class="o">=</span> <span class="n">output_settings</span><span class="p">)</span>
+</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>
+</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>    <span class="c1"># Get arrays from results container</span>
+</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>    <span class="n">Q_history</span> <span class="o">=</span> <span class="n">results</span><span class="p">[</span><span class="s1">&#39;flowrates&#39;</span><span class="p">]</span>
+</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a>    <span class="n">y_history</span> <span class="o">=</span> <span class="n">results</span><span class="p">[</span><span class="s1">&#39;water_depths&#39;</span><span class="p">]</span>
+</span><span id="__span-21-7"><a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a>    <span class="n">t_history</span> <span class="o">=</span> <span class="n">results</span><span class="p">[</span><span class="s1">&#39;time&#39;</span><span class="p">]</span>
+</span><span id="__span-21-8"><a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a>
+</span><span id="__span-21-9"><a id="__codelineno-21-9" name="__codelineno-21-9" href="#__codelineno-21-9"></a>    <span class="c1"># Save VTK files to a specified directory within the current working directory</span>
+</span><span id="__span-21-10"><a id="__codelineno-21-10" name="__codelineno-21-10" href="#__codelineno-21-10"></a>    <span class="n">output_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getcwd</span><span class="p">(),</span> <span class="s1">&#39;vtk_output&#39;</span><span class="p">)</span>
+</span><span id="__span-21-11"><a id="__codelineno-21-11" name="__codelineno-21-11" href="#__codelineno-21-11"></a>
+</span><span id="__span-21-12"><a id="__codelineno-21-12" name="__codelineno-21-12" href="#__codelineno-21-12"></a>    <span class="c1"># Create an instance of the VTKExporter</span>
+</span><span id="__span-21-13"><a id="__codelineno-21-13" name="__codelineno-21-13" href="#__codelineno-21-13"></a>    <span class="n">vtk_exporter</span> <span class="o">=</span> <span class="n">VtkDataExporter</span><span class="p">(</span><span class="n">output_dir</span><span class="p">)</span>
+</span><span id="__span-21-14"><a id="__codelineno-21-14" name="__codelineno-21-14" href="#__codelineno-21-14"></a>
+</span><span id="__span-21-15"><a id="__codelineno-21-15" name="__codelineno-21-15" href="#__codelineno-21-15"></a>    <span class="c1"># Export the results</span>
+</span><span id="__span-21-16"><a id="__codelineno-21-16" name="__codelineno-21-16" href="#__codelineno-21-16"></a>    <span class="n">vtk_exporter</span><span class="o">.</span><span class="n">export</span><span class="p">(</span><span class="n">cn_geometry</span><span class="p">,</span> <span class="n">Q_history</span><span class="p">,</span> <span class="n">y_history</span><span class="p">,</span> <span class="n">t_history</span><span class="p">)</span>
+</span></code></pre></div>
 
 
 
