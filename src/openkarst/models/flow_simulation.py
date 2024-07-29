@@ -1245,7 +1245,7 @@ class FlowSimulation:
                   
     def _compute_flows(self, a1, a2, a_mid_upwtd, r_mid_upwtd, r_mid,
                       h1, h2, alpha, v_mid):
-	"""
+        """
         Compute the flow rates in conduits based on various physical parameters.
 
         This method calculates the flow rates in conduits by considering pressure terms,
