@@ -28,9 +28,12 @@ from openkarst.utils.logging_config import setup_logging
 
 class FlowSimulation:
     """
-    Simulates free surface and pressurized flow through a karst conduit network using the dynamic wave equation.
+    Simulates free surface and pressurized flow through a karst conduit network using the
+    dynamic wave equation.
 
-    This class models the flow of water through a network of conduits, considering both free surface and pressurized flow conditions. It utilizes the dynamic wave equation to compute the flow rates, water depths, and other relevant properties over time.
+    This class models the flow of water through a network of conduits, considering both
+    free surface and pressurized flow conditions. It utilizes the dynamic wave equation
+    to compute the flow rates, water depths, and other relevant properties over time.
 
     Attributes:
         GEOMETRY_CHANNEL (int): Indicator for channel geometry. Set to 1 for channel validation.
@@ -38,6 +41,7 @@ class FlowSimulation:
         physical_properties (PhysicalProperties): Object containing the physical properties of the simulation.
         solver_settings (SolverSettings): Object containing the solver settings.
         simulation_settings (SimulationSettings): Object containing the simulation settings.
+        logging_settings (LoggingSettings): Object containing the logger settings.
         network (openpnm.network.GenericNetwork): The OpenPNM network used in the simulation.
         waterdepth_boundary (dict): Dictionary storing water depth boundary conditions.
         inflow_boundary (dict): Dictionary storing inflow boundary conditions.
@@ -109,7 +113,8 @@ class FlowSimulation:
     def __init__(self, openpnm_network,
                  physical_properties: Optional[Dict[str, Any]] = None,
                  solver_settings: Optional[Dict[str, Any]] = None,
-                 simulation_settings: Optional[Dict[str, Any]] = None):
+                 simulation_settings: Optional[Dict[str, Any]] = None,
+                 logging_settings: Optional[Dict[str, Any]] = None):
         """
         Initializes the FlowSimulation class with provided settings and network.
 
@@ -118,6 +123,7 @@ class FlowSimulation:
             physical_properties (Optional[Dict[str, Any]]): Physical properties settings.
             solver_settings (Optional[Dict[str, Any]]): Solver settings.
             simulation_settings (Optional[Dict[str, Any]]): Simulation settings.
+            logging_settings (Optional[Dict[str, Any]]): Logging configuration settings.
         
         Attributes:
             logger: Logger for logging information and debugging.
@@ -130,7 +136,8 @@ class FlowSimulation:
             critical_depth_boundary (dict): Dictionary for critical depth boundary conditions.
         """
         
-        self.logger = setup_logging()
+        # Set up logger
+        self.logger = setup_logging(logging_settings)
         
         self.physical_properties = (PhysicalProperties(**physical_properties) 
                                     if physical_properties else PhysicalProperties()
@@ -504,8 +511,6 @@ class FlowSimulation:
         np.copyto(self.y_prev_i, self.y)  
         np.copyto(self.a_mid_old_t, self.a_mid) 
         np.copyto(self.dQ_old_t, self.dQ)
-         
-        self.logger.debug('State variables initialized')
          
     def _update_network_state(self):
         """

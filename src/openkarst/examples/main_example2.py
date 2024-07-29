@@ -63,6 +63,11 @@ def main():
         'reynolds_numbers': True,
     }
     
+    logging_settings = {
+        'base_dir': os.path.dirname(os.path.abspath(__file__)),
+        'log_file': 'simulation.log'
+    }
+    
     # Get the directory of the current script
     current_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -83,7 +88,8 @@ def main():
     flow_network = FlowSimulation(cn_geometry,
                                   physical_properties = physical_properties,
                                   solver_settings = solver_settings,
-                                  simulation_settings = simulation_settings)
+                                  simulation_settings = simulation_settings,
+                                  logging_settings = logging_settings)
     
     # Set initial conditions
     initial_Q = np.full(cn_geometry.Nt, 0.0, dtype=float)   # Initial flows at each conduit (Nt throats)

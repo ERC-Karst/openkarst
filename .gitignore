@@ -93,3 +93,6 @@ venv.bak/
 
 # System files
 .DS_Store
+
+# Log files
+logs/

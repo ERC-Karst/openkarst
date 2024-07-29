@@ -1,8 +1,0 @@
-2024-07-26 09:20:23,285 - FlowSimulation - INFO - Settings validated
-2024-07-26 09:20:23,285 - FlowSimulation - INFO - Settings applied
-2024-07-26 09:20:23,285 - FlowSimulation - INFO - Arrays initialized
-2024-07-26 09:20:23,285 - FlowSimulation - INFO - Conduit properties initialized
-2024-07-26 09:20:23,285 - FlowSimulation - INFO - FlowSimulation initialized with physical properties: PhysicalProperties(water_density=1000, gravity=9.81, dynamic_viscosity=0.001, geometry_channel=False, channel_type='infinite', channel_width=1.0, channel_manning=0.03)
-2024-07-26 09:20:23,286 - FlowSimulation - INFO - FlowSimulation initialized with solver settings: SolverSettings(relaxation_factor=0.6, max_iterations=20, picard_depth_tol=1e-07, ss_rel_l2tol=1e-07)
-2024-07-26 09:20:23,286 - FlowSimulation - INFO - FlowSimulation initialized with simulation settings: SimulationSettings(min_waterdepth=1e-10, min_flowrate=1e-10, courant=0.8, adaptive_timesteps=True, dt_init=0.001, dt_max=1.0, t_max=1000.0, steady_state=False, print_info_interval=1000)
-2024-07-26 09:20:23,286 - FlowSimulation - INFO - Results container created for: {'output_interval': 10.0, 'time': True, 'time_step_size': True, 'flowrates': True, 'water_depths': True, 'l2_norms': True, 'convergence_fails': True, 'reynolds_numbers': True}

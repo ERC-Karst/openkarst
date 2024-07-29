@@ -63,9 +63,9 @@ def main():
         'adaptive_timesteps': True,   # Use adaptive timestepping
         'dt_init': 0.001,             # Initial (or constant) timestep (seconds)
         'dt_max': 1.0,                # Maximum allowable time step
-        'steady_state': False,        # Steady-state (True) or transient (False)
+        'steady_state': False,         # Steady-state (True) or transient (False)
         't_max': 1000.0,              # Maximum time for transient simulations (seconds)
-        'print_info_interval': 1000,  # Print info every # time steps
+        'print_info_interval': 1000,     # Print info every # time steps
     }
     
     output_settings = {
@@ -77,6 +77,11 @@ def main():
         'l2_norms': True,
         'convergence_fails': True,
         'reynolds_numbers': True,
+    }
+    
+    logging_settings = {
+        'base_dir': os.path.dirname(os.path.abspath(__file__)),
+        'log_file': 'simulation.log'
     }
 ```
 
@@ -110,7 +115,8 @@ We set constant initial conditions at all nodes and conduits. Note that again th
     flow_network = FlowSimulation(cn_geometry,
                                   physical_properties = physical_properties,
                                   solver_settings = solver_settings,
-                                  simulation_settings = simulation_settings)
+                                  simulation_settings = simulation_settings,
+                                  logging_settings = logging_settings)
     
     # Set initial conditions
     initial_Q = np.full(cn_geometry.Nt, 0.0, dtype=float)   # Initial flows at each conduit (Nt throats)
@@ -236,6 +242,11 @@ def main():
         'convergence_fails': True,
         'reynolds_numbers': True,
     }
+    
+        logging_settings = {
+        'base_dir': os.path.dirname(os.path.abspath(__file__)),
+        'log_file': 'simulation.log'
+    }
 ```
 
 We now use the CaveDataLoader class to create a loader object. We pass the file paths of nodes, edges and diameters to the loader object method load_cave_dat(). This will create a networkX graph, generate an openPNM geometry object, assign the diameters to the conduits, and return the openPNM geometry object. We then also assign a constant roughness value to all conduits. Notice the relative import of cave data from the parent folder openkarst/cave_data.
@@ -265,7 +276,8 @@ As in [Example 1](#example-1-basic-setup) we use the FlowSimulation class to cre
     flow_network = FlowSimulation(cn_geometry,
                                   physical_properties = physical_properties,
                                   solver_settings = solver_settings,
-                                  simulation_settings = simulation_settings)
+                                  simulation_settings = simulation_settings,
+                                  logging_settings = logging_settings)
     
     # Set initial conditions
     initial_Q = np.full(cn_geometry.Nt, 0.0, dtype=float)   # Initial flows at each conduit (Nt throats)
@@ -418,6 +430,11 @@ def main():
         'convergence_fails': True,
         'reynolds_numbers': True,
     }
+    
+        logging_settings = {
+        'base_dir': os.path.dirname(os.path.abspath(__file__)),
+        'log_file': 'simulation.log'
+    }
 ```
 
 First we create the geometry object, a 5000m long channel with a node spacing of 1m. Notice that we do not explicitly pass the conduit diameters to the geometry object as they are not required for the open channel flow.
@@ -484,7 +501,8 @@ Finally we create a FlowSimulation object and set the initial conditions (no flo
     flow_network = FlowSimulation(cn_geometry,
                                   physical_properties = physical_properties,
                                   solver_settings = solver_settings,
-                                  simulation_settings = simulation_settings)
+                                  simulation_settings = simulation_settings,
+                                  logging_settings = logging_settings)
     
     # Set initial conditions
     initial_Q = np.full(cn_geometry.Nt, 0.0, dtype=float)   # Initial flows at each conduit (Nt throats)

@@ -7,7 +7,6 @@ Created on Thu Jul 18 12:56:06 2024
 @contact: jannes.kordilla@idaea.csic.es
 """
 
-import sys
 import os
 
 import openpnm as op
@@ -21,7 +20,7 @@ from openkarst.models import FlowSimulation
 
 
 def main():
-    
+        
     # Setup flow simulation parameters
     physical_properties = {
         'water_density': 1000,        # kg/m^3
@@ -62,6 +61,11 @@ def main():
         'reynolds_numbers': True,
     }
     
+    logging_settings = {
+        'base_dir': os.path.dirname(os.path.abspath(__file__)),
+        'log_file': 'simulation.log'
+    }
+    
     # Create network object using OpenPNM
     dl = 1 # Constant spacing between nodes (meters)
     cn_geometry = op.network.Cubic(shape=[200, 1, 1], connectivity=6, spacing=dl)
@@ -81,7 +85,8 @@ def main():
     flow_network = FlowSimulation(cn_geometry,
                                   physical_properties = physical_properties,
                                   solver_settings = solver_settings,
-                                  simulation_settings = simulation_settings)
+                                  simulation_settings = simulation_settings,
+                                  logging_settings = logging_settings)
     
     # Set initial conditions
     initial_Q = np.full(cn_geometry.Nt, 0.0, dtype=float)   # Initial flows at each conduit (Nt throats)
