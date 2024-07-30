@@ -24,7 +24,8 @@ class NetworkGenerator:
         self.graph = nx.Graph()
         self.node_id = 0
 
-    def create_linear_network_with_deadends(self, total_length, spacing, n_dead_ends, length_deadends):
+    def create_linear_network_with_deadends(self, total_length, spacing, n_dead_ends, length_deadends, 
+                                            distribution='equal', mean=None, sigma=None):
         """
         Creates a linear network with specified dead-ends.
         
@@ -32,7 +33,10 @@ class NetworkGenerator:
             total_length (float): The total length of the main linear path.
             spacing (float): The spacing between nodes along the main linear path.
             n_dead_ends (int): The number of dead-ends to add to the network.
-            length_deadends (float): The length of each dead-end branch.
+            length_deadends (float): The length of each dead-end branch (used if distribution='equal').
+            distribution (str): The type of distribution for dead-end lengths ('equal' or 'lognormal').
+            mean (float): The mean of the lognormal distribution (used if distribution='lognormal').
+            sigma (float): The standard deviation of the lognormal distribution (used if distribution='lognormal').
         
         Returns:
             nx.Graph: The generated network with linear and dead-end branches.
@@ -59,14 +63,23 @@ class NetworkGenerator:
             base_node_id = main_path_nodes[i * dead_end_spacing]
             x, y, _ = self.graph.nodes[base_node_id]['coords']
             
+            if distribution == 'equal':
+                length = length_deadends
+            elif distribution == 'lognormal':
+                if mean is None or sigma is None:
+                    raise ValueError("Mean and sigma must be provided for lognormal distribution")
+                length = np.random.lognormal(mean, sigma)
+            else:
+                raise ValueError("Unsupported distribution type. Use 'equal' or 'lognormal'")
+            
             # Add dead-end extending in positive y direction
-            self._add_deadend(base_node_id, x, y, spacing, length_deadends, 1)
+            self._add_deadend(base_node_id, x, y, spacing, length, 1)
             
             # Reset base_node_id to extend in negative y direction
             base_node_id = main_path_nodes[i * dead_end_spacing]
             
             # Add dead-end extending in negative y direction
-            self._add_deadend(base_node_id, x, y, spacing, length_deadends, -1)
+            self._add_deadend(base_node_id, x, y, spacing, length, -1)
         
         return self.graph
     

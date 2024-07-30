@@ -54,7 +54,7 @@ def setup_logging(logging_settings: Optional[dict] = None):
         filename=log_path,
         filemode='a',  # Append to the log file if it exists
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        level=logging.DEBUG,
+        level=logging.INFO,
         force=True
     )
     logger = logging.getLogger('FlowSimulation')
