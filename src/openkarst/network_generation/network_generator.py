@@ -20,7 +20,6 @@ class NetworkGenerator:
         """
         Initializes the NetworkGenerator with an empty graph and a node ID counter.
         """
-        
         self.graph = nx.Graph()
         self.node_id = 0
 
@@ -41,7 +40,6 @@ class NetworkGenerator:
         Returns:
             nx.Graph: The generated network with linear and dead-end branches.
         """
-
         self.graph.clear()
         self.node_id = 0
         
@@ -90,10 +88,9 @@ class NetworkGenerator:
         Args:
             coords (list): The coordinates of the node.
         """
-        
         self.graph.add_node(self.node_id, coords=coords)
     
-    def _add_deadend(self, base_node_id, x, y, spacing, length_deadends, direction):
+    def _add_deadend(self, base_node_id, x, y, spacing, length, direction):
         """
         Adds a dead-end branch to the graph.
 
@@ -102,11 +99,10 @@ class NetworkGenerator:
             x (float): The x-coordinate of the base node.
             y (float): The y-coordinate of the base node.
             spacing (float): The spacing between nodes along the dead-end.
-            length_deadends (float): The length of the dead-end branch.
+            length (float): The length of the dead-end branch.
             direction (int): The direction of the dead-end branch (1 for positive y, -1 for negative y).
         """
-        
-        for j in range(1, int(length_deadends / spacing) + 1):
+        for j in range(1, int(length / spacing) + 1):
             self._add_node([float(x), float(y + j * spacing * direction), 0.0])
             self.graph.add_edge(base_node_id, self.node_id)
             base_node_id = self.node_id
