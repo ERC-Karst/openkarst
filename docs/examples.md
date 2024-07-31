@@ -724,21 +724,23 @@ With the VtkDataExporter class simulation results can be exported to VTK files, 
 
 ```python
 
+from openkarst.io.vtk_data_exporter import VtkDataExporter
+
 # Run simulation and store results
-    results = flow_network.run_simulation(desired_outputs = output_settings)
-    
-    # Get arrays from results container
-    Q_history = results['flowrates']
-    y_history = results['water_depths']
-    t_history = results['time']
-    
-    # Save VTK files to a specified directory within the current working directory
-    output_dir = os.path.join(os.getcwd(), 'vtk_output')
-    
-    # Create an instance of the VTKExporter
-    vtk_exporter = VtkDataExporter(output_dir)
-    
-    # Export the results
-    vtk_exporter.export(cn_geometry, Q_history, y_history, t_history)
+results = flow_network.run_simulation(desired_outputs = output_settings)
+
+# Get arrays from results container
+Q_history = results['flowrates']
+y_history = results['water_depths']
+t_history = results['time']
+
+# Save VTK files to a specified directory within the current working directory
+output_dir = os.path.join(os.getcwd(), 'vtk_output')
+
+# Create an instance of the VTKExporter
+vtk_exporter = VtkDataExporter(output_dir)
+
+# Export the results
+vtk_exporter.export(cn_geometry, Q_history, y_history, t_history)
     
 ```
