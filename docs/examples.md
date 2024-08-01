@@ -29,6 +29,7 @@ import numpy as np
 # Needs pip install imageio-ffmpeg or directly point to your FFMPEG location
 os.environ["IMAGEIO_FFMPEG_EXE"] = "/Users/jkordil_idaea/Downloads/ffmpeg" 
 
+from openkarst.network_generation import compute_conduit_lengths
 from openkarst.visualization.animation_pyvista import animate_network
 from openkarst.models import FlowSimulation
 ```
@@ -94,12 +95,8 @@ We compute the node distances (i.e. conduit lengths) and assign them to a new ne
     dl = 1 # Constant spacing between nodes (meters)
     cn_geometry = op.network.Cubic(shape=[200, 1, 1], connectivity=6, spacing=dl)
     
-    # Compute and assign conduit lengths 
-    coords_diff = np.diff(cn_geometry.coords[cn_geometry.conns], axis=1).squeeze()
-    squared_diffs = coords_diff**2
-    sum_squared_diffs = np.sum(squared_diffs, axis=1)
-    conduit_lengths = np.sqrt(sum_squared_diffs)
-    cn_geometry['throat.lengths'] = conduit_lengths
+    # Compute conduit lengths using the utility function
+    cn_geometry = compute_conduit_lengths(cn_geometry)
     
     # Assign conduit properties
     cn_geometry['throat.epsilon'] = 0.03
@@ -384,6 +381,7 @@ from scipy.integrate import odeint
 # Needs pip install imageio-ffmpeg
 os.environ["IMAGEIO_FFMPEG_EXE"] = "/Users/jkordil_idaea/Downloads/ffmpeg" 
 
+from openkarst.network_generation import compute_conduit_lengths
 from openkarst.visualization.animation_pyvista import animate_network
 from openkarst.models import FlowSimulation
 
@@ -444,12 +442,8 @@ First we create the geometry object, a 5000m long channel with a node spacing of
     dl = 1 # Constant spacing between nodes (meters)
     cn_geometry = op.network.Cubic(shape=[5000, 1, 1], connectivity=6, spacing=dl)
     
-    # Compute and assign conduit lengths 
-    coords_diff = np.diff(cn_geometry.coords[cn_geometry.conns], axis=1).squeeze()
-    squared_diffs = coords_diff**2
-    sum_squared_diffs = np.sum(squared_diffs, axis=1)
-    conduit_lengths = np.sqrt(sum_squared_diffs)
-    cn_geometry['throat.lengths'] = conduit_lengths
+    # Compute conduit lengths using the utility function
+    cn_geometry = compute_conduit_lengths(cn_geometry)
 
 ```
 

@@ -21,6 +21,7 @@ from scipy.integrate import odeint
 # Needs pip install imageio-ffmpeg
 os.environ["IMAGEIO_FFMPEG_EXE"] = "/Users/jkordil_idaea/Downloads/ffmpeg" 
 
+from openkarst.network_generation import compute_conduit_lengths
 from openkarst.visualization.animation_pyvista import animate_network
 from openkarst.models import FlowSimulation
 
@@ -77,12 +78,8 @@ def main():
     dl = 1 # Constant spacing between nodes (meters)
     cn_geometry = op.network.Cubic(shape=[5000, 1, 1], connectivity=6, spacing=dl)
     
-    # Compute and assign conduit lengths 
-    coords_diff = np.diff(cn_geometry.coords[cn_geometry.conns], axis=1).squeeze()
-    squared_diffs = coords_diff**2
-    sum_squared_diffs = np.sum(squared_diffs, axis=1)
-    conduit_lengths = np.sqrt(sum_squared_diffs)
-    cn_geometry['throat.lengths'] = conduit_lengths
+    # Compute conduit lengths using the utility function
+    cn_geometry = compute_conduit_lengths(cn_geometry)
     
     # Create a height field according to the analytical steady-state solution (3.3.1.9) from:
     # Delestre, O. (2010): Simulation du ruissellement d’eau de pluie sur des surfaces agricoles.
