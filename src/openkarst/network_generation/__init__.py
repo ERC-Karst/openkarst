@@ -8,3 +8,4 @@ Created on Mon Jul 29 11:53:19 2024
 """
 
 from .network_generator import NetworkGenerator
+from .network_utils import compute_conduit_lengths
