@@ -1527,10 +1527,16 @@ class FlowSimulation:
         """
         
         l2_norm = np.linalg.norm(self.y_new - self.y_old_t)
-        self.relative_l2_norm = l2_norm / np.linalg.norm(self.y_new) if np.linalg.norm(self.y_new) != 0 else 0.0
-    
+        if np.linalg.norm(self.y_new) != 0:
+            self.relative_l2_norm = l2_norm / np.linalg.norm(self.y_new)
+        else:
+            self.relative_l2_norm = 0.0
+        
         mad = np.median(np.abs(self.y_new - self.y_old_t))
-        self.relative_mad_norm = mad / np.median(np.abs(self.y_new)) if np.median(np.abs(self.y_new)) != 0 else 0.0 
+        if np.median(np.abs(self.y_new)) != 0:
+            self.relative_mad_norm = mad / np.median(np.abs(self.y_new))
+        else:
+            self.relative_mad_norm = 0.0
         
     def _check_steady_state_convergence(self):
         """
@@ -1548,8 +1554,10 @@ class FlowSimulation:
             bool: True if the system has converged based on the relative L2 and MAD norms, False otherwise.
         """
 
-        
-        is_l2_converged = (self.relative_mad_norm < self.ss_rel_madtol) and (self.relative_l2_norm < self.ss_rel_l2tol)
+        is_l2_converged = (
+            (self.relative_mad_norm < self.ss_rel_madtol) and
+            (self.relative_l2_norm < self.ss_rel_l2tol)
+        )
         
         return is_l2_converged
     

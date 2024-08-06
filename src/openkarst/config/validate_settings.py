@@ -55,8 +55,8 @@ def validate_settings(physical_properties, solver_settings, simulation_settings,
                          "less than 1e-2.")
         
     if not (isinstance(solver_settings.ss_rel_madtol, (int, float)) and 
-            1e-8 < solver_settings.ss_rel_madtol <= 1e-2):
-        raise ValueError("Error: 'ss_rel_l2tol' must be type int/float and greater than 1e-8 and "
+            1e-9 < solver_settings.ss_rel_madtol <= 1e-2):
+        raise ValueError("Error: 'ss_rel_madtol' must be type int/float and greater than 1e-9 and "
                          "less than 1e-3.")
 
     if not (isinstance(simulation_settings.min_waterdepth, (int, float)) and 
