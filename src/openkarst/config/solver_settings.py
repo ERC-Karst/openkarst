@@ -14,4 +14,5 @@ class SolverSettings:
     relaxation_factor: float = 0.6
     max_iterations: int = 500
     picard_depth_tol: float = 1e-9
-    ss_rel_l2tol: float = 1e-7
+    ss_rel_l2tol: float = 1e-3
+    ss_rel_madtol: float = 1e-7

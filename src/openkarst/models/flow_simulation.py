@@ -1348,10 +1348,10 @@ class FlowSimulation:
         
         # Check for flow rate sign changes to address potential numerical instabilities.
         # Currently not needed, but retained for future debugging.
-        #is_sign_change = np.sign(self.Q_new) != np.sign(self.Q_prev_i)
-        #if np.any(is_sign_change) == True:
-        #    print("is sign change")
-        #self.Q_new[is_sign_change] = 1e-9 * np.sign(self.Q_new[is_sign_change])
+        # is_sign_change = np.sign(self.Q_new) != np.sign(self.Q_prev_i)
+        # if np.any(is_sign_change) == True:
+        #     print("is sign change")
+        # self.Q_new[is_sign_change] = 1e-9 * np.sign(self.Q_new[is_sign_change])
 
         return
     
@@ -1404,11 +1404,11 @@ class FlowSimulation:
     
         # Compute the change in volume at each node (dV)
         dV = 0.5 * (self.dQ_old_t + self.dQ_new) * self.dt
-
+        
         # Compute change in flow depths and new depths
         dy = dV / n_surface_a
         self.y_new = self.y_old_t + dy
-
+                 
         # Update water depths using under-relaxation
         self.y_new = (1.0 - self.w) * self.y_prev_i + self.w * self.y_new
 
@@ -1505,32 +1505,27 @@ class FlowSimulation:
         
     def _check_steady_state_convergence(self):
         """
-        Check if the simulation has reached steady-state convergence.
-
-        This method checks if the simulation has reached steady-state convergence 
-        based on the relative L2 norm of the change in water depths and the maximum 
-        change in water depths.
-
+        Check if the system has reached steady state convergence.
+    
+        This method calculates the L2 norm and the median absolute deviation (MAD) 
+        between the new state (`self.y_new`) and the old state (`self.y_old_t`). 
+        It then computes the relative norms for both L2 and MAD. The system is 
+        considered to have reached steady state convergence if both the relative 
+        MAD norm and the relative L2 norm are below their respective tolerances.
+    
         Returns:
-            bool: True if the simulation has converged to steady-state, False otherwise.
-            
+            bool: True if the system has converged based on the relative MAD and 
+            L2 norms, False otherwise.
         """
-
-        # Relative L2 norm criteria
+        
         l2_norm = np.linalg.norm(self.y_new - self.y_old_t)
         relative_l2_norm = l2_norm / np.linalg.norm(self.y_new)
     
-        # Maximum change in water depths criteria
-        max_change_in_state = np.max(np.abs(self.y_new - self.y_old_t))
-    
-        # Thresholds
-        relative_l2_tol = self.ss_rel_l2tol
-        max_state_change_tol = self.picard_depth_tol
-    
-        # Steady-state conditions
-        is_l2_converged = relative_l2_norm < relative_l2_tol
-        is_state_change_converged = max_change_in_state < max_state_change_tol
-    
+        mad = np.median(np.abs(self.y_new - self.y_old_t))
+        relative_mad_norm = mad / np.median(np.abs(self.y_new))
+        
+        is_l2_converged = (relative_mad_norm < self.ss_rel_madtol) and (relative_l2_norm < self.ss_rel_l2tol) #0.001 for linear with deadends
+        
         if is_l2_converged: #or is_state_change_converged:
             return True
         else:

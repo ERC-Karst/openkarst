@@ -8,6 +8,31 @@ Created on Fri Jul 19 10:54:37 2024
 """
 
 def apply_settings(simulation, physical_properties, solver_settings, simulation_settings, logger):
+    """
+    Apply various settings to the simulation object.
+
+    This function sets multiple physical properties, solver settings, and 
+    simulation settings to the provided simulation object. It also logs the 
+    application of these settings.
+
+    Args:
+        simulation: The simulation object to which settings are applied.
+        physical_properties: An object containing physical properties such as 
+            water density, gravity, dynamic viscosity, geometry channel, channel 
+            type, channel width, and channel Manning.
+        solver_settings: An object containing solver settings such as relaxation 
+            factor, maximum iterations, Picard depth tolerance, relative L2 tolerance, 
+            and relative MAD tolerance.
+        simulation_settings: An object containing simulation settings such as 
+            minimum water depth, minimum flow rate, Courant number, adaptive 
+            timesteps, initial timestep, maximum timestep, maximum simulation 
+            time, steady state flag, and print info interval.
+        logger: A logging object used to log the application of settings.
+
+    Returns:
+        None
+    """
+    
     simulation.rho = physical_properties.water_density
     simulation.gravity = physical_properties.gravity
     simulation.dyn_viscosity = physical_properties.dynamic_viscosity
@@ -19,6 +44,7 @@ def apply_settings(simulation, physical_properties, solver_settings, simulation_
     simulation.max_iterations = solver_settings.max_iterations
     simulation.picard_depth_tol = solver_settings.picard_depth_tol
     simulation.ss_rel_l2tol = solver_settings.ss_rel_l2tol
+    simulation.ss_rel_madtol = solver_settings.ss_rel_madtol
     simulation.min_waterdepth = simulation_settings.min_waterdepth
     simulation.min_flowrate = simulation_settings.min_flowrate
     simulation.courant = simulation_settings.courant
