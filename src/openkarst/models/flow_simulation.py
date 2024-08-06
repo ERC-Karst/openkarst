@@ -92,8 +92,10 @@ class FlowSimulation:
             Prints information about the current timestep.
         _check_picard_convergence(self):
             Checks the convergence of the Picard iterations.
+        _compute_error_norms(self):
+            Computes the L2 and MAD error norm 
         _check_steady_state_convergence(self):
-            Checks the convergence to steady state.
+            Checks the convergence to steady state using the L2 and MAD norm.
         _flow_area_cdepth(self, depth, diameter):
             Computes the flow area at critical depth.
         _wetted_perimeter_cdepth(self, depth, diameter):
@@ -387,12 +389,15 @@ class FlowSimulation:
                     
                 # Update the network state with the new values
                 self._update_network_state()
+
+                # Compute L2 and MAD error norms for each timestep
+                self._compute_error_norms()
         
                 # Store the results if the current time exceeds the next output interval
                 if self.current_time >= next_output_time:
                     results_container = store_results(self, results_container)
                     next_output_time += output_interval
-                
+                             
                 # Check if steady-state achieved and exit
                 if (
                     self.steady_state and
@@ -400,16 +405,16 @@ class FlowSimulation:
                     self.current_timestep > 1
                 ):
                   
-                   self.logger.info(
-                       f'Steady state reached: Simulation finished at time = {self.current_time:.2f}s'
-                   )
+                    self.logger.info(
+                        f'Steady state reached: Simulation finished at time = {self.current_time:.2f}s'
+                    )
                    
-                   percentage_fails = 100 * self.convergence_fails / self.current_timestep
-                   self.logger.info('Percentage convergence fails: {:.2f}'.format(percentage_fails))
-                   print(f'[run_simulation] Percentage convergence fails = {percentage_fails:.2f}%')
-                   print(colored('[run_simulation] Steady state reached', 'green'))
+                    percentage_fails = 100 * self.convergence_fails / self.current_timestep
+                    self.logger.info('Percentage convergence fails: {:.2f}'.format(percentage_fails))
+                    print(f'[run_simulation] Percentage convergence fails = {percentage_fails:.2f}%')
+                    print(colored('[run_simulation] Steady state reached', 'green'))
                    
-                   break
+                    break
                 
                 # Increment the time by dt
                 self.current_time += self.dt
@@ -1505,34 +1510,48 @@ class FlowSimulation:
         else:
             return False
         
+    def _compute_error_norms(self):
+        """
+        Compute the relative L2 and MAD norms between the new state and the old state.
+    
+        This method calculates the L2 norm and the median absolute deviation (MAD)
+        between the new state (`self.y_new`) and the old state (`self.y_old_t`).
+        It then computes the relative L2 norm and the relative MAD norm.
+    
+        If the L2 norm or the MAD of `self.y_new` is zero, the corresponding relative
+        norm is set to zero.
+    
+        Attributes:
+            relative_l2_norm (float): The relative L2 norm between `self.y_new` and `self.y_old_t`.
+            relative_mad_norm (float): The relative MAD norm between `self.y_new` and `self.y_old_t`.
+        """
+        
+        l2_norm = np.linalg.norm(self.y_new - self.y_old_t)
+        self.relative_l2_norm = l2_norm / np.linalg.norm(self.y_new) if np.linalg.norm(self.y_new) != 0 else 0.0
+    
+        mad = np.median(np.abs(self.y_new - self.y_old_t))
+        self.relative_mad_norm = mad / np.median(np.abs(self.y_new)) if np.median(np.abs(self.y_new)) != 0 else 0.0 
         
     def _check_steady_state_convergence(self):
         """
         Check if the system has reached steady state convergence.
     
-        This method calculates the L2 norm and the median absolute deviation (MAD) 
-        between the new state (`self.y_new`) and the old state (`self.y_old_t`). 
-        It then computes the relative norms for both L2 and MAD. The system is 
-        considered to have reached steady state convergence if both the relative 
-        MAD norm and the relative L2 norm are below their respective tolerances.
+        This method checks whether the system has reached steady state convergence
+        by evaluating the relative L2 norm and the relative MAD norm, which are
+        computed previously using the `_compute_error_norms` method.
+    
+        The system is considered to have reached steady state convergence if both
+        the relative L2 norm and the relative MAD norm are below their respective
+        tolerances.
     
         Returns:
-            bool: True if the system has converged based on the relative MAD and 
-            L2 norms, False otherwise.
+            bool: True if the system has converged based on the relative L2 and MAD norms, False otherwise.
         """
+
         
-        l2_norm = np.linalg.norm(self.y_new - self.y_old_t)
-        self.relative_l2_norm = l2_norm / np.linalg.norm(self.y_new)
-    
-        mad = np.median(np.abs(self.y_new - self.y_old_t))
-        self.relative_mad_norm = mad / np.median(np.abs(self.y_new))
+        is_l2_converged = (self.relative_mad_norm < self.ss_rel_madtol) and (self.relative_l2_norm < self.ss_rel_l2tol)
         
-        is_l2_converged = (self.relative_mad_norm < self.ss_rel_madtol) and (self.relative_l2_norm < self.ss_rel_l2tol) #0.001 for linear with deadends
-        
-        if is_l2_converged:
-            return True
-        else:
-            return False
+        return is_l2_converged
     
     # Calculation of critical depths. This is computationally inefficient. Probably better to use
     # a lookup table with precomputed values and then interpolate.
