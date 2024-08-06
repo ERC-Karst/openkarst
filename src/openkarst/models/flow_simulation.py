@@ -403,6 +403,7 @@ class FlowSimulation:
                    )
                    
                    percentage_fails = 100 * self.convergence_fails / self.current_timestep
+                   self.logger.info('Percentage convergence fails: {:.2f}'.format(percentage_fails))
                    print(f'[run_simulation] Percentage convergence fails = {percentage_fails:.2f}%')
                    print(colored('[run_simulation] Steady state reached', 'green'))
                    
