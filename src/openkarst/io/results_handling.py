@@ -61,15 +61,14 @@ def store_results(simulation_instance, results_container):
     if 'time_step_size' in results_container:
         results_container['time_step_size'].append(simulation_instance.dt)
     if 'l2_norms' in results_container:
-        l2_norm = np.linalg.norm(simulation_instance.y_new - simulation_instance.y_old_t)
-        relative_l2_norm = l2_norm / np.linalg.norm(simulation_instance.y_new)
-
-        results_container['l2_norms'].append(relative_l2_norm)
+        #l2_norm = np.linalg.norm(simulation_instance.y_new - simulation_instance.y_old_t)
+        #relative_l2_norm = l2_norm / np.linalg.norm(simulation_instance.y_new)
+        results_container['l2_norms'].append(simulation_instance.relative_l2_norm)
     if 'mad_norms' in results_container:   
-        mad = np.median(np.abs(simulation_instance.y_new - simulation_instance.y_old_t))
-        relative_mad_norm = mad / np.median(np.abs(simulation_instance.y_new))
+        #mad = np.median(np.abs(simulation_instance.y_new - simulation_instance.y_old_t))
+        #relative_mad_norm = mad / np.median(np.abs(simulation_instance.y_new))
         
-        results_container['mad_norms'].append(relative_mad_norm)
+        results_container['mad_norms'].append(simulation_instance.relative_mad_norm)
     if 'reynolds_numbers' in results_container:
         results_container['reynolds_numbers'].append(np.copy(simulation_instance.Re_conduit))
 

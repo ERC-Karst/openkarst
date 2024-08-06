@@ -369,6 +369,8 @@ class FlowSimulation:
             self.dt = self.dt_init
             self.current_time = 0.0
             self.current_timestep = 0
+            self.relative_l2_norm = 0.0
+            self.relative_mad_norm = 0.0
             
             while True:
                 self._initialize_state_variables()
@@ -1520,14 +1522,14 @@ class FlowSimulation:
         """
         
         l2_norm = np.linalg.norm(self.y_new - self.y_old_t)
-        relative_l2_norm = l2_norm / np.linalg.norm(self.y_new)
+        self.relative_l2_norm = l2_norm / np.linalg.norm(self.y_new)
     
         mad = np.median(np.abs(self.y_new - self.y_old_t))
-        relative_mad_norm = mad / np.median(np.abs(self.y_new))
+        self.relative_mad_norm = mad / np.median(np.abs(self.y_new))
         
-        is_l2_converged = (relative_mad_norm < self.ss_rel_madtol) and (relative_l2_norm < self.ss_rel_l2tol) #0.001 for linear with deadends
+        is_l2_converged = (self.relative_mad_norm < self.ss_rel_madtol) and (self.relative_l2_norm < self.ss_rel_l2tol) #0.001 for linear with deadends
         
-        if is_l2_converged: #or is_state_change_converged:
+        if is_l2_converged:
             return True
         else:
             return False
