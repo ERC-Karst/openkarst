@@ -172,6 +172,9 @@ class FlowSimulation:
         self.inflow_boundary = {}
         self.critical_depth_boundary = {}
         
+        # Stop conditions dictionary
+        self.flowrate_condition = {}
+        
         self._initialize_arrays()
         
         self._initialize_conduit_properties()
@@ -397,31 +400,54 @@ class FlowSimulation:
                 if self.current_time >= next_output_time:
                     results_container = store_results(self, results_container)
                     next_output_time += output_interval
-                             
-                # Check if steady-state achieved and exit
-                if (
-                    self.steady_state and
-                    self._check_steady_state_convergence() and 
-                    self.current_timestep > 1
-                ):
-                  
-                    self.logger.info(
-                        f'Steady state reached: Simulation finished at time = {self.current_time:.2f}s'
-                    )
-                   
-                    percentage_fails = 100 * self.convergence_fails / self.current_timestep
-                    self.logger.info('Percentage convergence fails: {:.2f}'.format(percentage_fails))
-                    print(f'[run_simulation] Percentage convergence fails = {percentage_fails:.2f}%')
-                    print(colored('[run_simulation] Steady state reached', 'green'))
-                   
+                
+                # Check flowrate stop condition if set
+                if self.stop_condition_set:
+                    for node_index, flowrate_value in self.flowrate_condition.items():
+                        connected_conduits = np.where(
+                            (self.n_indices1 == node_index) | (self.n_indices2 == node_index)
+                        )[0]
+                        
+                        total_flowrate = np.sum(np.abs(self.Q_new[connected_conduits]))
+                                        
+                        if total_flowrate > self.flowrate_threshold * flowrate_value:
+                            self.logger.info(
+                                f'Flowrate threshold reached at node {node_index}: Simulation finished at time = {self.current_time:.2f}s'
+                            )
+                           
+                            percentage_fails = 100 * self.convergence_fails / self.current_timestep
+                            self.logger.info('Percentage convergence fails: {:.2f}'.format(percentage_fails))
+                            print(f'[run_simulation] Percentage convergence fails = {percentage_fails:.2f}%')
+                            print(colored('[run_simulation] Flowrate threshold reached (99% of flow rate)', 'green'))
+                           
+                            break
+                    else:
+                        # Continue the loop if the break was not triggered
+                        self.current_time += self.dt
+                        self.current_timestep += 1
+                        continue
                     break
+                
+                # Check if steady-state achieved and exit (only if stop condition not set)
+                if not self.stop_condition_set and self.steady_state:
+                    if self._check_steady_state_convergence() and self.current_timestep > 1:
+                        self.logger.info(
+                            f'Steady state reached: Simulation finished at time = {self.current_time:.2f}s'
+                        )
+                       
+                        percentage_fails = 100 * self.convergence_fails / self.current_timestep
+                        self.logger.info('Percentage convergence fails: {:.2f}'.format(percentage_fails))
+                        print(f'[run_simulation] Percentage convergence fails = {percentage_fails:.2f}%')
+                        print(colored('[run_simulation] Steady state reached', 'green'))
+                       
+                        break
                 
                 # Increment the time by dt
                 self.current_time += self.dt
                 self.current_timestep += 1
                 
-                # If no steady-state simulation exit when t_max is exceeded
-                if not self.steady_state and self.current_time > self.t_max:
+                # If no steady-state simulation, exit when t_max is exceeded (only if stop condition not set)
+                if not self.stop_condition_set and not self.steady_state and self.current_time > self.t_max:
                     
                     self.logger.info(
                         f'Maximum time reached: Simulation finished at time = {self.current_time:.2f}s'
@@ -500,8 +526,19 @@ class FlowSimulation:
             
         if critical_depth_boundary is not None:
             self.critical_depth_boundary = critical_depth_boundary
-        
        
+            
+    def set_stop_conditions(self, flowrate_condition=None, flowrate_threshold=0.98):
+        
+        if flowrate_condition is not None:
+            self.flowrate_condition = flowrate_condition
+            self.flowrate_threshold = flowrate_threshold
+            self.stop_condition_set = True
+        else:
+            self.stop_condition_set = False
+        
+
+        
     def _initialize_state_variables(self):
         """
         Initialize state variables for the simulation.
