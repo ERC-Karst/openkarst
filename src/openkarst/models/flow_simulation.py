@@ -409,6 +409,10 @@ class FlowSimulation:
                         )[0]
                         
                         total_flowrate = np.sum(np.abs(self.Q_new[connected_conduits]))
+                        
+                        if math.fmod(self.current_timestep, self.print_info_interval) == 0:
+                            
+                            print(f'Outflow rate = {100 * (total_flowrate / flowrate_value):.2f}%')
                                         
                         if total_flowrate > self.flowrate_threshold * flowrate_value:
                             self.logger.info(
