@@ -174,6 +174,8 @@ class FlowSimulation:
         
         # Stop conditions dictionary
         self.flowrate_condition = {}
+        # Initialize in case user does not specify this
+        self.stop_condition_set = False
         
         self._initialize_arrays()
         
