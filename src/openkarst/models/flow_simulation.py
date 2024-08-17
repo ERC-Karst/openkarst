@@ -502,53 +502,53 @@ class FlowSimulation:
         np.copyto(self.y, initial_y)
 
         
-def set_boundary_conditions(
-        self,
-        waterdepth_boundary=None,
-        inflow_boundary=None,
-        critical_depth_boundary=None,
-        inflow_type='constant',  # New parameter to specify inflow type
-        inflow_rate=0.01,        # Default constant inflow rate
-        start_time=0,            # Start time for ramped inflow
-        end_time=200,            # End time for ramped inflow
-        peak_rate=0.05           # Peak rate for ramped inflow
-):
-    """
-    Set the boundary conditions for the flow simulation.
-
-    This method allows setting the boundary conditions for water depth,
-    inflow, and critical depth in the flow simulation.
-
-    Args:
-        waterdepth_boundary (dict, optional): Dictionary of water depth 
-            boundary conditions {node_index: value}.
-        inflow_boundary (dict, optional): Dictionary of inflow boundary 
-            conditions {node_index: value}.
-        critical_depth_boundary (dict, optional): Dictionary of critical 
-            depth boundary conditions {node_index: value}.
-        inflow_type (str, optional): Type of inflow ('constant' or 'ramp').
-        inflow_rate (float, optional): Constant inflow rate if inflow_type 
-            is 'constant'.
-        start_time (float, optional): Start time for ramped inflow.
-        end_time (float, optional): End time for ramped inflow.
-        peak_rate (float, optional): Peak rate for ramped inflow.
-    """
+    def set_boundary_conditions(
+            self,
+            waterdepth_boundary=None,
+            inflow_boundary=None,
+            critical_depth_boundary=None,
+            inflow_type='constant',  # New parameter to specify inflow type
+            inflow_rate=0.01,        # Default constant inflow rate
+            start_time=0,            # Start time for ramped inflow
+            end_time=200,            # End time for ramped inflow
+            peak_rate=0.05           # Peak rate for ramped inflow
+    ):
+        """
+        Set the boundary conditions for the flow simulation.
     
-    if waterdepth_boundary is not None:
-        self.waterdepth_boundary = waterdepth_boundary
-
-    if inflow_boundary is not None:
-        self.inflow_boundary = inflow_boundary
-
-    if critical_depth_boundary is not None:
-        self.critical_depth_boundary = critical_depth_boundary
-
-   
-    self.inflow_type = inflow_type
-    self.inflow_rate = inflow_rate
-    self.start_time = start_time
-    self.end_time = end_time
-    self.peak_rate = peak_rate
+        This method allows setting the boundary conditions for water depth,
+        inflow, and critical depth in the flow simulation.
+    
+        Args:
+            waterdepth_boundary (dict, optional): Dictionary of water depth 
+                boundary conditions {node_index: value}.
+            inflow_boundary (dict, optional): Dictionary of inflow boundary 
+                conditions {node_index: value}.
+            critical_depth_boundary (dict, optional): Dictionary of critical 
+                depth boundary conditions {node_index: value}.
+            inflow_type (str, optional): Type of inflow ('constant' or 'ramp').
+            inflow_rate (float, optional): Constant inflow rate if inflow_type 
+                is 'constant'.
+            start_time (float, optional): Start time for ramped inflow.
+            end_time (float, optional): End time for ramped inflow.
+            peak_rate (float, optional): Peak rate for ramped inflow.
+        """
+        
+        if waterdepth_boundary is not None:
+            self.waterdepth_boundary = waterdepth_boundary
+    
+        if inflow_boundary is not None:
+            self.inflow_boundary = inflow_boundary
+    
+        if critical_depth_boundary is not None:
+            self.critical_depth_boundary = critical_depth_boundary
+    
+       
+        self.inflow_type = inflow_type
+        self.inflow_rate = inflow_rate
+        self.start_time = start_time
+        self.end_time = end_time
+        self.peak_rate = peak_rate
        
             
     def set_stop_conditions(self, flowrate_condition=None, flowrate_threshold=0.98):
