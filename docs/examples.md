@@ -55,6 +55,7 @@ def main():
         'max_iterations': 20,        # Maximum Picard iterations
         'picard_depth_tol': 1e-7,    # Picard depth tolerance (meters)
         'ss_rel_l2tol': 1e-7,        # L2 tolerance for steady-state
+        'ss_rel_madtol': 1e-8        # Median tolerance for steady-state
     }
     
     simulation_settings = {
@@ -134,8 +135,12 @@ Now we set proper boundary conditions, in this case a constant inflow rate at th
     inflow_boundary_left = {node: flowrate for node in left_nodes}
     waterdepth_boundary_right = {node: water_depth for node in right_nodes}
     
-    flow_network.set_boundary_conditions(inflow_boundary = inflow_boundary_left)
-    flow_network.set_boundary_conditions(waterdepth_boundary = waterdepth_boundary_right)
+ 	flow_network.set_boundary_conditions(
+        inflow_boundary=inflow_boundary_left,
+        waterdepth_boundary=waterdepth_boundary_right,
+        inflow_type='constant',    
+        inflow_rate=flowrate           
+    )
 ```
 
 Finally we call the run_simulation method to start the simulation and pass the desired output settings. To visualize the results we extract the required arrays from the results container and pass them to the animate_network function
@@ -215,6 +220,7 @@ def main():
         'max_iterations': 20,        # Maximum Picard iterations
         'picard_depth_tol': 1e-4,    # Picard depth tolerance (meters)
         'ss_rel_l2tol': 1e-7,        # L2 tolerance for steady-state
+        'ss_rel_madtol': 1e-8         # Median tolerance for steady-state
     }
     
     simulation_settings = {
@@ -296,8 +302,12 @@ Now we set the boundary conditions for the inflow node (constant flow rate) and 
     inflow_boundary_left = {node: flowrate for node in inflow_nodes}
     waterdepth_boundary_right = {node: water_depth for node in outflow_nodes}
     
-    flow_network.set_boundary_conditions(inflow_boundary = inflow_boundary_left)
-    flow_network.set_boundary_conditions(waterdepth_boundary = waterdepth_boundary_right)
+    flow_network.set_boundary_conditions(
+        inflow_boundary=inflow_boundary_left,
+        waterdepth_boundary=waterdepth_boundary_right,
+        inflow_type='constant',    
+        inflow_rate=flowrate       
+    )
 ```
 
 We then call the run_simulation method to start the simulation and pass the desired output settings. As in the previous example we extract the required arrays from the results container and pass them to the animate_network function. In addition we also return the results container and the openPNM geometry object (cn_geometry) from the main() function for further plotting (here for example the outflow at the outlet conduit) and easier access in a variable explorer of your IDE.
@@ -404,6 +414,7 @@ def main():
         'max_iterations': 20,        # Maximum Picard iterations
         'picard_depth_tol': 1e-5,    # Picard depth tolerance (meters)
         'ss_rel_l2tol': 1e-7,        # L2 tolerance for steady-state
+        'ss_rel_madtol': 1e-8         # Median tolerance for steady-state
     }
     
     simulation_settings = {
@@ -506,8 +517,12 @@ Finally we create a FlowSimulation object and set the initial conditions (no flo
     inflow_boundary_left = {0: 2.0} # Flowrate in m^2/s at node 0
     waterdepth_boundary_right = {4999: water_height[4999]}
     
-    flow_network.set_boundary_conditions(inflow_boundary = inflow_boundary_left)
-    flow_network.set_boundary_conditions(waterdepth_boundary = waterdepth_boundary_right)
+    flow_network.set_boundary_conditions(
+        inflow_boundary=inflow_boundary_left,
+        waterdepth_boundary=waterdepth_boundary_right,
+        inflow_type='constant',    # Constant inflow
+        inflow_rate=flow_rate          # Constant flow rate
+    )
     
     # Run simulation and store results
     results = flow_network.run_simulation(desired_outputs = output_settings)
