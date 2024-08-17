@@ -693,16 +693,35 @@ fig.savefig('analytical_solution.eps', format='eps', bbox_inches='tight')
 
 ## Boundary conditions
 
-openKARST currently accepts the following boundary conditions via methods: (1) constant water depths, (2) constant flow rate, (3) free outfall via critical depth. Application of (1) and (2) is demonstrated in the working examples on single nodes. Setting multiple nodes as boundaries is also possible via the set_boundary_conditions() method:
+openKARST currently accepts the following boundary conditions via methods: (1) constant water depths, (2) constant flow rate, (3) ramping flow rate, (4) free outfall via critical depth. Application of (1) and (2) is demonstrated in the working examples on single nodes. Setting multiple nodes as boundaries is also possible via the set_boundary_conditions() method:
 
 ```python
-
-inflow_boundary_nodes = {10: 0.1, 24: 0.2, 35: 0.5}
+inflow_boundary_nodes = {10: 0.1}
 waterdepth_boundary_nodes = {0: 0.01, 26: 0.2}
 
-flow_network.set_boundary_conditions(inflow_boundary = inflow_boundary_nodes)
+flow_network.set_boundary_conditions(
+	inflow_boundary=inflow_boundary_left,
+	inflow_type='constant',    
+	inflow_rate=flow_rate        
+)
+
 flow_network.set_boundary_conditions(waterdepth_boundary = waterdepth_boundary_nodes)
 
+```
+
+A ramping inflow rate can be set as follows. The inflow rate is linearly ramped up to the peak_rate and then back to the inflow rate between start and end time. No inflow occurs before the start time.
+
+```python
+inflow_boundary_nodes = {10: 0.1}
+
+flow_network.set_boundary_conditions(
+    inflow_boundary=inflow_boundary_left,
+    inflow_type='ramp',        # Ramped inflow
+    start_time=100,              # Start time of ramp (seconds)
+    end_time=200,              # End time of ramp (seconds)
+    inflow_rate=0.01,          # Initial inflow rate (at start time)
+    peak_rate=0.05             # Peak inflow rate
+)
 ```
 
 A free outfall via a critical depth boundary condition can be set as follows (e.g. at node 12):
