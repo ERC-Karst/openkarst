@@ -502,36 +502,53 @@ class FlowSimulation:
         np.copyto(self.y, initial_y)
 
         
-    def set_boundary_conditions(
-            self,
-            waterdepth_boundary=None,
-            inflow_boundary=None,
-            critical_depth_boundary=None
-    ):
-        """
-        Set the boundary conditions for the flow simulation.
+def set_boundary_conditions(
+        self,
+        waterdepth_boundary=None,
+        inflow_boundary=None,
+        critical_depth_boundary=None,
+        inflow_type='constant',  # New parameter to specify inflow type
+        inflow_rate=0.01,        # Default constant inflow rate
+        start_time=0,            # Start time for ramped inflow
+        end_time=200,            # End time for ramped inflow
+        peak_rate=0.05           # Peak rate for ramped inflow
+):
+    """
+    Set the boundary conditions for the flow simulation.
 
-        This method allows setting the boundary conditions for water depth,
-        inflow, and critical depth in the flow simulation.
+    This method allows setting the boundary conditions for water depth,
+    inflow, and critical depth in the flow simulation.
 
-        Args:
-            waterdepth_boundary (dict, optional): Dictionary of water depth 
-                boundary conditions {node_index: value}.
-            inflow_boundary (dict, optional): Dictionary of inflow boundary 
-                conditions {node_index: value}.
-            critical_depth_boundary (dict, optional): Dictionary of critical 
-                depth boundary conditions {node_index: value}.
-        """
+    Args:
+        waterdepth_boundary (dict, optional): Dictionary of water depth 
+            boundary conditions {node_index: value}.
+        inflow_boundary (dict, optional): Dictionary of inflow boundary 
+            conditions {node_index: value}.
+        critical_depth_boundary (dict, optional): Dictionary of critical 
+            depth boundary conditions {node_index: value}.
+        inflow_type (str, optional): Type of inflow ('constant' or 'ramp').
+        inflow_rate (float, optional): Constant inflow rate if inflow_type 
+            is 'constant'.
+        start_time (float, optional): Start time for ramped inflow.
+        end_time (float, optional): End time for ramped inflow.
+        peak_rate (float, optional): Peak rate for ramped inflow.
+    """
     
+    if waterdepth_boundary is not None:
+        self.waterdepth_boundary = waterdepth_boundary
 
-        if waterdepth_boundary is not None:
-            self.waterdepth_boundary = waterdepth_boundary
+    if inflow_boundary is not None:
+        self.inflow_boundary = inflow_boundary
 
-        if inflow_boundary is not None:
-            self.inflow_boundary = inflow_boundary
-            
-        if critical_depth_boundary is not None:
-            self.critical_depth_boundary = critical_depth_boundary
+    if critical_depth_boundary is not None:
+        self.critical_depth_boundary = critical_depth_boundary
+
+   
+    self.inflow_type = inflow_type
+    self.inflow_rate = inflow_rate
+    self.start_time = start_time
+    self.end_time = end_time
+    self.peak_rate = peak_rate
        
             
     def set_stop_conditions(self, flowrate_condition=None, flowrate_threshold=0.98):
@@ -551,8 +568,6 @@ class FlowSimulation:
 
         This method copies the current state variables to their respective previous and
         old state variables to prepare for the next iteration of the simulation.
-
-        It also logs a debug message indicating that the state variables have been initialized.
         """
         
         np.copyto(self.Q_old_t, self.Q)
@@ -1151,7 +1166,7 @@ class FlowSimulation:
     
         # Check if any conduit is full and halve the Courant number if so
         if np.any(self.is_full_y_mid):
-            effective_courant = self.courant / 2
+            effective_courant = self.courant #/ 2
         else:
             effective_courant = self.courant
     
@@ -1440,9 +1455,18 @@ class FlowSimulation:
                   self.Q_new[is_negative_flow])
         
         # Apply inflow boundary conditions
-        for node_index, inflow_value in self.inflow_boundary.items():
+        current_time = self.current_timestep * self.dt
+        for node_index in self.inflow_boundary:
+            if self.inflow_type == 'constant':
+                # Apply constant inflow rate
+                inflow_value = self.inflow_rate
+            elif self.inflow_type == 'ramp':
+                # Apply time-dependent inflow rate
+                inflow_value = _time_dependent_flowrate(
+                    current_time, self.start_time, self.end_time, self.inflow_rate, self.peak_rate
+                )
             self.dQ_new[node_index] += inflow_value
-            
+                
         #self.dQ_new[self.network.pores('left')] += 1.0
         
         # This is for Delestre 6.1 (width of channel is 0.12)
@@ -1709,5 +1733,35 @@ class FlowSimulation:
         critical_depth = optimize.fsolve(self._critical_depth, initial_guess, args=(Q, g, diameter))[0]
         return critical_depth
 
-
+    
+    def _time_dependent_flowrate(current_time, start_time, end_time, initial_rate, peak_rate):
+        """
+        Calculate the inflow rate based on the current time.
+        
+        Args:
+            current_time (float): The current time in seconds.
+            start_time (float): The time at which the ramp-up starts.
+            end_time (float): The time at which the ramp-down ends.
+            initial_rate (float): The initial flow rate at the start time.
+            peak_rate (float): The peak flow rate during the ramp-up.
+            
+        Returns:
+            float: The inflow rate at the given time.
+        """
+        # Duration for ramping up
+        ramp_up_duration = (end_time - start_time) / 2
+        
+        # Ramp-up phase
+        if start_time <= current_time < start_time + ramp_up_duration:
+            return initial_rate + (peak_rate - initial_rate) * \
+                   ((current_time - start_time) / ramp_up_duration)
+        
+        # Ramp-down phase
+        elif start_time + ramp_up_duration <= current_time <= end_time:
+            return peak_rate - (peak_rate - initial_rate) * \
+                   ((current_time - (start_time + ramp_up_duration)) / ramp_up_duration)
+        
+        # Outside the defined period, return the initial flow rate
+        else:
+            return initial_rate
    
