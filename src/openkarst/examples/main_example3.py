@@ -130,11 +130,16 @@ def main():
     initial_y = np.full(cn_geometry.Np, 0.0, dtype=float)  # Initial water depths at each node (Np pores)    
     flow_network.set_initial_conditions(initial_Q, initial_y)
       
-    inflow_boundary_left = {0: 2.0} # Flowrate in m^2/s at node 0
+    flow_rate = 2.0
+    inflow_boundary_left = {0: flow_rate} # Flowrate in m^2/s at node 0
     waterdepth_boundary_right = {4999: water_height[4999]}
     
-    flow_network.set_boundary_conditions(inflow_boundary = inflow_boundary_left)
-    flow_network.set_boundary_conditions(waterdepth_boundary = waterdepth_boundary_right)
+    flow_network.set_boundary_conditions(
+        inflow_boundary=inflow_boundary_left,
+        waterdepth_boundary=waterdepth_boundary_right,
+        inflow_type='constant',    # Constant inflow
+        inflow_rate=flow_rate          # Constant flow rate
+    )
     
     # Run simulation and store results
     results = flow_network.run_simulation(desired_outputs = output_settings)

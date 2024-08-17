@@ -1462,7 +1462,7 @@ class FlowSimulation:
                 inflow_value = self.inflow_rate
             elif self.inflow_type == 'ramp':
                 # Apply time-dependent inflow rate
-                inflow_value = _time_dependent_flowrate(
+                inflow_value = self._time_dependent_flowrate(
                     current_time, self.start_time, self.end_time, self.inflow_rate, self.peak_rate
                 )
             self.dQ_new[node_index] += inflow_value
