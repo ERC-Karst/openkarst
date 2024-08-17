@@ -1444,20 +1444,23 @@ class FlowSimulation:
         np.add.at(self.dQ_new, self.n_indices2[is_negative_flow],
                   self.Q_new[is_negative_flow])
         
-       # Apply inflow boundary conditions with node-specific and time-dependent inflows
+        # Apply inflow boundary conditions with node-specific and time-dependent inflows
         current_time = self.current_timestep * self.dt
         for node_index, inflow_value in self.inflow_boundary.items():
             if self.inflow_type == 'constant':
                 # Apply constant inflow rate
                 self.dQ_new[node_index] += inflow_value
             elif self.inflow_type == 'ramp':
-                # Apply time-dependent inflow rate
-                initial_rate, peak_rate = inflow_value if isinstance(inflow_value, tuple) else (inflow_value, inflow_value)
-                ramped_inflow = self._time_dependent_flowrate(
-                    current_time, self.start_time, self.end_time, initial_rate, peak_rate
-                )
-                self.dQ_new[node_index] += ramped_inflow
-                
+                # Handle ramped inflow
+                if isinstance(inflow_value, tuple) and len(inflow_value) == 2:
+                    initial_rate, peak_rate = inflow_value
+                    ramped_inflow = self._time_dependent_flowrate(
+                        current_time, self.start_time, self.end_time, initial_rate, peak_rate
+                    )
+                    self.dQ_new[node_index] += ramped_inflow
+                else:
+                    raise ValueError(f"Expected a tuple for ramped inflow at node {node_index}, got {inflow_value}")
+
         #self.dQ_new[self.network.pores('left')] += 1.0
         
         # This is for Delestre 6.1 (width of channel is 0.12)
@@ -1725,7 +1728,8 @@ class FlowSimulation:
         return critical_depth
 
     
-    def _time_dependent_flowrate(current_time, start_time, end_time, initial_rate, peak_rate):
+    def _time_dependent_flowrate(self, current_time, start_time, end_time, initial_rate, peak_rate):
+        
         """
         Calculate the inflow rate based on the current time.
         

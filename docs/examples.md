@@ -137,10 +137,10 @@ Now we set proper boundary conditions, in this case a constant inflow rate at th
     
     flow_network.set_boundary_conditions(
     inflow_boundary=inflow_boundary_left,
+    waterdepth_boundary=waterdepth_boundary_right,
     inflow_type='constant',
     )
     
-    flow_network.set_boundary_conditions(waterdepth_boundary=waterdepth_boundary_right)
 ```
 
 Finally we call the run_simulation method to start the simulation and pass the desired output settings. To visualize the results we extract the required arrays from the results container and pass them to the animate_network function
@@ -304,10 +304,9 @@ Now we set the boundary conditions for the inflow node (constant flow rate) and 
     
     flow_network.set_boundary_conditions(
     inflow_boundary=inflow_boundary_left,
+    waterdepth_boundary=waterdepth_boundary_right,
     inflow_type='constant',
     )
-    
-    flow_network.set_boundary_conditions(waterdepth_boundary=waterdepth_boundary_right)
 ```
 
 We then call the run_simulation method to start the simulation and pass the desired output settings. As in the previous example we extract the required arrays from the results container and pass them to the animate_network function. In addition we also return the results container and the openPNM geometry object (cn_geometry) from the main() function for further plotting (here for example the outflow at the outlet conduit) and easier access in a variable explorer of your IDE.
@@ -519,10 +518,9 @@ Finally we create a FlowSimulation object and set the initial conditions (no flo
     
     flow_network.set_boundary_conditions(
     inflow_boundary=inflow_boundary_left,
+    waterdepth_boundary=waterdepth_boundary_right,
     inflow_type='constant',
     )
-    
-    flow_network.set_boundary_conditions(waterdepth_boundary=waterdepth_boundary_right)
     
     # Run simulation and store results
     results = flow_network.run_simulation(desired_outputs = output_settings)
@@ -700,12 +698,11 @@ inflow_boundary_nodes = {10: 0.1, 15: 0.5, 26: 0.3}
 waterdepth_boundary_nodes = {0: 0.01, 26: 0.2}
 
 flow_network.set_boundary_conditions(
-	inflow_boundary=inflow_boundary_left,
+	inflow_boundary=inflow_boundary_nodes,
+	waterdepth_boundary=waterdepth_boundary_nodes,
 	inflow_type='constant',    
 	inflow_rate=flow_rate        
 )
-
-flow_network.set_boundary_conditions(waterdepth_boundary = waterdepth_boundary_nodes)
 
 ```
 
