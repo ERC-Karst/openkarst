@@ -135,12 +135,12 @@ Now we set proper boundary conditions, in this case a constant inflow rate at th
     inflow_boundary_left = {node: flowrate for node in left_nodes}
     waterdepth_boundary_right = {node: water_depth for node in right_nodes}
     
- 	flow_network.set_boundary_conditions(
-        inflow_boundary=inflow_boundary_left,
-        waterdepth_boundary=waterdepth_boundary_right,
-        inflow_type='constant',    
-        inflow_rate=flowrate           
+    flow_network.set_boundary_conditions(
+    inflow_boundary=inflow_boundary_left,
+    inflow_type='constant',
     )
+    
+    flow_network.set_boundary_conditions(waterdepth_boundary=waterdepth_boundary_right)
 ```
 
 Finally we call the run_simulation method to start the simulation and pass the desired output settings. To visualize the results we extract the required arrays from the results container and pass them to the animate_network function
@@ -303,11 +303,11 @@ Now we set the boundary conditions for the inflow node (constant flow rate) and 
     waterdepth_boundary_right = {node: water_depth for node in outflow_nodes}
     
     flow_network.set_boundary_conditions(
-        inflow_boundary=inflow_boundary_left,
-        waterdepth_boundary=waterdepth_boundary_right,
-        inflow_type='constant',    
-        inflow_rate=flowrate       
+    inflow_boundary=inflow_boundary_left,
+    inflow_type='constant',
     )
+    
+    flow_network.set_boundary_conditions(waterdepth_boundary=waterdepth_boundary_right)
 ```
 
 We then call the run_simulation method to start the simulation and pass the desired output settings. As in the previous example we extract the required arrays from the results container and pass them to the animate_network function. In addition we also return the results container and the openPNM geometry object (cn_geometry) from the main() function for further plotting (here for example the outflow at the outlet conduit) and easier access in a variable explorer of your IDE.
@@ -518,11 +518,11 @@ Finally we create a FlowSimulation object and set the initial conditions (no flo
     waterdepth_boundary_right = {4999: water_height[4999]}
     
     flow_network.set_boundary_conditions(
-        inflow_boundary=inflow_boundary_left,
-        waterdepth_boundary=waterdepth_boundary_right,
-        inflow_type='constant',    # Constant inflow
-        inflow_rate=flow_rate          # Constant flow rate
+    inflow_boundary=inflow_boundary_left,
+    inflow_type='constant',
     )
+    
+    flow_network.set_boundary_conditions(waterdepth_boundary=waterdepth_boundary_right)
     
     # Run simulation and store results
     results = flow_network.run_simulation(desired_outputs = output_settings)
@@ -696,7 +696,7 @@ fig.savefig('analytical_solution.eps', format='eps', bbox_inches='tight')
 openKARST currently accepts the following boundary conditions via methods: (1) constant water depths, (2) constant flow rate, (3) ramping flow rate, (4) free outfall via critical depth. Application of (1) and (2) is demonstrated in the working examples on single nodes. Setting multiple nodes as boundaries is also possible via the set_boundary_conditions() method:
 
 ```python
-inflow_boundary_nodes = {10: 0.1}
+inflow_boundary_nodes = {10: 0.1, 15: 0.5, 26: 0.3}
 waterdepth_boundary_nodes = {0: 0.01, 26: 0.2}
 
 flow_network.set_boundary_conditions(
@@ -709,18 +709,21 @@ flow_network.set_boundary_conditions(waterdepth_boundary = waterdepth_boundary_n
 
 ```
 
-A ramping inflow rate can be set as follows. The inflow rate is linearly ramped up to the peak_rate and then back to the inflow rate between start and end time. No inflow occurs before the start time.
+A ramping inflow rate can be set for single or multiple node as follows. The inflow rate is linearly ramped up to the peak_rate and then back to the inflow rate between start and end time. No inflow occurs before the start time.
 
 ```python
-inflow_boundary_nodes = {10: 0.1}
+inflow_boundary_left = {
+    100: (0.01, 0.05),  # Node 100 ramps from 0.01 to 0.05 m³/s
+    101: (0.02, 0.03),  # Node 101 ramps from 0.02 to 0.03 m³/s
+    102: (0.015, 0.025),  # Node 102 ramps from 0.015 to 0.025 m³/s
+}
 
 flow_network.set_boundary_conditions(
     inflow_boundary=inflow_boundary_left,
-    inflow_type='ramp',        # Ramped inflow
-    start_time=100,              # Start time of ramp (seconds)
-    end_time=200,              # End time of ramp (seconds)
-    inflow_rate=0.01,          # Initial inflow rate (at start time)
-    peak_rate=0.05             # Peak inflow rate
+    waterdepth_boundary=waterdepth_boundary_right,
+    inflow_type='ramp',  # Use ramped inflow rates
+    start_time=0,        # Start ramping at time = 0 seconds
+    end_time=200         # End ramping at time = 200 seconds
 )
 ```
 

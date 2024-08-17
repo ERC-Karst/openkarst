@@ -103,13 +103,12 @@ def main():
     inflow_boundary_left = {node: flowrate for node in left_nodes}
     waterdepth_boundary_right = {node: water_depth for node in right_nodes}
     
-    flow_network.set_boundary_conditions(inflow_boundary = inflow_boundary_left)
     flow_network.set_boundary_conditions(
     inflow_boundary=inflow_boundary_left,
-    waterdepth_boundary=waterdepth_boundary_right,
-    inflow_type='constant',    # Constant inflow
-    inflow_rate=flowrate           # Constant flow rate
+    inflow_type='constant',
     )
+    
+    flow_network.set_boundary_conditions(waterdepth_boundary=waterdepth_boundary_right)
 
     
     # Run simulation and store results

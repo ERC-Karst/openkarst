@@ -135,11 +135,11 @@ def main():
     waterdepth_boundary_right = {4999: water_height[4999]}
     
     flow_network.set_boundary_conditions(
-        inflow_boundary=inflow_boundary_left,
-        waterdepth_boundary=waterdepth_boundary_right,
-        inflow_type='constant',    # Constant inflow
-        inflow_rate=flow_rate          # Constant flow rate
+    inflow_boundary=inflow_boundary_left,
+    inflow_type='constant',
     )
+    
+    flow_network.set_boundary_conditions(waterdepth_boundary=waterdepth_boundary_right)
     
     # Run simulation and store results
     results = flow_network.run_simulation(desired_outputs = output_settings)
