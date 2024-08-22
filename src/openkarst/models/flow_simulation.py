@@ -1148,11 +1148,6 @@ class FlowSimulation:
         """
         
         # First criterion
-        # Lower limit for the Froude number
-        froude_threshold = 0.01
-    
-        # Filter out conduits with Froude number <= 0.01
-        valid_indices = froude > froude_threshold
     
         # Check if any conduit is full and halve the Courant number if so
         if np.any(self.is_full_y_mid):
@@ -1162,7 +1157,7 @@ class FlowSimulation:
     
         # Calculate dt_criterion_froude only for valid conduits
         dt_criterion_froude = np.where(
-            valid_indices & (v_mid != 0),
+            v_mid != 0,
             1 / np.abs(v_mid) * (froude / (1 + froude)) * effective_courant,
             np.inf
         )
