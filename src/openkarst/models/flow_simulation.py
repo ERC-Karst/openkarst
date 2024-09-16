@@ -507,9 +507,9 @@ class FlowSimulation:
             waterdepth_boundary=None,
             inflow_boundary=None,
             critical_depth_boundary=None,
-            inflow_type='constant',  # constant or ramp
-            start_time=0,            # Start time for ramped inflow
-            end_time=200             # End time for ramped inflow
+            inflow_type='constant',  # constant, constant_timespan or ramp
+            start_time=0,            # Start time for constant_timespan or ramped inflow
+            end_time=200             # End time for constant_timespan or ramped inflow
     ):
         """
         Set the boundary conditions for the flow simulation.
@@ -521,9 +521,9 @@ class FlowSimulation:
                 conditions {node_index: value or (initial_rate, peak_rate)}.
             critical_depth_boundary (dict, optional): Dictionary of critical 
                 depth boundary conditions {node_index: value}.
-            inflow_type (str, optional): Type of inflow ('constant' or 'ramp').
-            start_time (float, optional): Start time for ramped inflow.
-            end_time (float, optional): End time for ramped inflow.
+            inflow_type (str, optional): Type of inflow ('constant', 'constant_timespan', or 'ramp').
+            start_time (float, optional): Start time for constant_timespan or ramped inflow.
+            end_time (float, optional): End time for constant_timespan or ramped inflow.
         """
         
         if waterdepth_boundary is not None:
@@ -1455,6 +1455,14 @@ class FlowSimulation:
                     self.dQ_new[node_index] += ramped_inflow
                 else:
                     raise ValueError(f"Expected a tuple for ramped inflow at node {node_index}, got {inflow_value}")
+                    
+            elif self.inflow_type == 'constant_timespan':
+                # Apply constant inflow rate only within a specific time span
+                if self.time_start <= current_time <= self.time_end:
+                    self.dQ_new[node_index] += inflow_value
+                # Optionally, handle the case when it's outside the time span
+                else:
+                    self.dQ_new[node_index] += 0  # No inflow if outside the time range
 
         #self.dQ_new[self.network.pores('left')] += 1.0
         
@@ -1561,7 +1569,26 @@ class FlowSimulation:
 
         """
 
-        if np.all(np.abs(self.y_new - self.y_prev_i) < self.picard_depth_tol):
+        # if np.all(np.abs(self.y_new - self.y_prev_i) < self.picard_depth_tol):
+        #     return True
+        # else:
+        #     return False
+        
+        # Calculate the L2 norm of the difference between the new and previous water depths
+        l2_norm_diff = np.linalg.norm(self.y_new - self.y_prev_i)
+    
+        # Calculate the L2 norm of the new water depths
+        l2_norm_new = np.linalg.norm(self.y_new)
+    
+        # Compute the relative L2 norm
+        if l2_norm_new != 0:
+            relative_l2_norm = l2_norm_diff / l2_norm_new
+        else:
+            # Handle the case where the new L2 norm is zero (to avoid division by zero)
+            relative_l2_norm = l2_norm_diff
+    
+        # Check if the relative L2 norm is below the specified tolerance
+        if relative_l2_norm < self.picard_depth_tol:
             return True
         else:
             return False
