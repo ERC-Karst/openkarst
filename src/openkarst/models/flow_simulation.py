@@ -1458,7 +1458,7 @@ class FlowSimulation:
                     
             elif self.inflow_type == 'constant_timespan':
                 # Apply constant inflow rate only within a specific time span
-                if self.time_start <= current_time <= self.time_end:
+                if self.start_time <= current_time <= self.end_time:
                     self.dQ_new[node_index] += inflow_value
                 # Optionally, handle the case when it's outside the time span
                 else:
