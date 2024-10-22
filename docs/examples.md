@@ -122,7 +122,7 @@ We set constant initial conditions at all nodes and conduits. Note that again th
     flow_network.set_initial_conditions(initial_Q, initial_y)
 ```
 
-Now we set proper boundary conditions, in this case a constant inflow rate at the left side and a constant water depths at the right side. Note that the indexing of nodes starts at zero. Both boundaries receive dictionaries of nodes and associated values (flow rates or depths).
+Now we set proper boundary conditions, in this case a constant volumetric inflow rate at the left side and a constant water depths at the right side. Note that the indexing of nodes starts at zero. Both boundaries receive dictionaries of nodes and associated values (flow rates or depths).
 
 ```python
 # Set boundary conditions
@@ -132,7 +132,7 @@ Now we set proper boundary conditions, in this case a constant inflow rate at th
     flowrate  = 0.1     # Flowrate in m^3/s
     water_depth = 0.01  # Water depths in m
     
-    inflow_boundary_left = {node: flowrate for node in left_nodes}
+    inflow_boundary_left = {node: ('volumetric', flow_rate) for node in left_nodes}
     waterdepth_boundary_right = {node: water_depth for node in right_nodes}
     
     flow_network.set_boundary_conditions(
@@ -288,7 +288,7 @@ As in [Example 1](#example-1-basic-setup) we use the FlowSimulation class to cre
     flow_network.set_initial_conditions(initial_Q, initial_y)    
 ```
 
-Now we set the boundary conditions for the inflow node (constant flow rate) and outlet node (constant water depths). Note that these have been chosen by inspecting the cave network data. In principle node numbers can also be determined from the information stored in the openPNM geometry object, e.g., finding the highest/lowest node, or nodes with coordination number 1.
+Now we set the boundary conditions for the inflow node (constant volumetric flow rate) and outlet node (constant water depths). Note that these have been chosen by inspecting the cave network data. In principle node numbers can also be determined from the information stored in the openPNM geometry object, e.g., finding the highest/lowest node, or nodes with coordination number 1.
 
 ```python
 
@@ -299,7 +299,7 @@ Now we set the boundary conditions for the inflow node (constant flow rate) and 
     flowrate  = 0.01     # Flowrate in m^3/s
     water_depth = 0.01  # Water depths in m
     
-    inflow_boundary_left = {node: flowrate for node in inflow_nodes}
+    inflow_boundary_left = {node: ('volumetric', flow_rate) for node in inflow_nodes}
     waterdepth_boundary_right = {node: water_depth for node in outflow_nodes}
     
     flow_network.set_boundary_conditions(
@@ -497,7 +497,7 @@ Next we compute the height field z for the channel base for a given water height
 
 ```
 
-Finally we create a FlowSimulation object and set the initial conditions (no flows, empty channel). We also set the inflow boundary at the left side and the constant water depth boundary at the right side (computed from the analytical solution). 
+Finally we create a FlowSimulation object and set the initial conditions (no flows, empty channel). We also set the inflow boundary at the left side (volumetric inflow) and the constant water depth boundary at the right side (computed from the analytical solution). 
 
 ```python
 
@@ -512,8 +512,7 @@ Finally we create a FlowSimulation object and set the initial conditions (no flo
     initial_Q = np.full(cn_geometry.Nt, 0.0, dtype=float)   # Initial flows at each conduit (Nt throats)
     initial_y = np.full(cn_geometry.Np, 0.0, dtype=float)  # Initial water depths at each node (Np pores)    
     flow_network.set_initial_conditions(initial_Q, initial_y)
-      
-    inflow_boundary_left = {0: 2.0} # Flowrate in m^2/s at node 0
+    inflow_boundary_left = {0: ('volumetric', flow_rate)} # Flowrate in m^2/s at node 0
     waterdepth_boundary_right = {4999: water_height[4999]}
     
     flow_network.set_boundary_conditions(
@@ -691,7 +690,7 @@ fig.savefig('analytical_solution.eps', format='eps', bbox_inches='tight')
 
 ## Boundary conditions
 
-openKARST currently accepts the following boundary conditions via methods: (1) constant water depths, (2) constant flow rate, (3) ramping flow rate, (4) free outfall via critical depth. Application of (1) and (2) is demonstrated in the working examples on single nodes. Setting multiple nodes as boundaries is also possible via the set_boundary_conditions() method:
+openKARST currently accepts the following boundary conditions and source/sink terms via methods: (1) constant water depths, (2) constant flow rate, (3) ramping flow rate, (4) free outfall via critical depth and (5) source/sink terms such as rainfall. Application of (1) and (2) is demonstrated in the working examples on single nodes. Application of (5) the source/sink term (rainfall) is demonstrated in the analytical solutions that can be found on the Zenodo directory. Note, that this type of source/sink term is currently only supported for channel type geometries. Setting multiple nodes as boundaries is also possible via the set_boundary_conditions() method:
 
 ```python
 inflow_boundary_nodes = {10: 0.1, 15: 0.5, 26: 0.3}
@@ -710,9 +709,9 @@ A ramping inflow rate can be set for single or multiple node as follows. The inf
 
 ```python
 inflow_boundary_left = {
-    100: (0.01, 0.05),  # Node 100 ramps from 0.01 to 0.05 m³/s
-    101: (0.02, 0.03),  # Node 101 ramps from 0.02 to 0.03 m³/s
-    102: (0.015, 0.025),  # Node 102 ramps from 0.015 to 0.025 m³/s
+    100: ('volumetric', 0.01, 0.05),  # Node 100 ramps from 0.01 to 0.05 m³/s
+    101: ('volumetric', 0.02, 0.03),  # Node 101 ramps from 0.02 to 0.03 m³/s
+    102: ('volumetric', 0.015, 0.025),  # Node 102 ramps from 0.015 to 0.025 m³/s
 }
 
 flow_network.set_boundary_conditions(

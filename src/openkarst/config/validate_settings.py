@@ -60,13 +60,13 @@ def validate_settings(physical_properties, solver_settings, simulation_settings,
                          "less than 1e-3.")
 
     if not (isinstance(simulation_settings.min_waterdepth, (int, float)) and 
-            1e-12 <= simulation_settings.min_waterdepth < 1e-5):
-        raise ValueError("Error: 'min_waterdepth' must be type int/float and greater equal 1e-10 and "
+            1e-14 <= simulation_settings.min_waterdepth < 1e-5):
+        raise ValueError("Error: 'min_waterdepth' must be type int/float and greater equal 1e-14 and "
                          "less than 1e-5 (meter).")
     
     if not (isinstance(simulation_settings.min_flowrate, (int, float)) and 
-            1e-12 <= simulation_settings.min_flowrate < 1e-5):
-        raise ValueError("Error: 'min_flowrate' must be type int/float and greater equal 1e-10 and "
+            0e-14 <= simulation_settings.min_flowrate < 1e-5):
+        raise ValueError("Error: 'min_flowrate' must be type int/float and greater equal 0e-14 and "
                          "less than 1e-5 (m^3/s).")
 
     if not (isinstance(simulation_settings.courant, (int, float)) and 

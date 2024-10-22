@@ -12,24 +12,43 @@ from typing import Dict
 
 def initialize_results_container(desired_outputs: Dict[str, bool], logger):
     """
-    Initializes a results container based on the desired outputs.
+    Initializes a results container for storing selected simulation outputs.
 
-    This function creates a dictionary to store simulation results for the keys 
-    specified in `desired_outputs` that are set to True. It logs the creation of 
-    the results container using the provided logger.
+    This function validates the user-specified `desired_outputs` dictionary against a
+    predefined set of supported output keys. It then creates a container dictionary 
+    where each valid key maps to an empty list to store time-dependent results.
 
     Args:
-        desired_outputs (Dict[str, bool]): A dictionary specifying which results to store. 
-            Keys are the names of the results, and values are booleans indicating whether 
-            to store that result.
-        logger (logging.Logger): Logger instance for logging the creation of the results container.
+        desired_outputs (Dict[str, bool]): A dictionary specifying which results to store.
+            Keys must be among the supported output types, and values should be True
+            to enable storing that result.
+        logger (logging.Logger): Logger instance for logging messages about the setup.
 
     Returns:
-        Dict[str, list]: A dictionary initialized to store lists of the specified results.
+        Dict[str, list]: A dictionary with result keys initialized to empty lists.
+
+    Raises:
+        ValueError: If `desired_outputs` contains unknown or unsupported keys.
     """
-    
-    results_container = {key: [] for key in desired_outputs if desired_outputs[key]}
-    logger.info('Results container created for: %s', desired_outputs)
+
+    allowed_keys = {
+        'convergence_fails',
+        'flowrates',
+        'water_depths',
+        'time',
+        'time_step_size',
+        'l2_norms',
+        'mad_norms',
+        'reynolds_numbers'
+    }
+
+    invalid_keys = [key for key in desired_outputs if key not in allowed_keys and key != 'output_interval']
+    if invalid_keys:
+        raise ValueError(f"Invalid keys in desired_outputs: {invalid_keys}. "
+                         f"Allowed keys are: {sorted(allowed_keys)}")
+
+    results_container = {key: [] for key in desired_outputs if desired_outputs.get(key, False) and key in allowed_keys}
+    logger.info('Results container created for: %s', list(results_container.keys()))
     return results_container
 
 def store_results(simulation_instance, results_container):

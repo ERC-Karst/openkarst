@@ -131,7 +131,7 @@ def main():
     flow_network.set_initial_conditions(initial_Q, initial_y)
       
     flow_rate = 2.0
-    inflow_boundary_left = {0: flow_rate} # Flowrate in m^2/s at node 0
+    inflow_boundary_left = {0: ('volumetric', flow_rate)} # Flowrate in m^2/s at node 0
     waterdepth_boundary_right = {4999: water_height[4999]}
     
     flow_network.set_boundary_conditions(

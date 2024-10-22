@@ -101,7 +101,9 @@ def main():
     flowrate  = 0.1     # Flowrate in m^3/s
     water_depth = 0.01  # Water depths in m
     
-    inflow_boundary_left = {node: flowrate for node in left_nodes}
+    
+    
+    inflow_boundary_left = {node: ('volumetric', flowrate) for node in left_nodes}
     waterdepth_boundary_right = {node: water_depth for node in right_nodes}
     
     flow_network.set_boundary_conditions(

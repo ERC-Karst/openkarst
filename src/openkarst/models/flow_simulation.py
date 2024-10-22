@@ -82,7 +82,7 @@ class FlowSimulation:
             Computes the upstream weighted hydraulic radii.
         _compute_upstream_weighted_areas(self, a1, a2, a_mid, h1, h2, alpha):
             Computes the upstream weighted areas.
-        _compute_flows(self, a1, a2, a_mid_upwtd, r_mid_upwtd, r_mid, h1, h2, alpha, v_mid):
+        _compute_flows(self, a1, a2, a_mid_upwtd, r_mid_upwtd, r_mid, h1, h2, alpha, v_mid, w_mid):
             Computes the flow rates for the conduits.
         _compute_water_depths(self, n_surface_a):
             Computes the water depths at each node.
@@ -248,6 +248,13 @@ class FlowSimulation:
         self.is_full_y_mid = np.full(self.network.Nt, False, dtype=bool)
 
         self.n_indices1, self.n_indices2 = self.network.conns.T
+        
+        # Compute coordination numbers for all nodes (used for recharge computation)
+        self.coordination_numbers = np.zeros(self.network.Np, dtype=int)
+        for node in range(self.network.Np):
+            self.coordination_numbers[node] = np.sum(
+                (self.n_indices1 == node) | (self.n_indices2 == node)
+            )
         
         # Node heights
         self.Z = np.full(self.network.Np, self.network['pore.coords'][:, 2], dtype=float)
@@ -657,7 +664,7 @@ class FlowSimulation:
                                                                 h1, h2, alpha)
             
             # Compute dQ components and new flows
-            self._compute_flows(a1, a2, a_mid_upwtd, r_mid_upwtd, r_mid, h1, h2,alpha, v_mid)
+            self._compute_flows(a1, a2, a_mid_upwtd, r_mid_upwtd, r_mid, h1, h2,alpha, v_mid, w_mid)
             
             self._compute_water_depths(n_surface_a)
 
@@ -1300,14 +1307,14 @@ class FlowSimulation:
         return a_mid_upwtd
                   
     def _compute_flows(self, a1, a2, a_mid_upwtd, r_mid_upwtd, r_mid,
-                      h1, h2, alpha, v_mid):
+                      h1, h2, alpha, v_mid, w_mid):
         """
         Compute the flow rates in conduits based on various physical parameters.
 
         This method calculates the flow rates in conduits by considering pressure terms,
-        inertial terms, and friction factors. It uses the Manning equation for free surface flows
-        and the Churchill equation for pressurized flows. The Darcy-Weisbach equation forms the 
-        foundation for calculating friction losses in both cases.
+        inertial terms (+ correction due to recharge), and friction factors. It uses the Manning
+        equation for free surface flows and the Churchill equation for pressurized flows. The
+        Darcy-Weisbach equation forms the  foundation for calculating friction losses in both cases.
 
         Args:
             a1 (numpy.ndarray): Areas at the first end of the conduits.
@@ -1319,6 +1326,7 @@ class FlowSimulation:
             h2 (numpy.ndarray): Hydraulic heads at the second end of the conduits.
             alpha (numpy.ndarray): Alpha values for upstream weighting.
             v_mid (numpy.ndarray): Velocities at the middle of the conduits.
+            w_mid (numpy.ndarray): Water widths at the middle of the conduits.
 
         Returns:
             None: This method updates the instance attribute `self.Q_new` directly.
@@ -1327,15 +1335,60 @@ class FlowSimulation:
         # Initialize arrays
         f = np.zeros(self.network.Nt, dtype=float)
         dQ_friction = np.zeros(self.network.Nt, dtype=float)
+        q_correction = np.zeros(self.network.Nt, dtype=float)
         
         # Pressure term (upstream weighting)
         dQ_pressure = -self.gravity * a_mid_upwtd * (h2 - h1) / self.conduit_lengths * self.dt
-
+        
+        # Get the indices of nodes with inflow boundary conditions
+        boundary_nodes = set(self.inflow_boundary.keys())  # Convert to set for faster lookup
+        
+        # Identify the conduits where at least one node has a boundary condition or source/sink
+        relevant_conduits = np.where(
+            np.isin(self.n_indices1, list(boundary_nodes)) | np.isin(self.n_indices2, list(boundary_nodes))
+        )[0]
+        
+        # Loop only over conduits that have a BC or source/sink term
+        for conduit in relevant_conduits:
+            n1 = self.n_indices1[conduit]
+            n2 = self.n_indices2[conduit]
+            
+            # Get boundary conditions for both nodes
+            inflow_n1 = self.inflow_boundary.get(n1, None)
+            inflow_n2 = self.inflow_boundary.get(n2, None)
+            
+            # Initialize q for both nodes to zero
+            q_n1, q_n2 = 0, 0
+        
+            # Check if inflow at node n1 is a source/sink flux or volumetric flow
+            if isinstance(inflow_n1, tuple):
+                if inflow_n1[0] == 'flux':
+                    q_n1 = inflow_n1[1] * w_mid[conduit]  # convert to m^2/s
+                # Volumetric boundary condition, hence no correction is applied
+                elif inflow_n1[0] == 'volumetric':
+                    q_n1 = 0.0
+            
+            # Check if inflow at node n2 is a source/sink flux or volumetric flow
+            if isinstance(inflow_n2, tuple):
+                if inflow_n2[0] == 'flux':
+                    q_n2 = inflow_n2[1] * w_mid[conduit]  # convert to m^2/s
+                # Volumetric boundary condition, hence no correction is applied
+                elif inflow_n2[0] == 'volumetric':
+                    q_n2 = 0.0 
+            
+            # Calculate the average q for the conduit
+            q_avg = (q_n1 + q_n2) / 2
+            
+            # Assign the correction term for this conduit
+            q_correction[conduit] = q_avg
+                    
+                   
         # Inertial terms (alpha is zero when pressurized)
-        dQ_inertia1 = alpha * 2 * v_mid * (self.a_mid_new - self.a_mid_old_t)
+        # Apply the correction term to the inertia term
+        dQ_inertia1 = alpha * 2 * v_mid * (self.a_mid_new - self.a_mid_old_t - q_correction * self.dt)
         dQ_inertia2 = alpha * v_mid * v_mid * (a2 - a1) / self.conduit_lengths * self.dt     
         
-        # Do not compute for open channel geometry
+        # Compute this only for circular conduits (i.e. not for open channel flows)
         if self.geometry_channel == False:
             # Compute Reynolds number for pressurized conduits
             self.Re_conduit[self.is_full_y_mid] = (
@@ -1438,10 +1491,44 @@ class FlowSimulation:
                   -self.Q_new[is_negative_flow])
         np.add.at(self.dQ_new, self.n_indices2[is_negative_flow],
                   self.Q_new[is_negative_flow])
-        
+ 
+                    
         # Apply inflow boundary conditions with node-specific and time-dependent inflows
         current_time = self.current_timestep * self.dt
+        # Loop through inflow boundary conditions and apply inflows
         for node_index, inflow_value in self.inflow_boundary.items():
+            
+            # Ensure inflow_value is numerical (flux or volumetric flowrate)
+            if isinstance(inflow_value, tuple):
+                # Handle both cases for flux or volumetric inflow
+                if inflow_value[0] == 'flux':
+                    flux_value = inflow_value[1]
+                    
+                    # Get the conduits connected to this node
+                    connected_conduits = np.where(
+                        (self.n_indices1 == node_index) | (self.n_indices2 == node_index)
+                    )[0]
+                    
+                    # Consider half of each connected conduit length
+                    half_conduit_lengths = 0.5 * self.conduit_lengths[connected_conduits]
+                    
+                    # For channel geometry only
+                    if self.geometry_channel:
+                        if self.channel_type == 'infinite':
+                            # Multiplied by unit width (1.0)
+                            inflow_value = flux_value * np.sum(half_conduit_lengths) # * 1.0
+                        else:  # Finite channel
+                            inflow_value = flux_value * self.channel_width * np.sum(half_conduit_lengths)
+                    else:
+                        raise ValueError("Flux inputs are not yet handled for non-channel geometries.")
+                else:
+                    # If the tuple is not a 'flux', assume it's a volumetric flowrate (m^3/s)
+                    inflow_value = inflow_value[1]
+            else:
+                # If not a tuple, assume inflow_value is already a float (volumetric flowrate in m^3/s)
+                inflow_value = float(inflow_value)
+    
+            # Apply inflow based on the type of inflow
             if self.inflow_type == 'constant':
                 # Apply constant inflow rate
                 self.dQ_new[node_index] += inflow_value
@@ -1454,25 +1541,13 @@ class FlowSimulation:
                     )
                     self.dQ_new[node_index] += ramped_inflow
                 else:
-                    raise ValueError(f"Expected a tuple for ramped inflow at node {node_index}, got {inflow_value}")
-                    
+                    raise ValueError(f"Expected a tuple for ramped inflow at node {node_index}, but got {inflow_value}")
             elif self.inflow_type == 'constant_timespan':
                 # Apply constant inflow rate only within a specific time span
                 if self.start_time <= current_time <= self.end_time:
                     self.dQ_new[node_index] += inflow_value
-                # Optionally, handle the case when it's outside the time span
                 else:
                     self.dQ_new[node_index] += 0  # No inflow if outside the time range
-
-        #self.dQ_new[self.network.pores('left')] += 1.0
-        
-        # This is for Delestre 6.1 (width of channel is 0.12)
-        #if self.current_timestep*dt > 5 and self.current_timestep*dt < 125 :
-        #    self.dQ_new[0:97] += (0.04*0.12) * 1.4444e-5
-        
-        #if self.current_timestep*dt > 5 and self.current_timestep*dt < 125 :
-        #self.dQ_new[self.network.pores('all')] += 0.001
-        #This needs to be multiplied by conduit length when dl is not 1m !!!
     
         # Compute the change in volume at each node (dV)
         dV = 0.5 * (self.dQ_old_t + self.dQ_new) * self.dt
@@ -1483,7 +1558,7 @@ class FlowSimulation:
                  
         # Update water depths using under-relaxation
         self.y_new = (1.0 - self.w) * self.y_prev_i + self.w * self.y_new
-
+    
         # Apply fixed head boundary conditions
         for node_index, waterdepth_value in self.waterdepth_boundary.items():
             self.y_new[node_index] = waterdepth_value
@@ -1508,7 +1583,7 @@ class FlowSimulation:
             critical_depth = max(critical_depths) if critical_depths else 0.0
             self.y_new[node_index] = critical_depth
     
- 
+        # Ensure water depths don't go negative
         self.y_new[self.y_new <= 0.0] = 0.0
         
         # Compute change in water depths
