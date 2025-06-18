@@ -25,6 +25,8 @@ from openkarst.io.results_handling import initialize_results_container, store_re
 from openkarst.utils.helpers import time_this
 from openkarst.utils.logging_config import setup_logging
 
+from openkarst.models.boundary_conditions import ConstantBC, RampBC, TimeSeriesBC
+
 
 class FlowSimulation:
     """
@@ -508,44 +510,107 @@ class FlowSimulation:
         np.copyto(self.Q, initial_Q)
         np.copyto(self.y, initial_y)
 
-            
-    def set_boundary_conditions(
-            self,
-            waterdepth_boundary=None,
-            inflow_boundary=None,
-            critical_depth_boundary=None,
-            inflow_type='constant',  # constant, constant_timespan or ramp
-            start_time=0,            # Start time for constant_timespan or ramped inflow
-            end_time=200             # End time for constant_timespan or ramped inflow
-    ):
+
+    def set_waterdepth_BC(self, nodes, values, mode='add'):
         """
-        Set the boundary conditions for the flow simulation.
+        Set water depth boundary conditions at specified nodes.
+
+        Parameters
+        ----------
+        nodes : int or list of int
+            Index or indices of nodes to apply boundary conditions to.
+        values : float or tuple or list
+            Values to assign to each node.
+            - float: constant water depth
+            - tuple: ('ramp', v0, v1, t0, t1) or ('timeseries', times, values)
+        mode : str
+            'add' (default): adds new BCs; raises error if node already has one
+            'overwrite': replaces existing BCs for specified nodes
+            'remove': removes BCs at specified nodes
+        """
+
+        if not hasattr(self, 'boundary_conditions'):
+            self.boundary_conditions = {}
+
+        if 'waterdepth' not in self.boundary_conditions:
+            self.boundary_conditions['waterdepth'] = []
+
+        if not isinstance(nodes, list):
+            nodes = [nodes]
+
+        if mode == 'remove':
+            self.boundary_conditions['waterdepth'] = [
+                bc for bc in self.boundary_conditions['waterdepth']
+                if all(n not in nodes for n in bc.target_ids)
+            ]
+            return
+
+        if not isinstance(values, list):
+            values = [values] * len(nodes)
+
+        for node, val in zip(nodes, values):
+            # Remove existing BC if overwrite
+            if mode == 'overwrite':
+                self.boundary_conditions['waterdepth'] = [
+                    bc for bc in self.boundary_conditions['waterdepth']
+                    if node not in bc.target_ids
+                ]
+            elif mode == 'add':
+                for bc in self.boundary_conditions['waterdepth']:
+                    if node in bc.target_ids:
+                        raise ValueError(f"Water depth BC already exists at node {node}. Use mode='overwrite' to replace it.")
+
+            # Create new BC object
+            if isinstance(val, (int, float)):
+                bc = ConstantBC([node], value=val)
+            elif isinstance(val, tuple) and val[0] == 'ramp':
+                _, v0, v1, t0, t1 = val
+                bc = RampBC([node], value_start=v0, value_end=v1, t_start=t0, t_end=t1)
+            elif isinstance(val, tuple) and val[0] == 'timeseries':
+                _, times, vals = val
+                bc = TimeSeriesBC([node], times=times, values=vals)
+            else:
+                raise ValueError(f"Unrecognized value for BC at node {node}: {val}")
+
+            self.boundary_conditions['waterdepth'].append(bc)
+                   
+    # def set_boundary_conditions(
+    #         self,
+    #         waterdepth_boundary=None,
+    #         inflow_boundary=None,
+    #         critical_depth_boundary=None,
+    #         inflow_type='constant',  # constant, constant_timespan or ramp
+    #         start_time=0,            # Start time for constant_timespan or ramped inflow
+    #         end_time=200             # End time for constant_timespan or ramped inflow
+    # ):
+    #     """
+    #     Set the boundary conditions for the flow simulation.
     
-        Args:
-            waterdepth_boundary (dict, optional): Dictionary of water depth 
-                boundary conditions {node_index: value}.
-            inflow_boundary (dict, optional): Dictionary of inflow boundary 
-                conditions {node_index: value or (initial_rate, peak_rate)}.
-            critical_depth_boundary (dict, optional): Dictionary of critical 
-                depth boundary conditions {node_index: value}.
-            inflow_type (str, optional): Type of inflow ('constant', 'constant_timespan', or 'ramp').
-            start_time (float, optional): Start time for constant_timespan or ramped inflow.
-            end_time (float, optional): End time for constant_timespan or ramped inflow.
-        """
+    #     Args:
+    #         waterdepth_boundary (dict, optional): Dictionary of water depth 
+    #             boundary conditions {node_index: value}.
+    #         inflow_boundary (dict, optional): Dictionary of inflow boundary 
+    #             conditions {node_index: value or (initial_rate, peak_rate)}.
+    #         critical_depth_boundary (dict, optional): Dictionary of critical 
+    #             depth boundary conditions {node_index: value}.
+    #         inflow_type (str, optional): Type of inflow ('constant', 'constant_timespan', or 'ramp').
+    #         start_time (float, optional): Start time for constant_timespan or ramped inflow.
+    #         end_time (float, optional): End time for constant_timespan or ramped inflow.
+    #     """
         
-        if waterdepth_boundary is not None:
-            self.waterdepth_boundary = waterdepth_boundary
+    #     if waterdepth_boundary is not None:
+    #         self.waterdepth_boundary = waterdepth_boundary
     
-        if inflow_boundary is not None:
-            self.inflow_boundary = inflow_boundary
+    #     if inflow_boundary is not None:
+    #         self.inflow_boundary = inflow_boundary
     
-        if critical_depth_boundary is not None:
-            self.critical_depth_boundary = critical_depth_boundary
+    #     if critical_depth_boundary is not None:
+    #         self.critical_depth_boundary = critical_depth_boundary
     
 
-        self.inflow_type = inflow_type
-        self.start_time = start_time
-        self.end_time = end_time
+    #     self.inflow_type = inflow_type
+    #     self.start_time = start_time
+    #     self.end_time = end_time
        
             
     def set_stop_conditions(self, flowrate_condition=None, flowrate_threshold=0.98):

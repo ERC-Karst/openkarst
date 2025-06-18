@@ -95,22 +95,15 @@ def main():
     flow_network.set_initial_conditions(initial_Q, initial_y)
     
     # Set boundary conditions
-    right_nodes = [199]
     left_nodes = [0]
-    
-    flowrate  = 0.1     # Flowrate in m^3/s
-    water_depth = 0.01  # Water depths in m
-    
-    
-    
-    inflow_boundary_left = {node: ('volumetric', flowrate) for node in left_nodes}
-    waterdepth_boundary_right = {node: water_depth for node in right_nodes}
-    
-    flow_network.set_boundary_conditions(
-    inflow_boundary=inflow_boundary_left,
-    waterdepth_boundary=waterdepth_boundary_right,
-    inflow_type='constant',
-    )
+    right_nodes = [199]
+
+    water_depth_left = 0.02  # m
+    water_depth_right = 0.01  # m
+
+    # Apply constant water depth boundary conditions
+    flow_network.set_waterdepth_BC(nodes=left_nodes, values=water_depth_left)
+    flow_network.set_waterdepth_BC(nodes=right_nodes, values=water_depth_right)
 
     # Run simulation and store results
     results = flow_network.run_simulation(desired_outputs = output_settings)
