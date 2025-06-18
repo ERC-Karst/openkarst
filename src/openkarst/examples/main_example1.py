@@ -98,12 +98,14 @@ def main():
     left_nodes = [0]
     right_nodes = [199]
 
-    water_depth_left = 0.1  # m
+    #water_depth_left = 0.1  # m
+    inflow_left = 0.1  # m
+
     water_depth_right = 0.01  # m
 
     # Apply constant water depth boundary conditions
     #flow_network.set_waterdepth_BC(nodes=left_nodes, values=water_depth_left)
-    flow_network.set_waterdepth_BC(nodes=left_nodes, values=water_depth_left)
+    flow_network.set_inflow_BC(nodes=left_nodes, values=inflow_left)
 
     flow_network.set_waterdepth_BC(nodes=right_nodes, values=water_depth_right)
 

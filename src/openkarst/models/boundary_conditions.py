@@ -1,23 +1,98 @@
 class BoundaryCondition:
+    """
+    Abstract base class for time-dependent boundary conditions.
+
+    This class defines the interface for boundary condition objects applied to 
+    specific nodes or conduits. Subclasses must implement the `get_value(t)` method.
+
+    Attributes:
+        target_ids (list of int): IDs of the target nodes or conduits where the 
+            boundary condition is applied.
+        target_type (str): Type of target, either 'node' or 'conduit'.
+    """
     def __init__(self, target_ids, target_type='node'):
+        """
+        Initialize a boundary condition.
+
+        Args:
+            target_ids (list of int): IDs of the nodes or conduits to which this 
+                boundary condition applies.
+            target_type (str, optional): 'node' or 'conduit'. Defaults to 'node'.
+        """
         self.target_ids = target_ids
         self.target_type = target_type
 
     def get_value(self, t):
+        """
+        Compute the boundary condition value at a given time.
+
+        Args:
+            t (float): Time at which to evaluate the boundary condition.
+
+        Returns:
+            float: The value of the boundary condition at time t.
+
+        Raises:
+            NotImplementedError: If the method is not implemented in a subclass.
+        """
         raise NotImplementedError("Subclasses must implement get_value")
 
 
 class ConstantBC(BoundaryCondition):
+    """
+    Constant boundary condition applied to one or more nodes/conduits.
+
+    Attributes:
+        value (float): Constant value of the boundary condition.
+    """
+
     def __init__(self, target_ids, value, target_type='node'):
+        """
+        Initialize a constant boundary condition.
+
+        Args:
+            target_ids (list of int): IDs of the target nodes or conduits.
+            value (float): Constant value to apply.
+            target_type (str, optional): 'node' or 'conduit'. Defaults to 'node'.
+        """
         super().__init__(target_ids, target_type)
         self.value = value
 
     def get_value(self, t):
+        """
+        Return the constant boundary condition value.
+
+        Args:
+            t (float): Time (ignored for constant BC).
+
+        Returns:
+            float: The constant value.
+        """
         return self.value
 
 
 class RampBC(BoundaryCondition):
+    """
+    Linearly ramped boundary condition between two values over a time interval.
+
+    Attributes:
+        v0 (float): Initial value at t0.
+        v1 (float): Final value at t1.
+        t0 (float): Start time of ramp.
+        t1 (float): End time of ramp.
+    """
+
     def __init__(self, target_ids, value_start, value_end, t_start, t_end):
+        """
+        Initialize a ramped boundary condition.
+
+        Args:
+            target_ids (list of int): IDs of the target nodes or conduits.
+            value_start (float): Value at the start of the ramp.
+            value_end (float): Value at the end of the ramp.
+            t_start (float): Start time of the ramp.
+            t_end (float): End time of the ramp.
+        """               
         super().__init__(target_ids)
         self.v0 = value_start
         self.v1 = value_end
@@ -25,6 +100,15 @@ class RampBC(BoundaryCondition):
         self.t1 = t_end
 
     def get_value(self, t):
+        """
+        Return the boundary condition value at time t.
+
+        Args:
+            t (float): Time at which to evaluate the value.
+
+        Returns:
+            float: The value at time t, based on linear interpolation.
+        """
         if t <= self.t0:
             return self.v0
         elif t >= self.t1:
@@ -34,11 +118,35 @@ class RampBC(BoundaryCondition):
 
 
 class TimeSeriesBC(BoundaryCondition):
+    """
+    Time series-based boundary condition using linear interpolation.
+
+    Attributes:
+        times (array-like): List or array of time points.
+        values (array-like): List or array of corresponding values.
+    """
     def __init__(self, target_ids, times, values):
+        """
+        Initialize a time series boundary condition.
+
+        Args:
+            target_ids (list of int): IDs of the target nodes or conduits.
+            times (list or np.ndarray): Times at which values are specified.
+            values (list or np.ndarray): Values corresponding to the time points.
+        """
         super().__init__(target_ids)
         self.times = times
         self.values = values
 
     def get_value(self, t):
+        """
+        Interpolate the value at a given time using the supplied time series.
+
+        Args:
+            t (float): Time at which to evaluate the boundary condition.
+
+        Returns:
+            float: Interpolated value at time t.
+        """
         import numpy as np
         return np.interp(t, self.times, self.values)
