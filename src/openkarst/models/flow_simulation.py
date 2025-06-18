@@ -1558,62 +1558,69 @@ class FlowSimulation:
                   self.Q_new[is_negative_flow])
  
                     
-        # Apply inflow boundary conditions with node-specific and time-dependent inflows
-        current_time = self.current_timestep * self.dt
-        # Loop through inflow boundary conditions and apply inflows
-        for node_index, inflow_value in self.inflow_boundary.items():
+        # # Apply inflow boundary conditions with node-specific and time-dependent inflows
+        # current_time = self.current_timestep * self.dt
+        # # Loop through inflow boundary conditions and apply inflows
+        # for node_index, inflow_value in self.inflow_boundary.items():
             
-            # Ensure inflow_value is numerical (flux or volumetric flowrate)
-            if isinstance(inflow_value, tuple):
-                # Handle both cases for flux or volumetric inflow
-                if inflow_value[0] == 'flux':
-                    flux_value = inflow_value[1]
+        #     # Ensure inflow_value is numerical (flux or volumetric flowrate)
+        #     if isinstance(inflow_value, tuple):
+        #         # Handle both cases for flux or volumetric inflow
+        #         if inflow_value[0] == 'flux':
+        #             flux_value = inflow_value[1]
                     
-                    # Get the conduits connected to this node
-                    connected_conduits = np.where(
-                        (self.n_indices1 == node_index) | (self.n_indices2 == node_index)
-                    )[0]
+        #             # Get the conduits connected to this node
+        #             connected_conduits = np.where(
+        #                 (self.n_indices1 == node_index) | (self.n_indices2 == node_index)
+        #             )[0]
                     
-                    # Consider half of each connected conduit length
-                    half_conduit_lengths = 0.5 * self.conduit_lengths[connected_conduits]
+        #             # Consider half of each connected conduit length
+        #             half_conduit_lengths = 0.5 * self.conduit_lengths[connected_conduits]
                     
-                    # For channel geometry only
-                    if self.geometry_channel:
-                        if self.channel_type == 'infinite':
-                            # Multiplied by unit width (1.0)
-                            inflow_value = flux_value * np.sum(half_conduit_lengths) # * 1.0
-                        else:  # Finite channel
-                            inflow_value = flux_value * self.channel_width * np.sum(half_conduit_lengths)
-                    else:
-                        raise ValueError("Flux inputs are not yet handled for non-channel geometries.")
-                else:
-                    # If the tuple is not a 'flux', assume it's a volumetric flowrate (m^3/s)
-                    inflow_value = inflow_value[1]
-            else:
-                # If not a tuple, assume inflow_value is already a float (volumetric flowrate in m^3/s)
-                inflow_value = float(inflow_value)
+        #             # For channel geometry only
+        #             if self.geometry_channel:
+        #                 if self.channel_type == 'infinite':
+        #                     # Multiplied by unit width (1.0)
+        #                     inflow_value = flux_value * np.sum(half_conduit_lengths) # * 1.0
+        #                 else:  # Finite channel
+        #                     inflow_value = flux_value * self.channel_width * np.sum(half_conduit_lengths)
+        #             else:
+        #                 raise ValueError("Flux inputs are not yet handled for non-channel geometries.")
+        #         else:
+        #             # If the tuple is not a 'flux', assume it's a volumetric flowrate (m^3/s)
+        #             inflow_value = inflow_value[1]
+        #     else:
+        #         # If not a tuple, assume inflow_value is already a float (volumetric flowrate in m^3/s)
+        #         inflow_value = float(inflow_value)
     
-            # Apply inflow based on the type of inflow
-            if self.inflow_type == 'constant':
-                # Apply constant inflow rate
-                self.dQ_new[node_index] += inflow_value
-            elif self.inflow_type == 'ramp':
-                # Handle ramped inflow
-                if isinstance(inflow_value, tuple) and len(inflow_value) == 2:
-                    initial_rate, peak_rate = inflow_value
-                    ramped_inflow = self._time_dependent_flowrate(
-                        current_time, self.start_time, self.end_time, initial_rate, peak_rate
-                    )
-                    self.dQ_new[node_index] += ramped_inflow
-                else:
-                    raise ValueError(f"Expected a tuple for ramped inflow at node {node_index}, but got {inflow_value}")
-            elif self.inflow_type == 'constant_timespan':
-                # Apply constant inflow rate only within a specific time span
-                if self.start_time <= current_time <= self.end_time:
-                    self.dQ_new[node_index] += inflow_value
-                else:
-                    self.dQ_new[node_index] += 0  # No inflow if outside the time range
+        #     # Apply inflow based on the type of inflow
+        #     if self.inflow_type == 'constant':
+        #         # Apply constant inflow rate
+        #         self.dQ_new[node_index] += inflow_value
+        #     elif self.inflow_type == 'ramp':
+        #         # Handle ramped inflow
+        #         if isinstance(inflow_value, tuple) and len(inflow_value) == 2:
+        #             initial_rate, peak_rate = inflow_value
+        #             ramped_inflow = self._time_dependent_flowrate(
+        #                 current_time, self.start_time, self.end_time, initial_rate, peak_rate
+        #             )
+        #             self.dQ_new[node_index] += ramped_inflow
+        #         else:
+        #             raise ValueError(f"Expected a tuple for ramped inflow at node {node_index}, but got {inflow_value}")
+        #     elif self.inflow_type == 'constant_timespan':
+        #         # Apply constant inflow rate only within a specific time span
+        #         if self.start_time <= current_time <= self.end_time:
+        #             self.dQ_new[node_index] += inflow_value
+        #         else:
+        #             self.dQ_new[node_index] += 0  # No inflow if outside the time range
     
+        # Apply time-dependent inflow BCs (new format)
+        current_time = self.current_timestep * self.dt
+        for bc in self.boundary_conditions.get('inflow', []):
+            value = bc.get_value(current_time)
+            for node in bc.target_ids:
+                self.dQ_new[node] += value
+
         # Compute the change in volume at each node (dV)
         dV = 0.5 * (self.dQ_old_t + self.dQ_new) * self.dt
         
@@ -1624,29 +1631,35 @@ class FlowSimulation:
         # Update water depths using under-relaxation
         self.y_new = (1.0 - self.w) * self.y_prev_i + self.w * self.y_new
     
-        # Apply fixed head boundary conditions
-        for node_index, waterdepth_value in self.waterdepth_boundary.items():
-            self.y_new[node_index] = waterdepth_value
+        # Apply fixed water depth BCs (new format)
+        for bc in self.boundary_conditions.get('waterdepth', []):
+            value = bc.get_value(current_time)
+            for node in bc.target_ids:
+                self.y_new[node] = value    
+                
+        # # Apply fixed head boundary conditions
+        # for node_index, waterdepth_value in self.waterdepth_boundary.items():
+        #     self.y_new[node_index] = waterdepth_value
         
-        # Apply free outfall condition using critical depth
-        for node_index in self.critical_depth_boundary:
+        # # Apply free outfall condition using critical depth
+        # for node_index in self.critical_depth_boundary:
             
-            # Find all conduits connected to this node
-            connected_conduits = np.where(
-                (self.n_indices1 == node_index) | (self.n_indices2 == node_index)
-            )[0]
+        #     # Find all conduits connected to this node
+        #     connected_conduits = np.where(
+        #         (self.n_indices1 == node_index) | (self.n_indices2 == node_index)
+        #     )[0]
         
-            # Compute the critical depth for each connected conduit
-            critical_depths = [
-                self._find_critical_depth(self.Q_new[conduit_index],
-                                          self.conduit_diameters[conduit_index]
-                                          )
-                for conduit_index in connected_conduits
-            ]   
+        #     # Compute the critical depth for each connected conduit
+        #     critical_depths = [
+        #         self._find_critical_depth(self.Q_new[conduit_index],
+        #                                   self.conduit_diameters[conduit_index]
+        #                                   )
+        #         for conduit_index in connected_conduits
+        #     ]   
         
-            # Assign the maximum critical depth to the node
-            critical_depth = max(critical_depths) if critical_depths else 0.0
-            self.y_new[node_index] = critical_depth
+        #     # Assign the maximum critical depth to the node
+        #     critical_depth = max(critical_depths) if critical_depths else 0.0
+        #     self.y_new[node_index] = critical_depth
     
         # Ensure water depths don't go negative
         self.y_new[self.y_new <= 0.0] = 0.0
