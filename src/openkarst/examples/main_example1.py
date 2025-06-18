@@ -50,7 +50,7 @@ def main():
         'dt_init': 0.001,             # Initial (or constant) timestep (seconds)
         'dt_max': 1.0,                # Maximum allowable time step
         'steady_state': False,         # Steady-state (True) or transient (False)
-        't_max': 10000.0,              # Maximum time for transient simulations (seconds)
+        't_max': 1000.0,              # Maximum time for transient simulations (seconds)
         'print_info_interval': 1000,     # Print info every # time steps
     }
     
@@ -102,7 +102,9 @@ def main():
     water_depth_right = 0.01  # m
 
     # Apply constant water depth boundary conditions
+    #flow_network.set_waterdepth_BC(nodes=left_nodes, values=water_depth_left)
     flow_network.set_waterdepth_BC(nodes=left_nodes, values=water_depth_left)
+
     flow_network.set_waterdepth_BC(nodes=right_nodes, values=water_depth_right)
 
     # Run simulation and store results
