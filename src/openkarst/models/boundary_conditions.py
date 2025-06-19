@@ -1,5 +1,8 @@
 import numpy as np
 
+VALID_TARGET_TYPES = {'node', 'conduit'}
+VALID_BC_TYPES = {'volumetric', 'flux'}
+
 class BoundaryCondition:
     """
     Abstract base class for time-dependent boundary conditions.
@@ -25,6 +28,11 @@ class BoundaryCondition:
             bc_type (str, optional): Type of boundary condition ('volumetric' or 'flux').
                 Defaults to 'volumetric'.
         """
+        if target_type not in VALID_TARGET_TYPES:
+            raise ValueError(f"Invalid target_type: {target_type}")
+        if bc_type not in VALID_BC_TYPES:
+            raise ValueError(f"Invalid bc_type: {bc_type}")
+        
         self.target_ids = target_ids
         self.target_type = target_type
         self.bc_type = bc_type
