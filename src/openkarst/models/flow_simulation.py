@@ -518,15 +518,23 @@ class FlowSimulation:
         Parameters
         ----------
         nodes : int or list of int
-            Index or indices of nodes to apply boundary conditions to.
-        values : float or tuple or list
-            Values to assign to each node.
-            - float: constant water depth
-            - tuple: ('ramp', v0, v1, t0, t1) or ('timeseries', times, values)
-        mode : str
-            'add' (default): adds new BCs; raises error if node already has one
-            'overwrite': replaces existing BCs for specified nodes
-            'remove': removes BCs at specified nodes
+            Index or indices of nodes to which water depth boundary conditions are applied.
+
+        values : float, tuple, or list
+            Values to assign to each node. If a single value is provided, it will be broadcast 
+            to all nodes. Supported formats include:
+            - float: constant water depth.
+            - tuple:
+                - ('ramp', v0, v1, t0, t1): ramps linearly from v0 to v1 between t0 and t1.
+                - ('timeseries', times, values): interpolated time series using numpy.interp.
+                - ('box', value, t0, t1 [, value_before=0.0, value_after=0.0]):
+                  constant value applied between t0 and t1; optional values before and after.
+
+        mode : str, optional
+            Defines how the new BCs should interact with existing ones:
+            - 'add' (default): adds new BCs; raises error if a BC already exists at the node.
+            - 'overwrite': replaces any existing BC at the specified nodes.
+            - 'remove': removes BCs from the specified nodes.
         """
 
         if not hasattr(self, 'boundary_conditions'):
@@ -584,21 +592,29 @@ class FlowSimulation:
         Parameters
         ----------
         nodes : int or list of int
-            Index or indices of nodes where inflow should be applied.
+            Index or indices of nodes where inflow boundary conditions are applied.
+
         values : float, tuple, or list
-            Values for each node:
-                - float: constant inflow (m³/s)
-                - tuple: 
-                    ('ramp', q0, q1, t0, t1)
-                    ('timeseries', times, values)
-            If a single value is provided, it will be broadcast to all nodes.
-        mode : str
-            'add': Add BCs. Raises error if one already exists.
-            'overwrite': Replace any existing BC at these nodes.
-            'remove': Remove BCs from specified nodes.
+            Values to assign to each node. If a single value is provided, it will be broadcast 
+            to all specified nodes. Supported formats include:
+            - float: constant inflow (in m³/s if 'volumetric', or m/s if 'flux').
+            - tuple:
+                - ('ramp', q0, q1, t0, t1): ramps linearly from q0 to q1 between t0 and t1.
+                - ('timeseries', times, values): interpolated time series using numpy.interp.
+                - ('box', value, t0, t1 [, value_before=0.0, value_after=0.0]):
+                  constant value between t0 and t1, with optional values before and after.
+
+        mode : str, optional
+            Defines how the new BCs should interact with existing ones:
+            - 'add' (default): adds new BCs; raises an error if a BC already exists at the node.
+            - 'overwrite': replaces any existing BCs at the specified nodes.
+            - 'remove': removes BCs from the specified nodes.
+
         inflow_type : str, optional
-            Type of inflow: 'volumetric' (default) or 'flux' (in m/s). If 'flux',
-            the actual inflow will be computed using geometry during simulation.
+            Specifies the type of inflow:
+            - 'volumetric' (default): inflow is treated as a total flow rate (m³/s).
+            - 'flux': inflow is treated as a flux (m/s) and will be converted to a volumetric
+              flow during the simulation using the local geometry (e.g., conduit area).
         """
 
         if not hasattr(self, 'boundary_conditions'):

@@ -102,17 +102,24 @@ def main():
     # Set boundary conditions
     outflow_nodes = [21]
     inflow_nodes = [71]
-    
-    flowrate  = 0.01     # Flowrate in m^3/s
-    water_depth = 0.01  # Water depths in m
-    
-    inflow_boundary_left = {node: ('volumetric', flowrate) for node in inflow_nodes}
-    waterdepth_boundary_right = {node: water_depth for node in outflow_nodes}
-    
-    flow_network.set_boundary_conditions(
-    inflow_boundary=inflow_boundary_left,
-    waterdepth_boundary=waterdepth_boundary_right,
-    inflow_type='constant',
+
+    # Define constant BC values
+    flowrate = 0.01       # Volumetric inflow in m³/s
+    water_depth = 0.01    # Constant water depth in m
+
+    # Apply constant volumetric inflow at inflow nodes
+    flow_network.set_inflow_BC(
+        nodes=inflow_nodes,
+        values=flowrate,          # Single float, default constant BC
+        mode='add',               # Default
+        inflow_type='volumetric'  # Default
+    )
+
+    # Apply constant water depth at outflow nodes
+    flow_network.set_waterdepth_BC(
+        nodes=outflow_nodes,
+        values=water_depth,       # Single float, default constant BC
+        mode='add'                # Default
     )
     
     # Run simulation and store results
