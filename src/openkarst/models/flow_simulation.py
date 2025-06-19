@@ -1688,10 +1688,32 @@ def set_inflow_BC(self, nodes, values, mode='add', inflow_type='volumetric'):
     
         # Apply time-dependent inflow BCs (new format)
         current_time = self.current_timestep * self.dt
+
         for bc in self.boundary_conditions.get('inflow', []):
             value = bc.get_value(current_time)
+
             for node in bc.target_ids:
-                self.dQ_new[node] += value
+                # If bc_type is flux convert to volume otherwise assume it is volumetric
+                if getattr(bc, 'bc_type', 'volumetric') == 'flux':
+                    # Convert to volumetric inflow based on local geometry
+                    connected_conduits = np.where(
+                        (self.n_indices1 == node) | (self.n_indices2 == node)
+                    )[0]
+                    half_lengths = 0.5 * self.conduit_lengths[connected_conduits]
+
+                    if self.geometry_channel:
+                        if self.channel_type == 'infinite':
+                            inflow_volume = value * np.sum(half_lengths)
+                        else:
+                            inflow_volume = value * self.channel_width * np.sum(half_lengths)
+                    else:
+                        raise ValueError("Flux inputs are not supported for non-channel geometries.")
+                    
+                    self.dQ_new[node] += inflow_volume
+
+                else:
+                    # Apply directly as volumetric flowrate
+                    self.dQ_new[node] += value
 
         # Compute the change in volume at each node (dV)
         dV = 0.5 * (self.dQ_old_t + self.dQ_new) * self.dt
