@@ -105,9 +105,20 @@ def main():
 
     # Apply constant water depth boundary conditions
     #flow_network.set_waterdepth_BC(nodes=left_nodes, values=water_depth_left)
-    flow_network.set_inflow_BC(nodes=left_nodes, values=inflow_left)
+    # LEFT SIDE: Apply constant volumetric inflow boundary condition
+    flow_network.set_inflow_BC(
+        nodes=left_nodes,
+        values=inflow_left,       # e.g. 0.1 m³/s
+        mode='add',               # Add new BC, raise error if one exists
+        inflow_type='volumetric'  # Default: volumetric inflow (m³/s)
+    )
 
-    flow_network.set_waterdepth_BC(nodes=right_nodes, values=water_depth_right)
+    # RIGHT SIDE: Apply constant water depth boundary condition
+    flow_network.set_waterdepth_BC(
+        nodes=right_nodes,
+        values=water_depth_right,  # e.g. 0.01 m
+        mode='add'                 # Add new BC, raise error if one exists
+    )
 
     # Run simulation and store results
     results = flow_network.run_simulation(desired_outputs = output_settings)
