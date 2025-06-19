@@ -575,67 +575,75 @@ class FlowSimulation:
             self.boundary_conditions['waterdepth'].append(bc)
 
 
-    def set_inflow_BC(self, nodes, values, mode='add'):
-        """
-        Set inflow boundary conditions at specified nodes.
+def set_inflow_BC(self, nodes, values, mode='add', inflow_type='volumetric'):
+    """
+    Set inflow boundary conditions at specified nodes.
 
-        Parameters
-        ----------
-        nodes : int or list of int
-            Index or indices of nodes where inflow should be applied.
-        values : float or tuple or list
-            Values for each node:
+    Parameters
+    ----------
+    nodes : int or list of int
+        Index or indices of nodes where inflow should be applied.
+    values : float, tuple, or list
+        Values for each node:
             - float: constant inflow (m³/s)
-            - tuple: ('ramp', q0, q1, t0, t1) or ('timeseries', times, values)
-        mode : str
-            'add': add new BCs, raise error if node already has one
-            'overwrite': replace any existing BCs at specified nodes
-            'remove': remove BCs at specified nodes
-        """
+            - tuple: 
+                ('ramp', q0, q1, t0, t1)
+                ('timeseries', times, values)
+        If a single value is provided, it will be broadcast to all nodes.
+    mode : str
+        'add': Add BCs. Raises error if one already exists.
+        'overwrite': Replace any existing BC at these nodes.
+        'remove': Remove BCs from specified nodes.
+    inflow_type : str, optional
+        Type of inflow: 'volumetric' (default) or 'flux' (in m/s). If 'flux',
+        the actual inflow will be computed using geometry during simulation.
+    """
 
-        if not hasattr(self, 'boundary_conditions'):
-            self.boundary_conditions = {}
+    if not hasattr(self, 'boundary_conditions'):
+        self.boundary_conditions = {}
 
-        if 'inflow' not in self.boundary_conditions:
-            self.boundary_conditions['inflow'] = []
+    if 'inflow' not in self.boundary_conditions:
+        self.boundary_conditions['inflow'] = []
 
-        if not isinstance(nodes, list):
-            nodes = [nodes]
+    if not isinstance(nodes, list):
+        nodes = [nodes]
 
-        if mode == 'remove':
+    if mode == 'remove':
+        self.boundary_conditions['inflow'] = [
+            bc for bc in self.boundary_conditions['inflow']
+            if all(n not in nodes for n in bc.target_ids)
+        ]
+        return
+
+    if not isinstance(values, list):
+        values = [values] * len(nodes)
+
+    for node, val in zip(nodes, values):
+        if mode == 'overwrite':
             self.boundary_conditions['inflow'] = [
                 bc for bc in self.boundary_conditions['inflow']
-                if all(n not in nodes for n in bc.target_ids)
+                if node not in bc.target_ids
             ]
-            return
+        elif mode == 'add':
+            for bc in self.boundary_conditions['inflow']:
+                if node in bc.target_ids:
+                    raise ValueError(f"Inflow BC already exists at node {node}. Use mode='overwrite' to replace it.")
 
-        if not isinstance(values, list):
-            values = [values] * len(nodes)
+        # Create BC object and attach type
+        if isinstance(val, (int, float)):
+            bc = ConstantBC([node], value=val, bc_type=inflow_type)
+        elif isinstance(val, tuple) and val[0] == 'ramp':
+            _, q0, q1, t0, t1 = val
+            bc = RampBC([node], value_start=q0, value_end=q1,
+                        t_start=t0, t_end=t1, bc_type=inflow_type)
+        elif isinstance(val, tuple) and val[0] == 'timeseries':
+            _, times, flow_values = val
+            bc = TimeSeriesBC([node], times=times, values=flow_values,
+                              bc_type=inflow_type)
+        else:
+            raise ValueError(f"Unrecognized inflow BC format at node {node}: {val}")
 
-        for node, val in zip(nodes, values):
-            if mode == 'overwrite':
-                self.boundary_conditions['inflow'] = [
-                    bc for bc in self.boundary_conditions['inflow']
-                    if node not in bc.target_ids
-                ]
-            elif mode == 'add':
-                for bc in self.boundary_conditions['inflow']:
-                    if node in bc.target_ids:
-                        raise ValueError(f"Inflow BC already exists at node {node}. Use mode='overwrite' to replace it.")
-
-            # Create BC object
-            if isinstance(val, (int, float)):
-                bc = ConstantBC([node], value=val)
-            elif isinstance(val, tuple) and val[0] == 'ramp':
-                _, q0, q1, t0, t1 = val
-                bc = RampBC([node], value_start=q0, value_end=q1, t_start=t0, t_end=t1)
-            elif isinstance(val, tuple) and val[0] == 'timeseries':
-                _, times, flow_values = val
-                bc = TimeSeriesBC([node], times=times, values=flow_values)
-            else:
-                raise ValueError(f"Unrecognized inflow BC format at node {node}: {val}")
-
-            self.boundary_conditions['inflow'].append(bc)
+        self.boundary_conditions['inflow'].append(bc)
 
 
     # def set_boundary_conditions(

@@ -11,8 +11,10 @@ class BoundaryCondition:
         target_ids (list of int): IDs of the target nodes or conduits where the 
             boundary condition is applied.
         target_type (str): Type of target, either 'node' or 'conduit'.
+        bc_type (str): Type of boundary condition ('volumetric' or 'flux').
     """
-    def __init__(self, target_ids, target_type='node'):
+
+    def __init__(self, target_ids, target_type='node', bc_type='volumetric'):
         """
         Initialize a boundary condition.
 
@@ -20,9 +22,12 @@ class BoundaryCondition:
             target_ids (list of int): IDs of the nodes or conduits to which this 
                 boundary condition applies.
             target_type (str, optional): 'node' or 'conduit'. Defaults to 'node'.
+            bc_type (str, optional): Type of boundary condition ('volumetric' or 'flux').
+                Defaults to 'volumetric'.
         """
         self.target_ids = target_ids
         self.target_type = target_type
+        self.bc_type = bc_type
 
     def get_value(self, t):
         """
@@ -48,7 +53,7 @@ class ConstantBC(BoundaryCondition):
         value (float): Constant value of the boundary condition.
     """
 
-    def __init__(self, target_ids, value, target_type='node'):
+    def __init__(self, target_ids, value, target_type='node', bc_type='volumetric'):
         """
         Initialize a constant boundary condition.
 
@@ -56,8 +61,9 @@ class ConstantBC(BoundaryCondition):
             target_ids (list of int): IDs of the target nodes or conduits.
             value (float): Constant value to apply.
             target_type (str, optional): 'node' or 'conduit'. Defaults to 'node'.
+            bc_type (str, optional): 'volumetric' or 'flux'. Defaults to 'volumetric'.
         """
-        super().__init__(target_ids, target_type)
+        super().__init__(target_ids, target_type, bc_type)
         self.value = value
 
     def get_value(self, t):
@@ -84,7 +90,8 @@ class RampBC(BoundaryCondition):
         t1 (float): End time of ramp.
     """
 
-    def __init__(self, target_ids, value_start, value_end, t_start, t_end):
+    def __init__(self, target_ids, value_start, value_end, t_start, t_end,
+                 target_type='node', bc_type='volumetric'):
         """
         Initialize a ramped boundary condition.
 
@@ -94,8 +101,10 @@ class RampBC(BoundaryCondition):
             value_end (float): Value at the end of the ramp.
             t_start (float): Start time of the ramp.
             t_end (float): End time of the ramp.
-        """               
-        super().__init__(target_ids)
+            target_type (str, optional): 'node' or 'conduit'. Defaults to 'node'.
+            bc_type (str, optional): 'volumetric' or 'flux'. Defaults to 'volumetric'.
+        """
+        super().__init__(target_ids, target_type, bc_type)
         self.v0 = value_start
         self.v1 = value_end
         self.t0 = t_start
@@ -127,7 +136,9 @@ class TimeSeriesBC(BoundaryCondition):
         times (array-like): List or array of time points.
         values (array-like): List or array of corresponding values.
     """
-    def __init__(self, target_ids, times, values):
+
+    def __init__(self, target_ids, times, values,
+                 target_type='node', bc_type='volumetric'):
         """
         Initialize a time series boundary condition.
 
@@ -135,8 +146,10 @@ class TimeSeriesBC(BoundaryCondition):
             target_ids (list of int): IDs of the target nodes or conduits.
             times (list or np.ndarray): Times at which values are specified.
             values (list or np.ndarray): Values corresponding to the time points.
+            target_type (str, optional): 'node' or 'conduit'. Defaults to 'node'.
+            bc_type (str, optional): 'volumetric' or 'flux'. Defaults to 'volumetric'.
         """
-        super().__init__(target_ids)
+        super().__init__(target_ids, target_type, bc_type)
         self.times = times
         self.values = values
 
@@ -151,3 +164,4 @@ class TimeSeriesBC(BoundaryCondition):
             float: Interpolated value at time t.
         """
         return np.interp(t, self.times, self.values)
+
