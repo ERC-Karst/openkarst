@@ -1,3 +1,5 @@
+import numpy as np
+
 class BoundaryCondition:
     """
     Abstract base class for time-dependent boundary conditions.
@@ -148,5 +150,4 @@ class TimeSeriesBC(BoundaryCondition):
         Returns:
             float: Interpolated value at time t.
         """
-        import numpy as np
         return np.interp(t, self.times, self.values)
