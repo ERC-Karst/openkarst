@@ -79,53 +79,35 @@ class ConstantBC(BoundaryCondition):
         return self.value
 
 
-class RampBC(BoundaryCondition):
+class BoxBC(BoundaryCondition):
     """
-    Linearly ramped boundary condition between two values over a time interval.
+    Boundary condition that applies a constant value during a time interval
+    and different values before and after.
 
     Attributes:
-        v0 (float): Initial value at t0.
-        v1 (float): Final value at t1.
-        t0 (float): Start time of ramp.
-        t1 (float): End time of ramp.
+        v_during (float): Value during [t0, t1]
+        v_before (float): Value before t0
+        v_after (float): Value after t1
+        t0 (float): Start time
+        t1 (float): End time
     """
-
-    def __init__(self, target_ids, value_start, value_end, t_start, t_end,
+    def __init__(self, target_ids, v_during, t_start, t_end,
+                 v_before=0.0, v_after=0.0,
                  target_type='node', bc_type='volumetric'):
-        """
-        Initialize a ramped boundary condition.
-
-        Args:
-            target_ids (list of int): IDs of the target nodes or conduits.
-            value_start (float): Value at the start of the ramp.
-            value_end (float): Value at the end of the ramp.
-            t_start (float): Start time of the ramp.
-            t_end (float): End time of the ramp.
-            target_type (str, optional): 'node' or 'conduit'. Defaults to 'node'.
-            bc_type (str, optional): 'volumetric' or 'flux'. Defaults to 'volumetric'.
-        """
         super().__init__(target_ids, target_type, bc_type)
-        self.v0 = value_start
-        self.v1 = value_end
+        self.v_during = v_during
+        self.v_before = v_before
+        self.v_after = v_after
         self.t0 = t_start
         self.t1 = t_end
 
     def get_value(self, t):
-        """
-        Return the boundary condition value at time t.
-
-        Args:
-            t (float): Time at which to evaluate the value.
-
-        Returns:
-            float: The value at time t, based on linear interpolation.
-        """
-        if t <= self.t0:
-            return self.v0
-        elif t >= self.t1:
-            return self.v1
+        if t < self.t0:
+            return self.v_before
+        elif self.t0 <= t <= self.t1:
+            return self.v_during
         else:
-            return self.v0 + (t - self.t0) / (self.t1 - self.t0) * (self.v1 - self.v0)
+            return self.v_after
 
 
 class TimeSeriesBC(BoundaryCondition):

@@ -25,7 +25,7 @@ from openkarst.io.results_handling import initialize_results_container, store_re
 from openkarst.utils.helpers import time_this
 from openkarst.utils.logging_config import setup_logging
 
-from openkarst.models.boundary_conditions import ConstantBC, RampBC, TimeSeriesBC
+from openkarst.models.boundary_conditions import ConstantBC, BoxBC, TimeSeriesBC
 
 
 class FlowSimulation:
@@ -563,9 +563,11 @@ class FlowSimulation:
             # Create new BC object
             if isinstance(val, (int, float)):
                 bc = ConstantBC([node], value=val)
-            elif isinstance(val, tuple) and val[0] == 'ramp':
-                _, v0, v1, t0, t1 = val
-                bc = RampBC([node], value_start=v0, value_end=v1, t_start=t0, t_end=t1)
+            elif isinstance(val, tuple) and val[0] == 'box':
+                _, v_during, t0, t1, *rest = val
+                v_before = rest[0] if len(rest) > 0 else 0.0
+                v_after = rest[1] if len(rest) > 1 else 0.0
+                bc = BoxBC([node], v_during, t0, t1, v_before, v_after, bc_type=inflow_type)
             elif isinstance(val, tuple) and val[0] == 'timeseries':
                 _, times, vals = val
                 bc = TimeSeriesBC([node], times=times, values=vals)
@@ -632,10 +634,11 @@ class FlowSimulation:
             # Create BC object and attach type
             if isinstance(val, (int, float)):
                 bc = ConstantBC([node], value=val, bc_type=inflow_type)
-            elif isinstance(val, tuple) and val[0] == 'ramp':
-                _, q0, q1, t0, t1 = val
-                bc = RampBC([node], value_start=q0, value_end=q1,
-                            t_start=t0, t_end=t1, bc_type=inflow_type)
+            elif isinstance(val, tuple) and val[0] == 'box':
+                _, v_during, t0, t1, *rest = val
+                v_before = rest[0] if len(rest) > 0 else 0.0
+                v_after = rest[1] if len(rest) > 1 else 0.0
+                bc = BoxBC([node], v_during, t0, t1, v_before, v_after, bc_type=inflow_type)
             elif isinstance(val, tuple) and val[0] == 'timeseries':
                 _, times, flow_values = val
                 bc = TimeSeriesBC([node], times=times, values=flow_values,
