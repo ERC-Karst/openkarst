@@ -47,7 +47,7 @@ def main():
         'min_flowrate': 1e-10,        # Minimum flow rate (m^3/s)
         'courant': 0.8,               # Courant number
         'adaptive_timesteps': True,   # Use adaptive timestepping
-        'dt_init': 0.001,             # Initial (or constant) timestep (seconds)
+        'dt_init': 0.01,             # Initial (or constant) timestep (seconds)
         'dt_max': 1.0,                # Maximum allowable time step
         'steady_state': False,         # Steady-state (True) or transient (False)
         't_max': 1000.0,              # Maximum time for transient simulations (seconds)

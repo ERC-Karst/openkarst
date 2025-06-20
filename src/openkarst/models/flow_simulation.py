@@ -408,7 +408,7 @@ class FlowSimulation:
                 self._compute_error_norms()
                 
                 # Compute new step size based on Froude and Courant number 
-                if self.adaptive_timesteps:
+                if self.adaptive_timesteps and self.current_timestep > 0:
                     self._compute_new_dt(self._v_mid_last, self._froude_last)
         
                 # Store the results if the current time exceeds the next output interval
@@ -1316,38 +1316,38 @@ class FlowSimulation:
         Raises:
             ValueError: If the computed time step dt is not valid (NaN or Inf).
         """
-        
-        # First criterion
-    
-        # Check if any conduit is full and halve the Courant number if so
+ 
+        # Check if any conduit is full and halve the Courant number
+        # Currently not used
         if np.any(self.is_full_y_mid):
             effective_courant = self.courant #/ 2
         else:
             effective_courant = self.courant
-    
-        # Calculate dt_criterion_froude only for valid conduits
-        dt_criterion_froude = np.where(
-            v_mid != 0,
-            1 / np.abs(v_mid) * (froude / (1 + froude)) * effective_courant,
-            np.inf
+
+        # 1. Courant–Froude criterion
+        v_mask = np.abs(v_mid) > 1e-8
+        dt_froude = np.full_like(v_mid, np.inf)
+        dt_froude[v_mask] = (
+            1 / np.abs(v_mid[v_mask]) * (froude[v_mask] / (1 + froude[v_mask])) * effective_courant
         )
+        max_dt1 = np.nanmin(dt_froude)
 
-        # Find the minimum dt from the valid conduits
-        max_allowable_dt1 = np.nanmin(dt_criterion_froude)
-    
-        # Second criterion
-        # Determine maximum allowable time step based on change in head over time dydt
-        max_allowable_dt2 = np.nanmin(self.max_depths / self.dydt)
+        # 2. Storage (dydt) criterion
+        dydt_mask = self.dydt > 1e-10
+        dt_dydt = np.full_like(self.dydt, np.inf)
+        dt_dydt[dydt_mask] = self.max_depths[dydt_mask] / self.dydt[dydt_mask]
+        max_dt2 = np.nanmin(dt_dydt)
 
-        # Initialize dt as the smallest value of the criteria           
-        self.dt = min(max_allowable_dt1, max_allowable_dt2)
-        
-        # Ensure dt does not exceed the specified maximum dt
-        self.dt = min(self.dt, self.dt_max)
-    
-        # Check if the computed dt is valid (not NaN or Inf)
-        if np.isnan(self.dt) or np.isinf(self.dt):
-            raise ValueError("Computed time step dt is not valid. Please check the input parameters.")
+        # Choose conservative dt
+        dt_new = min(max_dt1, max_dt2)
+
+        # Fallback logic
+        if not np.isfinite(dt_new) or dt_new <= 0.0:
+            self.logger.warning("Invalid dt computed. Falling back to dt_init.")
+            dt_new = self.dt_init
+
+        # Enforce max limit
+        self.dt = min(dt_new, self.dt_max)
 
                     
     def _compute_hydraulic_radius(self, flow_depths, flow_areas, slot_width, is_full):
