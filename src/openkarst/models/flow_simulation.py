@@ -406,6 +406,10 @@ class FlowSimulation:
 
                 # Compute L2 and MAD error norms for each timestep
                 self._compute_error_norms()
+                
+                # Compute new step size based on Froude and Courant number 
+                if self.adaptive_timesteps:
+                    self._compute_new_dt(self._v_mid_last, self._froude_last)
         
                 # Store the results if the current time exceeds the next output interval
                 if self.current_time >= next_output_time:
@@ -795,17 +799,20 @@ class FlowSimulation:
             
     
             
-            # Compute velocity and Frounde number at conduit center
-            
+            # Compute velocity and Frounde number at conduit center 
             v_mid = self.Q_prev_i / self.a_mid_new
             froude = np.abs(v_mid) / np.sqrt(self.gravity *  self.a_mid_new / w_mid)
+
+            # Store to use for adaptive timestep update outside of dynamic_wave
+            self._v_mid_last = v_mid
+            self._froude_last = froude  
            
             # Compute alpha for upstream weighting
             alpha = self._compute_alpha(froude)
             
-            if self.adaptive_timesteps:
-                # Compute new step size based on Froude and Courant number
-                self._compute_new_dt(v_mid, froude)
+            #if self.adaptive_timesteps:
+            #    # Compute new step size based on Froude and Courant number
+            #    self._compute_new_dt(v_mid, froude)
             
             # Compute hydraulic radii at both ends and middle of conduit
             r1 = self._compute_hydraulic_radius(y1, a1, slot_w1, self.is_full_y1)
@@ -1542,7 +1549,7 @@ class FlowSimulation:
         q_correction = np.zeros(self.network.Nt, dtype=float)
 
         # Precompute inflow values per node at current time
-        # These flows are also computed in when computing water depths
+        # These flows are also computed when computing water depths
         current_time = self.current_timestep * self.dt
         inflow_at_nodes = {}
 
@@ -1576,7 +1583,7 @@ class FlowSimulation:
                    
                    
         # Inertial terms (alpha is zero when pressurized)
-        # Apply the correction term to the inertia term
+        # Apply the momentum correction term to the inertia term
         dQ_inertia1 = alpha * 2 * v_mid * (self.a_mid_new - self.a_mid_old_t - q_correction * self.dt)
         dQ_inertia2 = alpha * v_mid * v_mid * (a2 - a1) / self.conduit_lengths * self.dt     
         
