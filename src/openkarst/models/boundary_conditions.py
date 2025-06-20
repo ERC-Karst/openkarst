@@ -1,108 +1,56 @@
 import numpy as np
 
-VALID_TARGET_TYPES = {'node', 'conduit'}
 VALID_BC_TYPES = {'volumetric', 'flux'}
 
 class BoundaryCondition:
     """
-    Abstract base class for time-dependent boundary conditions.
+    Abstract base class for time-dependent boundary conditions applied to nodes.
 
-    This class defines the interface for boundary condition objects applied to 
-    specific nodes or conduits. Subclasses must implement the `get_value(t)` method.
+    Subclasses must implement `get_value(t)` to define time-dependent behavior.
 
     Attributes:
-        target_ids (list of int): IDs of the target nodes or conduits where the 
-            boundary condition is applied.
-        target_type (str): Type of target, either 'node' or 'conduit'.
-        bc_type (str): Type of boundary condition ('volumetric' or 'flux').
+        target_ids (list[int]): IDs of the nodes where the boundary condition is applied.
+        bc_type (str): Type of boundary condition, 'volumetric' or 'flux'.
     """
-
-    def __init__(self, target_ids, target_type='node', bc_type='volumetric'):
-        """
-        Initialize a boundary condition.
-
-        Args:
-            target_ids (list of int): IDs of the nodes or conduits to which this 
-                boundary condition applies.
-            target_type (str, optional): 'node' or 'conduit'. Defaults to 'node'.
-            bc_type (str, optional): Type of boundary condition ('volumetric' or 'flux').
-                Defaults to 'volumetric'.
-        """
-        if target_type not in VALID_TARGET_TYPES:
-            raise ValueError(f"Invalid target_type: {target_type}")
+    def __init__(self, target_ids, bc_type='volumetric'):
         if bc_type not in VALID_BC_TYPES:
-            raise ValueError(f"Invalid bc_type: {bc_type}")
-        
+            raise ValueError(f"Invalid bc_type: {bc_type}. Must be one of {VALID_BC_TYPES}")
         self.target_ids = target_ids
-        self.target_type = target_type
         self.bc_type = bc_type
 
     def get_value(self, t):
-        """
-        Compute the boundary condition value at a given time.
-
-        Args:
-            t (float): Time at which to evaluate the boundary condition.
-
-        Returns:
-            float: The value of the boundary condition at time t.
-
-        Raises:
-            NotImplementedError: If the method is not implemented in a subclass.
-        """
-        raise NotImplementedError("Subclasses must implement get_value")
+        raise NotImplementedError("Subclasses must implement get_value(t)")
 
 
 class ConstantBC(BoundaryCondition):
     """
-    Constant boundary condition applied to one or more nodes/conduits.
+    Constant boundary condition.
 
     Attributes:
-        value (float): Constant value of the boundary condition.
+        value (float): Constant value applied at all times.
     """
-
-    def __init__(self, target_ids, value, target_type='node', bc_type='volumetric'):
-        """
-        Initialize a constant boundary condition.
-
-        Args:
-            target_ids (list of int): IDs of the target nodes or conduits.
-            value (float): Constant value to apply.
-            target_type (str, optional): 'node' or 'conduit'. Defaults to 'node'.
-            bc_type (str, optional): 'volumetric' or 'flux'. Defaults to 'volumetric'.
-        """
-        super().__init__(target_ids, target_type, bc_type)
+    def __init__(self, target_ids, value, bc_type='volumetric'):
+        super().__init__(target_ids, bc_type)
         self.value = value
 
     def get_value(self, t):
-        """
-        Return the constant boundary condition value.
-
-        Args:
-            t (float): Time (ignored for constant BC).
-
-        Returns:
-            float: The constant value.
-        """
         return self.value
 
 
 class BoxBC(BoundaryCondition):
     """
-    Boundary condition that applies a constant value during a time interval
-    and different values before and after.
+    Boundary condition active between [t0, t1] with optional values outside.
 
     Attributes:
-        v_during (float): Value during [t0, t1]
-        v_before (float): Value before t0
-        v_after (float): Value after t1
-        t0 (float): Start time
-        t1 (float): End time
+        v_during (float): Value during the interval [t0, t1].
+        v_before (float): Value before t0.
+        v_after (float): Value after t1.
+        t0 (float): Start time of activation.
+        t1 (float): End time of activation.
     """
     def __init__(self, target_ids, v_during, t_start, t_end,
-                 v_before=0.0, v_after=0.0,
-                 target_type='node', bc_type='volumetric'):
-        super().__init__(target_ids, target_type, bc_type)
+                 v_before=0.0, v_after=0.0, bc_type='volumetric'):
+        super().__init__(target_ids, bc_type)
         self.v_during = v_during
         self.v_before = v_before
         self.v_after = v_after
@@ -112,7 +60,7 @@ class BoxBC(BoundaryCondition):
     def get_value(self, t):
         if t < self.t0:
             return self.v_before
-        elif self.t0 <= t <= self.t1:
+        elif t <= self.t1:
             return self.v_during
         else:
             return self.v_after
@@ -120,38 +68,17 @@ class BoxBC(BoundaryCondition):
 
 class TimeSeriesBC(BoundaryCondition):
     """
-    Time series-based boundary condition using linear interpolation.
+    Time-dependent boundary condition using linear interpolation.
 
     Attributes:
-        times (array-like): List or array of time points.
-        values (array-like): List or array of corresponding values.
+        times (np.ndarray): Array of time points.
+        values (np.ndarray): Corresponding values.
     """
-
-    def __init__(self, target_ids, times, values,
-                 target_type='node', bc_type='volumetric'):
-        """
-        Initialize a time series boundary condition.
-
-        Args:
-            target_ids (list of int): IDs of the target nodes or conduits.
-            times (list or np.ndarray): Times at which values are specified.
-            values (list or np.ndarray): Values corresponding to the time points.
-            target_type (str, optional): 'node' or 'conduit'. Defaults to 'node'.
-            bc_type (str, optional): 'volumetric' or 'flux'. Defaults to 'volumetric'.
-        """
-        super().__init__(target_ids, target_type, bc_type)
-        self.times = times
-        self.values = values
+    def __init__(self, target_ids, times, values, bc_type='volumetric'):
+        super().__init__(target_ids, bc_type)
+        self.times = np.asarray(times)
+        self.values = np.asarray(values)
 
     def get_value(self, t):
-        """
-        Interpolate the value at a given time using the supplied time series.
-
-        Args:
-            t (float): Time at which to evaluate the boundary condition.
-
-        Returns:
-            float: Interpolated value at time t.
-        """
-        return np.interp(t, self.times, self.values)
+        return float(np.interp(t, self.times, self.values))
 

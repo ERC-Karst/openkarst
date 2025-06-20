@@ -575,7 +575,7 @@ class FlowSimulation:
                 _, v_during, t0, t1, *rest = val
                 v_before = rest[0] if len(rest) > 0 else 0.0
                 v_after = rest[1] if len(rest) > 1 else 0.0
-                bc = BoxBC([node], v_during, t0, t1, v_before, v_after, bc_type=inflow_type)
+                bc = BoxBC([node], v_during, t0, t1, v_before, v_after)
             elif isinstance(val, tuple) and val[0] == 'timeseries':
                 _, times, vals = val
                 bc = TimeSeriesBC([node], times=times, values=vals)
