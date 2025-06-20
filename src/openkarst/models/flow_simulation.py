@@ -170,8 +170,8 @@ class FlowSimulation:
         self.network = openpnm_network
         
         # Constant boundary conditions dictionary {node_index: value}
-        self.waterdepth_boundary = {}
-        self.inflow_boundary = {}
+        #self.waterdepth_boundary = {}
+        #self.inflow_boundary = {}
         self.critical_depth_boundary = {}
         
         # Stop conditions dictionary
@@ -1496,48 +1496,84 @@ class FlowSimulation:
         # Pressure term (upstream weighting)
         dQ_pressure = -self.gravity * a_mid_upwtd * (h2 - h1) / self.conduit_lengths * self.dt
         
-        # Get the indices of nodes with inflow boundary conditions
-        boundary_nodes = set(self.inflow_boundary.keys())  # Convert to set for faster lookup
+        # # Get the indices of nodes with inflow boundary conditions
+        # boundary_nodes = set(self.inflow_boundary.keys())  # Convert to set for faster lookup
         
-        # Identify the conduits where at least one node has a boundary condition or source/sink
+        # # Identify the conduits where at least one node has a boundary condition or source/sink
+        # relevant_conduits = np.where(
+        #     np.isin(self.n_indices1, list(boundary_nodes)) | np.isin(self.n_indices2, list(boundary_nodes))
+        # )[0]
+        
+        # # Loop only over conduits that have a BC or source/sink term
+        # for conduit in relevant_conduits:
+        #     n1 = self.n_indices1[conduit]
+        #     n2 = self.n_indices2[conduit]
+            
+        #     # Get boundary conditions for both nodes
+        #     inflow_n1 = self.inflow_boundary.get(n1, None)
+        #     inflow_n2 = self.inflow_boundary.get(n2, None)
+            
+        #     # Initialize q for both nodes to zero
+        #     q_n1, q_n2 = 0, 0
+        
+        #     # Check if inflow at node n1 is a source/sink flux or volumetric flow
+        #     if isinstance(inflow_n1, tuple):
+        #         if inflow_n1[0] == 'flux':
+        #             q_n1 = inflow_n1[1] * w_mid[conduit]  # convert to m^2/s
+        #         # Volumetric boundary condition, hence no correction is applied
+        #         elif inflow_n1[0] == 'volumetric':
+        #             q_n1 = 0.0
+            
+        #     # Check if inflow at node n2 is a source/sink flux or volumetric flow
+        #     if isinstance(inflow_n2, tuple):
+        #         if inflow_n2[0] == 'flux':
+        #             q_n2 = inflow_n2[1] * w_mid[conduit]  # convert to m^2/s
+        #         # Volumetric boundary condition, hence no correction is applied
+        #         elif inflow_n2[0] == 'volumetric':
+        #             q_n2 = 0.0 
+            
+        #     # Calculate the average q for the conduit
+        #     q_avg = (q_n1 + q_n2) / 2
+            
+        #     # Assign the correction term for this conduit
+        #     q_correction[conduit] = q_avg
+
+        # Compute q_correction for conduits affected by inflow BCs
+        q_correction = np.zeros(self.network.Nt, dtype=float)
+
+        # Precompute inflow values per node at current time
+        # These flows are also computed in when computing water depths
+        current_time = self.current_timestep * self.dt
+        inflow_at_nodes = {}
+
+        for bc in self.boundary_conditions.get("inflow", []):
+            value = bc.get_value(current_time)
+            for node in bc.target_ids:
+                inflow_at_nodes[node] = (bc.bc_type, value)
+
+        # Identify conduits with at least one node having a flux boundary condition
         relevant_conduits = np.where(
-            np.isin(self.n_indices1, list(boundary_nodes)) | np.isin(self.n_indices2, list(boundary_nodes))
+            np.isin(self.n_indices1, list(inflow_at_nodes.keys())) |
+            np.isin(self.n_indices2, list(inflow_at_nodes.keys()))
         )[0]
-        
-        # Loop only over conduits that have a BC or source/sink term
+
         for conduit in relevant_conduits:
             n1 = self.n_indices1[conduit]
             n2 = self.n_indices2[conduit]
-            
-            # Get boundary conditions for both nodes
-            inflow_n1 = self.inflow_boundary.get(n1, None)
-            inflow_n2 = self.inflow_boundary.get(n2, None)
-            
-            # Initialize q for both nodes to zero
-            q_n1, q_n2 = 0, 0
-        
-            # Check if inflow at node n1 is a source/sink flux or volumetric flow
-            if isinstance(inflow_n1, tuple):
-                if inflow_n1[0] == 'flux':
-                    q_n1 = inflow_n1[1] * w_mid[conduit]  # convert to m^2/s
-                # Volumetric boundary condition, hence no correction is applied
-                elif inflow_n1[0] == 'volumetric':
-                    q_n1 = 0.0
-            
-            # Check if inflow at node n2 is a source/sink flux or volumetric flow
-            if isinstance(inflow_n2, tuple):
-                if inflow_n2[0] == 'flux':
-                    q_n2 = inflow_n2[1] * w_mid[conduit]  # convert to m^2/s
-                # Volumetric boundary condition, hence no correction is applied
-                elif inflow_n2[0] == 'volumetric':
-                    q_n2 = 0.0 
-            
-            # Calculate the average q for the conduit
-            q_avg = (q_n1 + q_n2) / 2
-            
-            # Assign the correction term for this conduit
-            q_correction[conduit] = q_avg
-                    
+
+            q_n1 = q_n2 = 0.0
+
+            inflow_n1 = inflow_at_nodes.get(n1)
+            inflow_n2 = inflow_at_nodes.get(n2)
+
+            if inflow_n1 is not None and inflow_n1[0] == 'flux':
+                q_n1 = inflow_n1[1] * w_mid[conduit]
+
+            if inflow_n2 is not None and inflow_n2[0] == 'flux':
+                q_n2 = inflow_n2[1] * w_mid[conduit]
+
+            q_correction[conduit] = 0.5 * (q_n1 + q_n2)
+                   
                    
         # Inertial terms (alpha is zero when pressurized)
         # Apply the correction term to the inertia term
