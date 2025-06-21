@@ -21,6 +21,7 @@ from openkarst.config.validate_settings import validate_settings
 from openkarst.config.apply_settings import apply_settings
 
 from openkarst.io.results_handling import initialize_results_container, store_results
+from openkarst.io.observation_recorder import ObservationRecorder
 
 from openkarst.utils.helpers import time_this
 from openkarst.utils.logging_config import setup_logging
@@ -169,6 +170,9 @@ class FlowSimulation:
         #Get OpenPNM network (this will later come from another class)
         self.network = openpnm_network
         
+        # Additional tools
+        self.observation_recorder = None
+
         # Constant boundary conditions dictionary {node_index: value}
         #self.waterdepth_boundary = {}
         #self.inflow_boundary = {}
@@ -410,7 +414,12 @@ class FlowSimulation:
                 # Compute new step size based on Froude and Courant number 
                 if self.adaptive_timesteps and self.current_timestep > 0:
                     self._compute_new_dt(self._v_mid_last, self._froude_last)
-        
+
+                # Record observation data if recorder is active and it is time
+                if self.observation_recorder and self.current_time >= self.observation_recorder.next_record_time:
+                    self.observation_recorder.record(self.current_time, self)
+                    self.observation_recorder.next_record_time += self.observation_recorder.interval
+
                 # Store the results if the current time exceeds the next output interval
                 if self.current_time >= next_output_time:
                     results_container = store_results(self, results_container)
@@ -717,7 +726,8 @@ class FlowSimulation:
         else:
             self.stop_condition_set = False
         
-
+    def set_observation_points(self, nodes, variables, interval=1.0):
+        self.observation_recorder = ObservationRecorder(nodes, variables, interval)
         
     def _initialize_state_variables(self):
         """

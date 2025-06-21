@@ -1,3 +1,12 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Jul 20 12:56:06 2025
+
+@author: Jannes Kordilla
+@contact: jannes.kordilla@idaea.csic.es
+"""
+
 import numpy as np
 
 VALID_BC_TYPES = {'volumetric', 'flux'}
@@ -81,4 +90,3 @@ class TimeSeriesBC(BoundaryCondition):
 
     def get_value(self, t):
         return float(np.interp(t, self.times, self.values))
-
