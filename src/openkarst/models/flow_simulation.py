@@ -730,10 +730,10 @@ class FlowSimulation:
         self.observation_recorder = ObservationRecorder(nodes, variables, interval)
     
     def get_observation_dataframe(self):
-    if self.observation_recorder:
-        return self.observation_recorder.to_dataframe()
-    else:
-        raise RuntimeError("No observation recorder initialized.")
+        if self.observation_recorder:
+            return self.observation_recorder.to_dataframe()
+        else:
+            raise RuntimeError("No observation recorder initialized.")
         
     def _initialize_state_variables(self):
         """
