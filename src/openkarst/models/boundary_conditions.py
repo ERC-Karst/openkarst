@@ -82,11 +82,33 @@ class TimeSeriesBC(BoundaryCondition):
     Attributes:
         times (np.ndarray): Array of time points.
         values (np.ndarray): Corresponding values.
+        extrapolate (str): Behavior outside the time window: 'hold', 'zero', or 'error'.
     """
-    def __init__(self, target_ids, times, values, bc_type='volumetric'):
+    def __init__(self, target_ids, times, values, bc_type='volumetric', extrapolate='hold'):
         super().__init__(target_ids, bc_type)
         self.times = np.asarray(times)
         self.values = np.asarray(values)
+        self.extrapolate = extrapolate.lower()
+
+        if self.extrapolate not in {'hold', 'zero', 'error'}:
+            raise ValueError(f"Invalid extrapolate='{self.extrapolate}'. Use 'hold', 'zero', or 'error'.")
 
     def get_value(self, t):
-        return float(np.interp(t, self.times, self.values))
+        if t < self.times[0]:
+            if self.extrapolate == 'zero':
+                return 0.0
+            elif self.extrapolate == 'error':
+                raise ValueError(f"Time {t:.2f}s is before TimeSeriesBC range ({self.times[0]}s).")
+            else:  # 'hold'
+                return float(self.values[0])
+
+        elif t > self.times[-1]:
+            if self.extrapolate == 'zero':
+                return 0.0
+            elif self.extrapolate == 'error':
+                raise ValueError(f"Time {t:.2f}s is after TimeSeriesBC range ({self.times[-1]}s).")
+            else:  # 'hold'
+                return float(self.values[-1])
+
+        else:
+            return float(np.interp(t, self.times, self.values))

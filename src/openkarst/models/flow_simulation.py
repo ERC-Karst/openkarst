@@ -589,9 +589,13 @@ class FlowSimulation:
                 v_before = rest[0] if len(rest) > 0 else 0.0
                 v_after = rest[1] if len(rest) > 1 else 0.0
                 bc = BoxBC([node], v_during, t0, t1, v_before, v_after)
+            # elif isinstance(val, tuple) and val[0] == 'timeseries':
+            #     _, times, vals = val
+            #     bc = TimeSeriesBC([node], times=times, values=vals)
             elif isinstance(val, tuple) and val[0] == 'timeseries':
-                _, times, vals = val
-                bc = TimeSeriesBC([node], times=times, values=vals)
+                _, times, flow_values = val[:3]
+                extrapolate = val[3] if len(val) > 3 else 'hold'
+                bc = TimeSeriesBC([node], times=times, values=flow_values, extrapolate=extrapolate)
             else:
                 raise ValueError(f"Unrecognized value for BC at node {node}: {val}")
 
@@ -668,10 +672,15 @@ class FlowSimulation:
                 v_before = rest[0] if len(rest) > 0 else 0.0
                 v_after = rest[1] if len(rest) > 1 else 0.0
                 bc = BoxBC([node], v_during, t0, t1, v_before, v_after, bc_type=inflow_type)
+            # elif isinstance(val, tuple) and val[0] == 'timeseries':
+            #     _, times, flow_values = val
+            #     bc = TimeSeriesBC([node], times=times, values=flow_values,
+            #                     bc_type=inflow_type)
             elif isinstance(val, tuple) and val[0] == 'timeseries':
-                _, times, flow_values = val
+                _, times, flow_values = val[:3]
+                extrapolate = val[3] if len(val) > 3 else 'hold'
                 bc = TimeSeriesBC([node], times=times, values=flow_values,
-                                bc_type=inflow_type)
+                                bc_type=inflow_type, extrapolate=extrapolate)     
             else:
                 raise ValueError(f"Unrecognized inflow BC format at node {node}: {val}")
 
