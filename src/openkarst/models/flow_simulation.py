@@ -523,46 +523,49 @@ class FlowSimulation:
         np.copyto(self.Q, initial_Q)
         np.copyto(self.y, initial_y)
 
+
     def set_waterdepth_BC(self, nodes, values, mode='add', extrapolate='hold'):
         """
-        Set water depth boundary conditions at specified nodes.
+        Sets water depth boundary conditions at specified nodes.
 
-        Parameters
-        ----------
-        nodes : int or list of int
-            Index or indices of nodes to which water depth boundary conditions are applied.
+        Args:
+            nodes (int or list of int): Index or indices of nodes to which water depth boundary 
+                conditions are applied.
 
-        values : float, tuple, or list
-            Values to assign to each node. If a single value is provided, it will be broadcast 
-            to all nodes. Supported formats include:
-            - float: constant water depth.
-            - tuple:
-                - ('ramp', v0, v1, t0, t1): ramps linearly from v0 to v1 between t0 and t1.
-                - ('timeseries', times, values): interpolated time series using numpy.interp.
-                - ('box', value, t0, t1 [, value_before=0.0, value_after=0.0]):
-                constant value applied between t0 and t1; optional values before and after.
+            values (float, tuple, or list): Boundary condition definitions. If a single value is 
+                provided, it is broadcast to all specified nodes. Supported formats:
+                - float: constant water depth.
+                - tuple:
+                    - ('ramp', v0, v1, t0, t1): ramping value between t0 and t1.
+                    - ('timeseries', times, values): interpolated time series.
+                    - ('box', value, t0, t1 [, value_before=0.0, value_after=0.0]): constant value 
+                    during [t0, t1], optional values outside.
 
-        mode : str, optional
-            Defines how the new BCs should interact with existing ones:
-            - 'add' (default): adds new BCs; raises error if a BC already exists at the node.
-            - 'overwrite': replaces any existing BC at the specified nodes.
-            - 'remove': removes BCs from the specified nodes.
+            mode (str, optional): Defines how new BCs interact with existing ones. Options:
+                - 'add' (default): adds new BCs; raises error if a BC already exists at a node.
+                - 'overwrite': replaces any existing BCs.
+                - 'remove': removes BCs from the specified nodes.
 
-        extrapolate : str, optional
-            Behavior of timeseries BCs outside the defined time window. Applies only to 'timeseries' format.
-            - 'hold' (default): uses the nearest endpoint value (constant extrapolation).
-            - 'zero': sets BC to zero before and after the time series.
+            extrapolate (str, optional): Extrapolation behavior for timeseries BCs. Applies only to 
+                'timeseries' format.
+                - 'hold' (default): holds end values outside defined time range.
+                - 'zero': sets BC value to zero outside the range.
+
+        Raises:
+            ValueError: If an unrecognized BC format is provided or a duplicate node is given in 'add' mode.
         """
-
+        # Initialize boundary_conditions dictionary if missing
         if not hasattr(self, 'boundary_conditions'):
             self.boundary_conditions = {}
 
         if 'waterdepth' not in self.boundary_conditions:
             self.boundary_conditions['waterdepth'] = []
 
+        # Ensure node indices are a list
         if not isinstance(nodes, list):
             nodes = [nodes]
 
+        # Mode: remove BCs and exit early
         if mode == 'remove':
             self.boundary_conditions['waterdepth'] = [
                 bc for bc in self.boundary_conditions['waterdepth']
@@ -570,11 +573,16 @@ class FlowSimulation:
             ]
             return
 
+        # Broadcast same tuple (e.g., timeseries) to all nodes
+        if isinstance(values, tuple):
+            values = [values] * len(nodes)
+
+        # Broadcast scalar or constant to all nodes
         if not isinstance(values, list):
             values = [values] * len(nodes)
 
+        # Loop over each node-value pair
         for node, val in zip(nodes, values):
-            # Remove existing BC if overwrite
             if mode == 'overwrite':
                 self.boundary_conditions['waterdepth'] = [
                     bc for bc in self.boundary_conditions['waterdepth']
@@ -585,7 +593,7 @@ class FlowSimulation:
                     if node in bc.target_ids:
                         raise ValueError(f"Water depth BC already exists at node {node}. Use mode='overwrite' to replace it.")
 
-            # Create new BC object
+            # Create appropriate BC object
             if isinstance(val, (int, float)):
                 bc = ConstantBC([node], value=val)
             elif isinstance(val, tuple) and val[0] == 'box':
@@ -604,50 +612,49 @@ class FlowSimulation:
 
     def set_inflow_BC(self, nodes, values, mode='add', inflow_type='volumetric', extrapolate='hold'):
         """
-        Set inflow boundary conditions at specified nodes.
+        Sets inflow boundary conditions at specified nodes.
 
-        Parameters
-        ----------
-        nodes : int or list of int
-            Index or indices of nodes where inflow boundary conditions are applied.
+        Args:
+            nodes (int or list of int): Index or indices of nodes where inflow BCs are applied.
 
-        values : float, tuple, or list
-            Values to assign to each node. If a single value is provided, it will be broadcast 
-            to all specified nodes. Supported formats include:
-            - float: constant inflow (in m³/s if 'volumetric', or m/s if 'flux').
-            - tuple:
-                - ('ramp', q0, q1, t0, t1): ramps linearly from q0 to q1 between t0 and t1.
-                - ('timeseries', times, values): interpolated time series using numpy.interp.
-                - ('box', value, t0, t1 [, value_before=0.0, value_after=0.0]):
-                constant value between t0 and t1, with optional values before and after.
+            values (float, tuple, or list): Boundary condition definitions. If a single value is 
+                provided, it is broadcast to all specified nodes. Supported formats:
+                - float: constant inflow (m³/s for 'volumetric', or m/s for 'flux').
+                - tuple:
+                    - ('ramp', q0, q1, t0, t1): ramping value between t0 and t1.
+                    - ('timeseries', times, values): interpolated time series.
+                    - ('box', value, t0, t1 [, value_before=0.0, value_after=0.0]): constant value 
+                    during [t0, t1], optional values outside.
 
-        mode : str, optional
-            Defines how the new BCs should interact with existing ones:
-            - 'add' (default): adds new BCs; raises an error if a BC already exists at the node.
-            - 'overwrite': replaces any existing BCs at the specified nodes.
-            - 'remove': removes BCs from the specified nodes.
+            mode (str, optional): Defines how new BCs interact with existing ones. Options:
+                - 'add' (default): adds new BCs; raises error if a BC already exists at a node.
+                - 'overwrite': replaces any existing BCs.
+                - 'remove': removes BCs from the specified nodes.
 
-        inflow_type : str, optional
-            Specifies the type of inflow:
-            - 'volumetric' (default): inflow is treated as a total flow rate (m³/s).
-            - 'flux': inflow is treated as a flux (m/s) and will be converted to a volumetric
-            flow during the simulation using the local geometry (e.g., conduit area).
+            inflow_type (str, optional): Specifies type of inflow.
+                - 'volumetric' (default): total flow rate in m³/s.
+                - 'flux': area-normalized rate in m/s.
 
-        extrapolate : str, optional
-            Behavior of timeseries BCs outside the defined time window. Applies only to 'timeseries' format.
-            - 'hold' (default): uses the nearest endpoint value (constant extrapolation).
-            - 'zero': sets BC to zero before and after the time series.
+            extrapolate (str, optional): Extrapolation behavior for timeseries BCs. Applies only to 
+                'timeseries' format.
+                - 'hold' (default): holds end values outside defined time range.
+                - 'zero': sets BC value to zero outside the range.
+
+        Raises:
+            ValueError: If an unrecognized BC format is provided or a duplicate node is given in 'add' mode.
         """
-
+        # Initialize boundary_conditions dictionary if missing
         if not hasattr(self, 'boundary_conditions'):
             self.boundary_conditions = {}
 
         if 'inflow' not in self.boundary_conditions:
             self.boundary_conditions['inflow'] = []
 
+        # Ensure node indices are a list
         if not isinstance(nodes, list):
             nodes = [nodes]
 
+        # Mode: remove BCs and exit early
         if mode == 'remove':
             self.boundary_conditions['inflow'] = [
                 bc for bc in self.boundary_conditions['inflow']
@@ -655,9 +662,15 @@ class FlowSimulation:
             ]
             return
 
+        # Broadcast same tuple (e.g., timeseries) to all nodes
+        if isinstance(values, tuple):
+            values = [values] * len(nodes)
+
+        # Broadcast scalar or constant to all nodes    
         if not isinstance(values, list):
             values = [values] * len(nodes)
 
+        # Loop over each node-value pair
         for node, val in zip(nodes, values):
             if mode == 'overwrite':
                 self.boundary_conditions['inflow'] = [
@@ -669,7 +682,7 @@ class FlowSimulation:
                     if node in bc.target_ids:
                         raise ValueError(f"Inflow BC already exists at node {node}. Use mode='overwrite' to replace it.")
 
-            # Create BC object and attach type
+            # Create appropriate BC object
             if isinstance(val, (int, float)):
                 bc = ConstantBC([node], value=val, bc_type=inflow_type)
             elif isinstance(val, tuple) and val[0] == 'box':
@@ -680,7 +693,7 @@ class FlowSimulation:
             elif isinstance(val, tuple) and val[0] == 'timeseries':
                 _, times, flow_values = val[:3]
                 bc = TimeSeriesBC([node], times=times, values=flow_values,
-                                bc_type=inflow_type, extrapolate=extrapolate)     
+                                bc_type=inflow_type, extrapolate=extrapolate)
             else:
                 raise ValueError(f"Unrecognized inflow BC format at node {node}: {val}")
 
