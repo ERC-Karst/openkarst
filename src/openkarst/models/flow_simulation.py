@@ -540,13 +540,18 @@ class FlowSimulation:
                 - ('ramp', v0, v1, t0, t1): ramps linearly from v0 to v1 between t0 and t1.
                 - ('timeseries', times, values): interpolated time series using numpy.interp.
                 - ('box', value, t0, t1 [, value_before=0.0, value_after=0.0]):
-                  constant value applied between t0 and t1; optional values before and after.
+                constant value applied between t0 and t1; optional values before and after.
 
         mode : str, optional
             Defines how the new BCs should interact with existing ones:
             - 'add' (default): adds new BCs; raises error if a BC already exists at the node.
             - 'overwrite': replaces any existing BC at the specified nodes.
             - 'remove': removes BCs from the specified nodes.
+
+        extrapolate : str, optional
+            Behavior of timeseries BCs outside the defined time window. Applies only to 'timeseries' format.
+            - 'hold' (default): uses the nearest endpoint value (constant extrapolation).
+            - 'zero': sets BC to zero before and after the time series.
         """
 
         if not hasattr(self, 'boundary_conditions'):
@@ -598,7 +603,6 @@ class FlowSimulation:
 
 
     def set_inflow_BC(self, nodes, values, mode='add', inflow_type='volumetric', extrapolate='hold'):
-
         """
         Set inflow boundary conditions at specified nodes.
 
@@ -615,7 +619,7 @@ class FlowSimulation:
                 - ('ramp', q0, q1, t0, t1): ramps linearly from q0 to q1 between t0 and t1.
                 - ('timeseries', times, values): interpolated time series using numpy.interp.
                 - ('box', value, t0, t1 [, value_before=0.0, value_after=0.0]):
-                  constant value between t0 and t1, with optional values before and after.
+                constant value between t0 and t1, with optional values before and after.
 
         mode : str, optional
             Defines how the new BCs should interact with existing ones:
@@ -627,7 +631,12 @@ class FlowSimulation:
             Specifies the type of inflow:
             - 'volumetric' (default): inflow is treated as a total flow rate (m³/s).
             - 'flux': inflow is treated as a flux (m/s) and will be converted to a volumetric
-              flow during the simulation using the local geometry (e.g., conduit area).
+            flow during the simulation using the local geometry (e.g., conduit area).
+
+        extrapolate : str, optional
+            Behavior of timeseries BCs outside the defined time window. Applies only to 'timeseries' format.
+            - 'hold' (default): uses the nearest endpoint value (constant extrapolation).
+            - 'zero': sets BC to zero before and after the time series.
         """
 
         if not hasattr(self, 'boundary_conditions'):
