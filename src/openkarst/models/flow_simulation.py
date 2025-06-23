@@ -523,8 +523,7 @@ class FlowSimulation:
         np.copyto(self.Q, initial_Q)
         np.copyto(self.y, initial_y)
 
-
-    def set_waterdepth_BC(self, nodes, values, mode='add'):
+    def set_waterdepth_BC(self, nodes, values, mode='add', extrapolate='hold'):
         """
         Set water depth boundary conditions at specified nodes.
 
@@ -594,7 +593,6 @@ class FlowSimulation:
             #     bc = TimeSeriesBC([node], times=times, values=vals)
             elif isinstance(val, tuple) and val[0] == 'timeseries':
                 _, times, flow_values = val[:3]
-                extrapolate = val[3] if len(val) > 3 else 'hold'
                 bc = TimeSeriesBC([node], times=times, values=flow_values, extrapolate=extrapolate)
             else:
                 raise ValueError(f"Unrecognized value for BC at node {node}: {val}")
@@ -602,7 +600,8 @@ class FlowSimulation:
             self.boundary_conditions['waterdepth'].append(bc)
 
 
-    def set_inflow_BC(self, nodes, values, mode='add', inflow_type='volumetric'):
+    def set_inflow_BC(self, nodes, values, mode='add', inflow_type='volumetric', extrapolate='hold'):
+
         """
         Set inflow boundary conditions at specified nodes.
 
@@ -678,7 +677,6 @@ class FlowSimulation:
             #                     bc_type=inflow_type)
             elif isinstance(val, tuple) and val[0] == 'timeseries':
                 _, times, flow_values = val[:3]
-                extrapolate = val[3] if len(val) > 3 else 'hold'
                 bc = TimeSeriesBC([node], times=times, values=flow_values,
                                 bc_type=inflow_type, extrapolate=extrapolate)     
             else:
