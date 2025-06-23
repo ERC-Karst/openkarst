@@ -12,7 +12,8 @@ class ObservationRecorder:
     """Records simulation outputs at specified nodes and time intervals.
 
     This class records user-defined variables (e.g., water depth or inflow)
-    at a list of observation nodes during a transient simulation.
+    at a list of observation nodes during a transient simulation. Currently
+    does not support conduit values such as Reynolds numbers.
 
     Attributes:
         nodes (list of int): Indices of nodes to observe.
