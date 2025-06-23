@@ -588,9 +588,6 @@ class FlowSimulation:
                 v_before = rest[0] if len(rest) > 0 else 0.0
                 v_after = rest[1] if len(rest) > 1 else 0.0
                 bc = BoxBC([node], v_during, t0, t1, v_before, v_after)
-            # elif isinstance(val, tuple) and val[0] == 'timeseries':
-            #     _, times, vals = val
-            #     bc = TimeSeriesBC([node], times=times, values=vals)
             elif isinstance(val, tuple) and val[0] == 'timeseries':
                 _, times, flow_values = val[:3]
                 bc = TimeSeriesBC([node], times=times, values=flow_values, extrapolate=extrapolate)
@@ -671,10 +668,6 @@ class FlowSimulation:
                 v_before = rest[0] if len(rest) > 0 else 0.0
                 v_after = rest[1] if len(rest) > 1 else 0.0
                 bc = BoxBC([node], v_during, t0, t1, v_before, v_after, bc_type=inflow_type)
-            # elif isinstance(val, tuple) and val[0] == 'timeseries':
-            #     _, times, flow_values = val
-            #     bc = TimeSeriesBC([node], times=times, values=flow_values,
-            #                     bc_type=inflow_type)
             elif isinstance(val, tuple) and val[0] == 'timeseries':
                 _, times, flow_values = val[:3]
                 bc = TimeSeriesBC([node], times=times, values=flow_values,
