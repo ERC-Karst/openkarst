@@ -47,7 +47,8 @@ def launch_openkarst_viewer(results, geometry):
             max=len(t) - 1,
             step=1,
             value=0,
-            marks={0: '0s', len(t)//2: f'{int(t[len(t)//2])}s', len(t)-1: f'{int(t[-1])}s'}
+            marks={0: '0s', len(t)//2: f'{int(t[len(t)//2])}s', len(t)-1: f'{int(t[-1])}s'},
+            drag_value = True
         ),
 
         dcc.Interval(id="interval", interval=10, n_intervals=0, disabled=True),
