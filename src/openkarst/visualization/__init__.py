@@ -8,3 +8,4 @@ Created on Fri May 10 20:44:25 2024
 """
 
 from .animation_pyvista import animate_network
+from .openkarst_viewer import launch_openkarst_viewer
