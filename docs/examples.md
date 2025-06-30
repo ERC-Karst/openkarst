@@ -930,3 +930,5 @@ launch_openkarst_viewer(results, cn_geometry, obs_df)
 - Playback controls for transient results
 - Visualization of water depths, flowrates, and other selected outputs
 - Synchronization with observation time series
+
+![Visualizing the results with the openKARST 3D viewer](images/openkarstviewer.png)
