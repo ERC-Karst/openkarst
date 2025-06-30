@@ -122,25 +122,28 @@ We set constant initial conditions at all nodes and conduits. Note that again th
     flow_network.set_initial_conditions(initial_Q, initial_y)
 ```
 
-Now we set proper boundary conditions, in this case a constant volumetric inflow rate at the left side and a constant water depths at the right side. Note that the indexing of nodes starts at zero. Both boundaries receive dictionaries of nodes and associated values (flow rates or depths).
+Now we set the boundary conditions: a constant volumetric inflow rate at the left side and a constant water depth at the right side. Note that node indexing starts at zero. Both boundaries are defined using lists of node indices and corresponding values, applied via the set_inflow_BC() and set_waterdepth_BC() methods.
 
 ```python
-# Set boundary conditions
+    # Set boundary conditions
     right_nodes = [199]
     left_nodes = [0]
-    
-    flowrate  = 0.1     # Flowrate in m^3/s
-    water_depth = 0.01  # Water depths in m
-    
-    inflow_boundary_left = {node: ('volumetric', flow_rate) for node in left_nodes}
-    waterdepth_boundary_right = {node: water_depth for node in right_nodes}
-    
-    flow_network.set_boundary_conditions(
-    inflow_boundary=inflow_boundary_left,
-    waterdepth_boundary=waterdepth_boundary_right,
-    inflow_type='constant',
+
+    flow_rate = 0.1       # Flowrate in m^3/s
+    water_depth = 0.01    # Water depth in m
+
+    # Apply constant inflow at left nodes
+    flow_network.set_inflow_BC(
+        nodes=left_nodes,
+        values=flow_rate,
+        inflow_type='volumetric'
     )
-    
+
+    # Apply constant water depth at right nodes
+    flow_network.set_waterdepth_BC(
+        nodes=right_nodes,
+        values=water_depth
+    )
 ```
 
 Finally we call the run_simulation method to start the simulation and pass the desired output settings. To visualize the results we extract the required arrays from the results container and pass them to the animate_network function
@@ -291,21 +294,24 @@ As in [Example 1](#example-1-basic-setup) we use the FlowSimulation class to cre
 Now we set the boundary conditions for the inflow node (constant volumetric flow rate) and outlet node (constant water depths). Note that these have been chosen by inspecting the cave network data. In principle node numbers can also be determined from the information stored in the openPNM geometry object, e.g., finding the highest/lowest node, or nodes with coordination number 1.
 
 ```python
-
-# Set boundary conditions
+    # Set boundary conditions
     outflow_nodes = [21]
     inflow_nodes = [71]
-    
-    flowrate  = 0.01     # Flowrate in m^3/s
-    water_depth = 0.01  # Water depths in m
-    
-    inflow_boundary_left = {node: ('volumetric', flow_rate) for node in inflow_nodes}
-    waterdepth_boundary_right = {node: water_depth for node in outflow_nodes}
-    
-    flow_network.set_boundary_conditions(
-    inflow_boundary=inflow_boundary_left,
-    waterdepth_boundary=waterdepth_boundary_right,
-    inflow_type='constant',
+
+    flow_rate = 0.01       # Flowrate in m^3/s
+    water_depth = 0.01     # Water depth in m
+
+    # Apply constant volumetric inflow at inflow nodes
+    flow_network.set_inflow_BC(
+        nodes=inflow_nodes,
+        values=flow_rate,
+        inflow_type='volumetric'
+    )
+
+    # Apply constant water depth at outflow nodes
+    flow_network.set_waterdepth_BC(
+        nodes=outflow_nodes,
+        values=water_depth
     )
 ```
 
@@ -512,13 +518,25 @@ Finally we create a FlowSimulation object and set the initial conditions (no flo
     initial_Q = np.full(cn_geometry.Nt, 0.0, dtype=float)   # Initial flows at each conduit (Nt throats)
     initial_y = np.full(cn_geometry.Np, 0.0, dtype=float)  # Initial water depths at each node (Np pores)    
     flow_network.set_initial_conditions(initial_Q, initial_y)
-    inflow_boundary_left = {0: ('volumetric', flow_rate)} # Flowrate in m^2/s at node 0
-    waterdepth_boundary_right = {4999: water_height[4999]}
-    
-    flow_network.set_boundary_conditions(
-    inflow_boundary=inflow_boundary_left,
-    waterdepth_boundary=waterdepth_boundary_right,
-    inflow_type='constant',
+
+   # Set boundary conditions
+    inflow_node = 0
+    outflow_node = 4999
+
+    flow_rate = 0.01                  # Flow rate in m^3/s at node 0
+    water_depth = water_height[4999]  # Water depth at node 4999
+
+    # Apply constant volumetric inflow
+    flow_network.set_inflow_BC(
+        nodes=inflow_node,
+        values=flow_rate,
+        inflow_type='volumetric'
+    )
+
+    # Apply constant water depth at the outflow
+    flow_network.set_waterdepth_BC(
+        nodes=outflow_node,
+        values=water_depth
     )
     
     # Run simulation and store results
@@ -688,62 +706,169 @@ fig.savefig('analytical_solution.eps', format='eps', bbox_inches='tight')
 
 ![Figure: Analytical solution of Delestre (2010)](images/analytical_example3.png)
 
-## Boundary conditions
 
-openKARST currently accepts the following boundary conditions and source/sink terms via methods: (1) constant water depths, (2) constant flow rate, (3) ramping flow rate, (4) free outfall via critical depth and (5) source/sink terms such as rainfall. Application of (1) and (2) is demonstrated in the working examples on single nodes. Application of (5) the source/sink term (rainfall) is demonstrated in the analytical solutions that can be found on the Zenodo directory. Note, that this type of source/sink term is currently only supported for channel type geometries. Setting multiple nodes as boundaries is also possible via the set_boundary_conditions() method:
+## Boundary Conditions
 
-```python
-inflow_boundary_nodes = {10: 0.1, 15: 0.5, 26: 0.3}
-waterdepth_boundary_nodes = {0: 0.01, 26: 0.2}
+`openKARST` supports flexible and time-dependent boundary conditions through an object-oriented interface. Boundary conditions can be applied at any node as either:
 
-flow_network.set_boundary_conditions(
-	inflow_boundary=inflow_boundary_nodes,
-	waterdepth_boundary=waterdepth_boundary_nodes,
-	inflow_type='constant',    
-	inflow_rate=flow_rate        
-)
+- **Inflow boundary conditions** (volumetric or flux-based), or  
+- **Water depth boundary conditions** (e.g. constant depth or time-dependent)
 
-```
+These conditions are handled via the methods:
 
-A ramping inflow rate can be set for single or multiple node as follows. The inflow rate is linearly ramped up to the peak_rate and then back to the inflow rate between start and end time. No inflow occurs before the start time.
+- `set_inflow_BC(nodes, values, inflow_type='volumetric', ...)`
+- `set_waterdepth_BC(nodes, values, ...)`
 
-```python
-inflow_boundary_left = {
-    100: ('volumetric', 0.01, 0.05),  # Node 100 ramps from 0.01 to 0.05 m³/s
-    101: ('volumetric', 0.02, 0.03),  # Node 101 ramps from 0.02 to 0.03 m³/s
-    102: ('volumetric', 0.015, 0.025),  # Node 102 ramps from 0.015 to 0.025 m³/s
-}
+### Supported inflow types
 
-flow_network.set_boundary_conditions(
-    inflow_boundary=inflow_boundary_left,
-    waterdepth_boundary=waterdepth_boundary_right,
-    inflow_type='ramp',  # Use ramped inflow rates
-    start_time=0,        # Start ramping at time = 0 seconds
-    end_time=200         # End ramping at time = 200 seconds
-)
-```
+For inflow boundaries one can choose between:
 
-A free outfall via a critical depth boundary condition can be set as follows (e.g. at node 12):
+- `'volumetric'`: flow rate in m³/s  
+- `'flux'`: area-normalized rate in m/s (currently only supported for channel-type geometries)
 
-```python
-critical_depth_node = {12}
-flow_network.set_boundary_conditions(critical_depth_boundary = critical_depth_node)
+### Supported formats
 
-```
+For both inflow and water depth, the following formats are supported for `values`:
 
-The critical depth is calculated as the maximum critical depth evaluated at all connected conduits. When applying the free outfall boundary condition, the critical depth is used to determine the flow characteristics at the outfall point. This is based on the principle that at critical depth:
-
-1. The specific energy (the sum of the depth of flow and the velocity head) is at a minimum.
-2. The Froude number is equal to 1.
-
-
-This means that the depth at the outfall is adjusted so that the flow reaches a state of critical flow, where the energy is minimized and the Froude number condition is satisfied.
+- A **float**: applies a constant value over time.
+- A **tuple**:
+  - `('box', value, t_start, t_end [, value_before=0.0, value_after=0.0])`: step function.
+  - `('timeseries', times, values)`: interpolated time series (with optional `extrapolate` behavior).
+  - `('ramp', q0, q1, t0, t1)`: shorthand for ramping up/down, equivalent to a box BC.
 
 ---
 
-**WARNING:**  The currently implemented computation of the critical depth is inefficient and does not use lookup tables. Using this boundary condition can double computation times. From my experience a constant water depth boundary yields nearly the same results, especially when being close to zero (i.e. a free outfall).
+### Example: Constant inflow at single or multiple nodes
+
+```python
+# Constant volumetric inflow at node 10 (0.01 m³/s)
+flow_network.set_inflow_BC(nodes=10, values=0.01)
+
+# Multiple constant inflows (m³/s)
+flow_network.set_inflow_BC(
+    nodes=[10, 15, 26],
+    values=[0.1, 0.5, 0.3],
+    inflow_type='volumetric'
+)
+```
 
 ---
+
+### Example: Time-dependent inflow (ramp, box, timeseries)
+
+```python
+# Ramping inflow between t=0 and t=200 s
+flow_network.set_inflow_BC(
+    nodes=[100, 101, 102],
+    values=[
+        ('ramp', 0.01, 0.05, 0, 200),
+        ('ramp', 0.02, 0.03, 0, 200),
+        ('ramp', 0.015, 0.025, 0, 200)
+    ]
+)
+```
+
+```python
+# Time series inflow
+times = [0, 50, 100, 200]
+values = [0.0, 0.03, 0.06, 0.02]
+
+flow_network.set_inflow_BC(
+    nodes=50,
+    values=('timeseries', times, values),
+    extrapolate='zero'
+)
+```
+
+```python
+# Box inflow: 0.04 m³/s between t=100 and t=300, zero otherwise
+flow_network.set_inflow_BC(
+    nodes=20,
+    values=('box', 0.04, 100, 300)
+)
+```
+
+---
+
+### Water depth boundary conditions
+
+```python
+# Constant water depth boundary (e.g., 0.01 m) at nodes
+flow_network.set_waterdepth_BC(
+    nodes=[0, 26],
+    values=[0.01, 0.2]
+)
+```
+
+```python
+# Time-dependent water depth via box profile
+flow_network.set_waterdepth_BC(
+    nodes=5,
+    values=('box', 0.2, 100, 500, 0.0, 0.0)
+)
+```
+
+```python
+# Remove water depth BCs
+flow_network.set_waterdepth_BC(nodes=[0, 26], mode='remove')
+```
+
+---
+
+### Notes
+
+- Boundary conditions are stored in `flow_network.boundary_conditions` under `['inflow']` and `['waterdepth']`.
+- You can **overwrite** existing BCs using `mode='overwrite'` or **remove** them with `mode='remove'`.
+- All time-dependent BCs support clean handling via object-oriented classes (`ConstantBC`, `BoxBC`, `TimeSeriesBC`) and can be extended for more complex logic if needed.
+
+
+---
+
+
+
+## Observation nodes
+
+You can track simulation variables over time at specific nodes by setting **observation points**.
+
+Use the method:
+
+```python
+flow_network.set_observation_points(nodes, variables, interval=1.0)
+```
+
+- `nodes`: A single node or list of node indices to monitor.
+- `variables`: List of variables to observe. Supported values:
+  - `'water_depth'`: records water depth at each node.
+  - `'inflow'`: records the inflow (i.e., net change in flow `dQ`) into the node.
+- `interval`: Time interval (in seconds) between two recordings. Default is `1.0`.
+
+### Example:
+
+```python
+# Record water depth and inflow at nodes 0 and 10 every 2 seconds
+flow_network.set_observation_points(
+    nodes=[0, 10],
+    variables=['water_depth', 'inflow'],
+    interval=2.0
+)
+```
+
+After the simulation, data can be exported to a `pandas.DataFrame`:
+
+```python
+df = flow_network.observation_recorder.to_dataframe()
+```
+
+This will contain columns:
+- `time`
+- `node`
+- Any variables being recorded (`water_depth`, `inflow`, etc.)
+
+You can then plot or export this data for analysis.
+
+### Notes:
+- The recorder does not currently support conduit-based variables (e.g., Reynolds numbers).
+
 
 ## Exporting to VTK
 
@@ -771,3 +896,37 @@ vtk_exporter = VtkDataExporter(output_dir)
 vtk_exporter.export(cn_geometry, Q_history, y_history, t_history)
     
 ```
+
+## Visualization with the openKARST 3D Viewer
+
+openKARST includes a built-in 3D viewer using **Dash/Plotly** to visualize simulation results interactively in the browser. This tool allows for quick inspection of flowrates, water depths, and other simulation outputs over time.
+
+### Launching the Viewer
+
+After setting up and running a simulation, you can launch the 3D viewer as follows:
+
+```python
+from openkarst.visualization.openkarst_viewer import launch_openkarst_viewer
+
+# Set observation point to track inflow into node 21 (outlet)
+flow_network.set_observation_points(
+    nodes=[21],
+    variables=['inflow'],
+    interval=1.0  # record every simulated second
+)
+# Run the simulation
+results = flow_network.run_simulation(desired_outputs=output_settings)
+
+# Get observations aat node 21 as a DataFrame
+obs_df = flow_network.get_observation_dataframe()
+
+# Launch the interactive viewer. This should open a browser window.
+launch_openkarst_viewer(results, cn_geometry, obs_df)
+```
+
+### Features
+
+- Interactive 3D rendering of the network
+- Playback controls for transient results
+- Visualization of water depths, flowrates, and other selected outputs
+- Synchronization with observation time series
