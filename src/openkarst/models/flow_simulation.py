@@ -1692,10 +1692,10 @@ class FlowSimulation:
         
         # Check for flow rate sign changes to address potential numerical instabilities.
         # Currently not needed, but retained for future debugging.
-        is_sign_change = np.sign(self.Q_new) != np.sign(self.Q_prev_i)
-        if np.any(is_sign_change) == True:
+        #is_sign_change = np.sign(self.Q_new) != np.sign(self.Q_prev_i)
+        #if np.any(is_sign_change) == True:
         #     print("is sign change")
-            self.Q_new[is_sign_change] = 1e-9 * np.sign(self.Q_new[is_sign_change])
+        #    self.Q_new[is_sign_change] = 1e-9 * np.sign(self.Q_new[is_sign_change])
 
         return
     
