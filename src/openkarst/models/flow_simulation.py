@@ -391,12 +391,15 @@ class FlowSimulation:
             self.current_timestep = 0
             self.relative_l2_norm = 0.0
             self.relative_mad_norm = 0.0
+            self.picard_iterations_last = 0
             
             while True:
                 self._initialize_state_variables()
                
                 # Perform the dynamic wave computation for the current time step
-                converged = self._dynamic_wave()
+                #converged = self._dynamic_wave()
+                converged, n_iterations = self._dynamic_wave()
+                self.picard_iterations_last = n_iterations
                 
                 if not converged:
                     print(colored(
@@ -874,7 +877,7 @@ class FlowSimulation:
             self._print_timestep_info(iteration, froude)
             
             if self._check_picard_convergence():
-                return True
+                return True, iteration + 1
             
             # Update iteration state variables 
             np.copyto(self.Q_prev_i, self.Q_new)
@@ -882,7 +885,7 @@ class FlowSimulation:
             
             iteration += 1
 
-        return False  # if max_iterations hit
+        return False, iteration + 1  # if max_iterations hit
 
     def _get_water_depths(self):
         """
@@ -1669,7 +1672,7 @@ class FlowSimulation:
                 (8 * r_mid[self.is_full_y_mid]) * self.dt
             )
 
-
+        
         # Compute friction term for free-surface flows using equivalent
         # Manning n friction factor. This factor stays constant and is defined
         # for all conduits using f(epsilon, Re->infty)
@@ -1689,10 +1692,10 @@ class FlowSimulation:
         
         # Check for flow rate sign changes to address potential numerical instabilities.
         # Currently not needed, but retained for future debugging.
-        # is_sign_change = np.sign(self.Q_new) != np.sign(self.Q_prev_i)
-        # if np.any(is_sign_change) == True:
+        is_sign_change = np.sign(self.Q_new) != np.sign(self.Q_prev_i)
+        if np.any(is_sign_change) == True:
         #     print("is sign change")
-        # self.Q_new[is_sign_change] = 1e-9 * np.sign(self.Q_new[is_sign_change])
+            self.Q_new[is_sign_change] = 1e-9 * np.sign(self.Q_new[is_sign_change])
 
         return
     

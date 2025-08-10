@@ -39,7 +39,8 @@ def initialize_results_container(desired_outputs: Dict[str, bool], logger):
         'time_step_size',
         'l2_norms',
         'mad_norms',
-        'reynolds_numbers'
+        'reynolds_numbers',
+        'picard_iterations'
     }
 
     invalid_keys = [key for key in desired_outputs if key not in allowed_keys and key != 'output_interval']
@@ -85,5 +86,7 @@ def store_results(simulation_instance, results_container):
         results_container['mad_norms'].append(simulation_instance.relative_mad_norm)
     if 'reynolds_numbers' in results_container:
         results_container['reynolds_numbers'].append(np.copy(simulation_instance.Re_conduit))
+    if 'picard_iterations' in results_container:
+        results_container['picard_iterations'].append(simulation_instance.picard_iterations_last)
 
     return results_container
