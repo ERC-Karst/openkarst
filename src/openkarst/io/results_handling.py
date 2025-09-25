@@ -34,6 +34,7 @@ def initialize_results_container(desired_outputs: Dict[str, bool], logger):
     allowed_keys = {
         'convergence_fails',
         'flowrates',
+        'velocities',
         'water_depths',
         'time',
         'time_step_size',
@@ -74,6 +75,8 @@ def store_results(simulation_instance, results_container):
         results_container['convergence_fails'].append(simulation_instance.convergence_fails)
     if 'flowrates' in results_container:
         results_container['flowrates'].append(np.copy(simulation_instance.Q))
+    if 'velocities' in results_container:
+        results_container['velocities'].append(np.copy(simulation_instance._v_mid_last))
     if 'water_depths' in results_container:
         results_container['water_depths'].append(np.copy(simulation_instance.y))
     if 'time' in results_container:
