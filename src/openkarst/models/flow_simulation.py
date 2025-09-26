@@ -461,7 +461,7 @@ class FlowSimulation:
                 
                 # Check if steady-state achieved and exit (only if stop condition not set)
                 if not self.stop_condition_set and self.steady_state:
-                    if self._check_steady_state_convergence() and self.current_timestep > 1:
+                    if self._check_steady_state_convergence() and self.current_timestep > 10:
                         self.logger.info(
                             f'Steady state reached: Simulation finished at time = {self.current_time:.2f}s'
                         )
