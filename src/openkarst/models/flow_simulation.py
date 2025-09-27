@@ -1518,10 +1518,13 @@ class FlowSimulation:
         """
         Compute the flow rates in conduits based on various physical parameters.
 
-        This method calculates the flow rates in conduits by considering pressure terms,
-        inertial terms (+ correction due to recharge), and friction factors. It uses the Manning
-        equation for free surface flows and the Churchill equation for pressurized flows. The
-        Darcy-Weisbach equation forms the  foundation for calculating friction losses in both cases.
+        Advances conduit discharge from self.Q_old_t to self.Q_new over one
+        time step self.dt by combining a pressure-gradient term (upstream weighted),
+        inertial terms with a correction applied only at nodes with flux boundaries,
+        and friction losses computed either with Churchill only (pressurized and
+        free-surface via D_eff) or with a hybrid approach (Churchill for pressurized,
+        Manning for free-surface), depending on self.friction_model.
+
 
         Args:
             a1 (numpy.ndarray): Areas at the first end of the conduits.
@@ -1657,9 +1660,12 @@ class FlowSimulation:
         if self.geometry_channel == True:
             # Approximate Reynolds number using flow depth as hydraulic radius.
             # Notice that r_mid takes into account channel width (finite or infinite)
-            self.Re_conduit = (
-                self.rho * np.abs(v_mid[~self.is_full_y_mid]) * r_mid[~self.is_full_y_mid] / self.dyn_viscosity
-            )
+            D_eff = 4.0 * r_mid
+            self.Re_conduit = (self.rho * np.abs(v_mid) * D_eff) / self.dyn_viscosity
+            #self.Re_conduit = (
+            #    self.rho * np.abs(v_mid[~self.is_full_y_mid]) * r_mid[~self.is_full_y_mid] / self.dyn_viscosity
+            #)
+
             # Compute friction term using Manning's equation for free-surface flow
             # Manning n is provided directly via physical properties
             dQ_friction[~self.is_full_y_mid] = (
@@ -1703,7 +1709,7 @@ class FlowSimulation:
         
                 # Compute friction factor for laminar flow under pressurized conditions
                 # Set to zero if velocities_mid are zero
-                f = np.zeros_like(v_mid)
+                #f = np.zeros_like(v_mid)
 
                 # Laminar: f = 64 / Re
                 f[laminar_flow_mask] = np.where(
@@ -1749,17 +1755,22 @@ class FlowSimulation:
 
             # Hybrid friction (Churchill + Manning for free-surface flows)
             else:
-                # Compute Reynolds number for pressurized conduits
-                self.Re_conduit[self.is_full_y_mid] = (
-                    self.rho * np.abs(v_mid[self.is_full_y_mid]) *
-                    self.conduit_diameters[self.is_full_y_mid] / self.dyn_viscosity
-                )
+                D_eff = np.empty_like(r_mid)
+                D_eff[self.is_full_y_mid]  = self.conduit_diameters[self.is_full_y_mid]
+                D_eff[~self.is_full_y_mid] = 4.0 * r_mid[~self.is_full_y_mid]
+                self.Re_conduit = (self.rho * np.abs(v_mid) * D_eff) / self.dyn_viscosity
+
+                # # Compute Reynolds number for pressurized conduits
+                # self.Re_conduit[self.is_full_y_mid] = (
+                #     self.rho * np.abs(v_mid[self.is_full_y_mid]) *
+                #     self.conduit_diameters[self.is_full_y_mid] / self.dyn_viscosity
+                # )
         
-                # Compute Reynolds number for free-surface flows
-                self.Re_conduit[~self.is_full_y_mid] = (
-                    self.rho * np.abs(v_mid[~self.is_full_y_mid]) *
-                    r_mid[~self.is_full_y_mid] / self.dyn_viscosity
-                )
+                # # Compute Reynolds number for free-surface flows
+                # self.Re_conduit[~self.is_full_y_mid] = (
+                #     self.rho * np.abs(v_mid[~self.is_full_y_mid]) *
+                #     r_mid[~self.is_full_y_mid] / self.dyn_viscosity
+                # )
                 
                 # Define masks for flow regimes under pressurized conditions
                 laminar_flow_mask = (self.Re_conduit <= 2300) & self.is_full_y_mid
