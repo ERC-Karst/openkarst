@@ -1710,7 +1710,7 @@ class FlowSimulation:
                                                 1 / (A + B) ** 1.5) ** (1 / 12)
                     
                 # Compute friction dQ term for all conduits using Churchill
-                dQ_friction = (f * np.abs(v_mid) / (8 * r_mid) * self.dt)
+                dQ_friction = (f * np.abs(v_mid) / (8 * (4 * r_mid)) * self.dt)
 
             # Hybrid friction (Churchill + Manning for free-surface flows)
             else:
