@@ -1673,44 +1673,79 @@ class FlowSimulation:
             # Only Churchill friction
             if self.friction_model == "churchill":
 
-                # Compute Reynolds number for pressurized conduits
-                self.Re_conduit[self.is_full_y_mid] = (
-                    self.rho * np.abs(v_mid[self.is_full_y_mid]) *
-                    self.conduit_diameters[self.is_full_y_mid] / self.dyn_viscosity
+                # Define effective diameter
+                D_eff = np.empty_like(r_mid)
+                D_eff[self.is_full_y_mid] = self.conduit_diameters[self.is_full_y_mid]
+                D_eff[~self.is_full_y_mid] = 4 * r_mid[~self.is_full_y_mid]
+
+                # Reynolds number using D_eff
+                self.Re_conduit = (
+                    self.rho * np.abs(v_mid) * D_eff / self.dyn_viscosity
                 )
+
+                # # Compute Reynolds number for pressurized conduits
+                # self.Re_conduit[self.is_full_y_mid] = (
+                #     self.rho * np.abs(v_mid[self.is_full_y_mid]) *
+                #     self.conduit_diameters[self.is_full_y_mid] / self.dyn_viscosity
+                # )
         
-                # Compute Reynolds number for free-surface flows
-                self.Re_conduit[~self.is_full_y_mid] = (
-                    self.rho * np.abs(v_mid[~self.is_full_y_mid]) *
-                    4 * r_mid[~self.is_full_y_mid] / self.dyn_viscosity
-                )
+                # # Compute Reynolds number for free-surface flows
+                # self.Re_conduit[~self.is_full_y_mid] = (
+                #     self.rho * np.abs(v_mid[~self.is_full_y_mid]) *
+                #     4 * r_mid[~self.is_full_y_mid] / self.dyn_viscosity
+                # )
                 
                 # Define masks for flow regimes under pressurized conditions
-                laminar_flow_mask = (self.Re_conduit <= 2300) & self.is_full_y_mid
-                turbulent_flow_mask = (self.Re_conduit > 2300) & self.is_full_y_mid
+                #laminar_flow_mask = (self.Re_conduit <= 2300) & self.is_full_y_mid
+                #turbulent_flow_mask = (self.Re_conduit > 2300) & self.is_full_y_mid
+                laminar_flow_mask = self.Re_conduit <= 2300
+                turbulent_flow_mask = self.Re_conduit > 2300
         
                 # Compute friction factor for laminar flow under pressurized conditions
                 # Set to zero if velocities_mid are zero
+                f = np.zeros_like(v_mid)
+
+                # Laminar: f = 64 / Re
                 f[laminar_flow_mask] = np.where(
-                    self.Re_conduit[laminar_flow_mask] != 0,
+                    self.Re_conduit[laminar_flow_mask] > 0,
                     64 / self.Re_conduit[laminar_flow_mask],
                     0.0
                 )
-        
-                # Compute friction factor using the Churchill equation for turbulent flow
-                # under pressurized conditions
+
+                # Turbulent: Churchill equation
                 if np.any(turbulent_flow_mask):
-                    
                     C = ((7 / self.Re_conduit[turbulent_flow_mask]) ** 0.9 +
                         0.27 * self.conduit_epsilon[turbulent_flow_mask] /
-                        self.conduit_diameters[turbulent_flow_mask])
+                        D_eff[turbulent_flow_mask])
+                    
                     A = (-2.457 * np.log(C)) ** 16
                     B = (37530 / self.Re_conduit[turbulent_flow_mask]) ** 16
-                    f[turbulent_flow_mask] = 8 * ((8 / self.Re_conduit[turbulent_flow_mask]) ** 12 +
-                                                1 / (A + B) ** 1.5) ** (1 / 12)
+                    
+                    f[turbulent_flow_mask] = 8 * (
+                        (8 / self.Re_conduit[turbulent_flow_mask]) ** 12 +
+                        1 / (A + B) ** 1.5
+                    ) ** (1 / 12)
+                # f[laminar_flow_mask] = np.where(
+                #     self.Re_conduit[laminar_flow_mask] != 0,
+                #     64 / self.Re_conduit[laminar_flow_mask],
+                #     0.0
+                # )
+        
+                # # Compute friction factor using the Churchill equation for turbulent flow
+                # # under pressurized conditions
+                # if np.any(turbulent_flow_mask):
+                    
+                #     C = ((7 / self.Re_conduit[turbulent_flow_mask]) ** 0.9 +
+                #         0.27 * self.conduit_epsilon[turbulent_flow_mask] /
+                #         self.conduit_diameters[turbulent_flow_mask])
+                #     A = (-2.457 * np.log(C)) ** 16
+                #     B = (37530 / self.Re_conduit[turbulent_flow_mask]) ** 16
+                #     f[turbulent_flow_mask] = 8 * ((8 / self.Re_conduit[turbulent_flow_mask]) ** 12 +
+                #                                 1 / (A + B) ** 1.5) ** (1 / 12)
                     
                 # Compute friction dQ term for all conduits using Churchill
-                dQ_friction = (f * np.abs(v_mid) / (8 * (4 * r_mid)) * self.dt)
+                #dQ_friction = (f * np.abs(v_mid) / (8 * (4 * r_mid)) * self.dt)
+                dQ_friction = (f * np.abs(v_mid) / (8 * r_mid) * self.dt)
 
             # Hybrid friction (Churchill + Manning for free-surface flows)
             else:
