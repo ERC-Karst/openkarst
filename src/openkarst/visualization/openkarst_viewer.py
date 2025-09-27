@@ -72,6 +72,11 @@ def launch_openkarst_viewer(results, geometry, obs_df=None):
             html.Label(" "),
             html.Button("Play", id="play-button", n_clicks=0, style={'marginLeft': '5px'}),
 
+            # Node sampling control
+            html.Label(" "),
+            html.Label("Node step:", style={'marginLeft': '20px'}),
+            dcc.Input(id="node-step-input", type="number", value=1, min=1, step=1, style={'width': '60px'}),
+
             html.Label(" "),
             html.Label("Observation node(s):", style={'marginLeft': '20px'}),
             dcc.Checklist(
@@ -141,12 +146,20 @@ def launch_openkarst_viewer(results, geometry, obs_df=None):
         Output("3d-profile", "figure"),
         Input("time-slider", "value"),
         Input("node-selector", "value"),
+        Input("node-step-input", "value"),
         State("stored-camera", "data")
     )
-    def update_3d_plot(time_idx, node_ids, camera):
+    def update_3d_plot(time_idx, node_ids, node_step, camera):
 
         wd = water_depths[time_idx, :]
         water_surface_z = z + wd
+
+        # Compute indices to plot (every n-th node, but always include obs nodes)
+        N = len(x)
+        step = max(1, int(node_step)) if node_step else 1
+        base_idx = set(range(0, N, step))
+        obs_idx = set(node_ids or [])
+        idx = np.array(sorted(base_idx | obs_idx), dtype=int)
 
         fig = go.Figure()
 
@@ -168,27 +181,50 @@ def launch_openkarst_viewer(results, geometry, obs_df=None):
             showlegend=False
         ))
 
-        # Add vertical water depth bars
-        line_x = np.empty(3 * len(x))
-        line_y = np.empty(3 * len(y))
-        line_z = np.empty(3 * len(z))
-        color_vals = np.empty(3 * len(z))
+        # Build vertical bars only for sampled indices
+        xi = x[idx]; yi = y[idx]; zi = z[idx]; wdi = wd[idx]; wsi = water_surface_z[idx]
 
-        line_x[::3] = x
-        line_x[1::3] = x
-        line_x[2::3] = None
+        line_x = np.empty(3 * len(idx), dtype=float)
+        line_y = np.empty(3 * len(idx), dtype=float)
+        line_z = np.empty(3 * len(idx), dtype=float)
+        color_vals = np.empty(3 * len(idx), dtype=float)
 
-        line_y[::3] = y
-        line_y[1::3] = y
-        line_y[2::3] = None
+        line_x[::3] = xi
+        line_x[1::3] = xi
+        line_x[2::3] = np.nan
 
-        line_z[::3] = z
-        line_z[1::3] = water_surface_z
-        line_z[2::3] = None
+        line_y[::3] = yi
+        line_y[1::3] = yi
+        line_y[2::3] = np.nan
 
-        color_vals[::3] = wd
-        color_vals[1::3] = wd
+        line_z[::3] = zi
+        line_z[1::3] = wsi
+        line_z[2::3] = np.nan
+
+        color_vals[::3] = wdi
+        color_vals[1::3] = wdi
         color_vals[2::3] = np.nan
+        # # Add vertical water depth bars
+        # line_x = np.empty(3 * len(x))
+        # line_y = np.empty(3 * len(y))
+        # line_z = np.empty(3 * len(z))
+        # color_vals = np.empty(3 * len(z))
+
+        # line_x[::3] = x
+        # line_x[1::3] = x
+        # line_x[2::3] = None
+
+        # line_y[::3] = y
+        # line_y[1::3] = y
+        # line_y[2::3] = None
+
+        # line_z[::3] = z
+        # line_z[1::3] = water_surface_z
+        # line_z[2::3] = None
+
+        # color_vals[::3] = wd
+        # color_vals[1::3] = wd
+        # color_vals[2::3] = np.nan
 
         
 
