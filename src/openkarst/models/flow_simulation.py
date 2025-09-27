@@ -1583,8 +1583,23 @@ class FlowSimulation:
         dQ_inertia1 = alpha * 2 * v_mid * (self.a_mid_new - self.a_mid_old_t - q_correction * self.dt)
         dQ_inertia2 = alpha * v_mid * v_mid * (a2 - a1) / self.conduit_lengths * self.dt     
         
-        # Compute this only for circular conduits (i.e. not for open channel flows)
-        if self.geometry_channel == False:
+        # Case: Open channel geometry
+        if self.geometry_channel == True:
+            # Approximate Reynolds number using flow depth as hydraulic radius.
+            # Notice that r_mid takes into account channel width (finite or infinite)
+            self.Re_conduit = (
+                self.rho * np.abs(v_mid[~self.is_full_y_mid]) * r_mid[~self.is_full_y_mid] / self.dyn_viscosity
+            )
+            # Compute friction term using Manning's equation for free-surface flow
+            # Manning n is provided directly via physical properties
+            dQ_friction[~self.is_full_y_mid] = (
+                self.gravity * self.conduit_manning[~self.is_full_y_mid]**2 *
+                np.abs(v_mid[~self.is_full_y_mid]) /
+                (r_mid_upwtd[~self.is_full_y_mid]**(4/3)) * self.dt
+            )
+
+        else:
+
             # Compute Reynolds number for pressurized conduits
             self.Re_conduit[self.is_full_y_mid] = (
                 self.rho * np.abs(v_mid[self.is_full_y_mid]) *
@@ -1621,27 +1636,19 @@ class FlowSimulation:
                 f[turbulent_flow_mask] = 8 * ((8 / self.Re_conduit[turbulent_flow_mask]) ** 12 +
                                               1 / (A + B) ** 1.5) ** (1 / 12)
                 
-            # Compute friction term for pressurized conduits using Churchill
+            # Compute friction dQ term for pressurized conduits using Churchill
             dQ_friction[self.is_full_y_mid] = (
                 f[self.is_full_y_mid] * np.abs(v_mid[self.is_full_y_mid]) /
                 (8 * r_mid[self.is_full_y_mid]) * self.dt
             )
 
-        
-        # if geometry_channel == True
-        self.Re_conduit = (
-            self.rho * np.abs(v_mid[~self.is_full_y_mid]) * r_mid[~self.is_full_y_mid] / self.dyn_viscosity
-        )
-        # Compute friction term for free-surface flows using equivalent
-        # Manning n friction factor. This factor stays constant and is defined
-        # for all conduits using f(epsilon, Re->infty)
-        # In the case of open channel flow the Manning factor is directly applied via the
-        # physical property settings
-        dQ_friction[~self.is_full_y_mid] = (
-            self.gravity * self.conduit_manning[~self.is_full_y_mid]**2 *
-            np.abs(v_mid[~self.is_full_y_mid]) /
-            (r_mid_upwtd[~self.is_full_y_mid]**(4/3)) * self.dt
-        )
+            # Compute Manning-based friction dQ for free-surface flow in circular conduits
+            dQ_friction[~self.is_full_y_mid] = (
+                self.gravity * self.conduit_manning[~self.is_full_y_mid]**2 *
+                np.abs(v_mid[~self.is_full_y_mid]) /
+                (r_mid_upwtd[~self.is_full_y_mid]**(4/3)) * self.dt
+            )
+
         
         # Compute dQ components and new flows Q_new
         self.Q_new = (self.Q_old_t + dQ_pressure + dQ_inertia1 + dQ_inertia2)/(1 + dQ_friction)
