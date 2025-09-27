@@ -40,6 +40,7 @@ def apply_settings(simulation, physical_properties, solver_settings, simulation_
     simulation.channel_type = physical_properties.channel_type
     simulation.channel_width =  physical_properties.channel_width
     simulation.channel_manning =  physical_properties.channel_manning
+    simulation.friction_model =  physical_properties.friction_model
     simulation.w = solver_settings.relaxation_factor
     simulation.max_iterations = solver_settings.max_iterations
     simulation.picard_depth_tol = solver_settings.picard_depth_tol

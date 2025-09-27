@@ -8,7 +8,8 @@ Created on Fri Jul 19 10:38:20 2024
 """
 
 def validate_settings(physical_properties, solver_settings, simulation_settings, logger):
-       
+
+    # Physical properties   
     if not (isinstance(physical_properties.water_density, (int, float)) and 
             physical_properties.water_density > 0):
         raise ValueError("Error: 'water_density' must be type int/float and greater than 0 (kg/m^3).")
@@ -35,6 +36,17 @@ def validate_settings(physical_properties, solver_settings, simulation_settings,
                 physical_properties.channel_manning >= 0):
             raise ValueError("Error: 'channel_manning' must be type int/float and greater than or equal to 0.")
         
+    if not physical_properties.geometry_channel:
+        if not (physical_properties.friction_model in ['hybrid', 'churchill']):
+            raise ValueError("Error: 'friction_model' must be either 'hybrid' or 'churchill'.")
+    else:
+        # Warn if user set friction_model anyway when channel_geometry == TRUE
+        # In this case only Manning is appplied (with direct Manning factor)
+        if hasattr(physical_properties, "friction_model"):
+            logger.warning("Note: 'friction_model' is ignored when 'geometry_channel=True'.")
+
+    
+    # Solver settings  
     if not (isinstance(solver_settings.relaxation_factor, (int, float)) and 
             0 < solver_settings.relaxation_factor <= 1):
         raise ValueError("Error: 'relaxation_factor' must be type int/float and greater than 0 and "
@@ -59,6 +71,7 @@ def validate_settings(physical_properties, solver_settings, simulation_settings,
         raise ValueError("Error: 'ss_rel_madtol' must be type int/float and greater than 1e-10 and "
                          "less than 1e-2.")
 
+    # Simulation settings   
     if not (isinstance(simulation_settings.min_waterdepth, (int, float)) and 
             1e-14 <= simulation_settings.min_waterdepth < 1e-5):
         raise ValueError("Error: 'min_waterdepth' must be type int/float and greater equal 1e-14 and "
