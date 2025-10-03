@@ -1987,13 +1987,17 @@ class FlowSimulation:
             bool: True if the system has converged based on the relative L2 and MAD norms, False otherwise.
         """
 
+        # is_l2_converged = (
+        #     (self.relative_mad_norm < self.ss_rel_madtol) and
+        #     (self.relative_l2_norm < self.ss_rel_l2tol)
+        # )
         is_l2_converged = (
-            (self.relative_mad_norm < self.ss_rel_madtol) and
-            (self.relative_l2_norm < self.ss_rel_l2tol)
+            self.relative_l2_norm < self.ss_rel_l2tol
         )
         
         return is_l2_converged
-    
+ 
+ 
     # Calculation of critical depths. This is computationally inefficient. Probably better to use
     # a lookup table with precomputed values and then interpolate.
     def _flow_area_cdepth(self, depth, diameter):
