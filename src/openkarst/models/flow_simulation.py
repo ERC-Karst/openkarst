@@ -1544,7 +1544,7 @@ class FlowSimulation:
         dQ_inertia2 = alpha * v_mid * v_mid * (a2 - a1) / self.conduit_lengths * self.dt     
         
         # Precompute 
-        abs_vmid = np.abs(v_mid)
+        #abs_vmid = np.abs(v_mid)
 
         # Case: Open channel geometry
         if self.geometry_channel == True:
@@ -1552,7 +1552,7 @@ class FlowSimulation:
             # Approximate Reynolds number using flow depth as hydraulic radius.
             # Notice that r_mid takes into account channel width (finite or infinite)
             D_eff[:] = 4.0 * r_mid
-            self.Re_conduit[:] = (self.rho * abs_vmid * D_eff) / self.dyn_viscosity
+            self.Re_conduit[:] = (self.rho * np.abs(v_mid) * D_eff) / self.dyn_viscosity
    
             # Compute friction term using Manning's equation for free-surface flow
             # Manning n is provided directly via physical properties
@@ -1573,7 +1573,7 @@ class FlowSimulation:
 
                 # Reynolds number using D_eff
                 self.Re_conduit[:] = (
-                    self.rho * abs_vmid * D_eff / self.dyn_viscosity
+                    self.rho * np.abs(v_mid) * D_eff / self.dyn_viscosity
                 )
 
                 # Define masks for flow regimes under pressurized conditions
@@ -1598,14 +1598,14 @@ class FlowSimulation:
                     ) ** (1 / 12)
               
                 # Compute friction dQ term for all conduits using Churchill
-                dQ_friction[:] = (f * abs_vmid / (8 * r_mid) * self.dt)
+                dQ_friction[:] = (f * np.abs(v_mid) / (8 * r_mid) * self.dt)
 
             # Hybrid friction (Churchill + Manning for free-surface flows)
             else:
 
                 D_eff[self.is_full_y_mid]  = self.conduit_diameters[self.is_full_y_mid]
                 D_eff[~self.is_full_y_mid] = 4.0 * r_mid[~self.is_full_y_mid]
-                self.Re_conduit[:] = (self.rho * abs_vmid * D_eff) / self.dyn_viscosity
+                self.Re_conduit[:] = (self.rho * np.abs(v_mid) * D_eff) / self.dyn_viscosity
 
                 # Define masks for flow regimes under pressurized conditions
                 laminar_flow_mask = (self.Re_conduit <= 2300) & self.is_full_y_mid

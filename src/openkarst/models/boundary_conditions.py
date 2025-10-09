@@ -179,4 +179,87 @@ class TimeSeriesBC(BoundaryCondition):
             return float(np.interp(t, self.times, self.values))
 
 
+# from numba import njit
+
+# @njit(cache=True)
+# def _ts_eval_with_cursor(t, times, values, slopes, j, extrapolate_zero):
+#     """
+#     Evaluate piecewise-linear time series at time t using a segment cursor.
+#     Returns (value, new_j).
+#     - times: strictly increasing, len >= 2
+#     - slopes: len = len(times) - 1, (values[i+1]-values[i])/(times[i+1]-times[i])
+#     - j: cursor such that times[j] <= t < times[j+1] (if within range)
+#     - extrapolate_zero: bool (True -> zero outside; False -> hold endpoint)
+#     """
+#     n = times.size
+
+#     # extrapolation ends
+#     if t <= times[0]:
+#         return (0.0 if extrapolate_zero else values[0], 0)
+#     if t >= times[n-1]:
+#         return (0.0 if extrapolate_zero else values[n-1], n-2)
+
+#     # ensure cursor is at the correct segment
+#     if t < times[j]:
+#         # rare backward jump: reposition once
+#         jj = np.searchsorted(times, t) - 1
+#         if jj < 0:
+#             jj = 0
+#         elif jj > n - 2:
+#             jj = n - 2
+#         j = jj
+#     else:
+#         # typical forward-only advance; usually 0 or 1 increments
+#         while j < n - 2 and t >= times[j + 1]:
+#             j += 1
+
+#     # linear interpolation using precomputed slope
+#     val = values[j] + slopes[j] * (t - times[j])
+#     return (val, j)
+
+
+# class TimeSeriesBC(BoundaryCondition):
+#     """Time-dependent BC with segment cursor + Numba-accelerated evaluator."""
+
+#     def __init__(self, target_ids, times, values, bc_type='volumetric', extrapolate='hold'):
+#         super().__init__(target_ids, bc_type)
+
+#         t = np.asarray(times, dtype=np.float64)
+#         v = np.asarray(values, dtype=np.float64)
+#         if t.ndim != 1 or v.ndim != 1 or t.size != v.size:
+#             raise ValueError("times and values must be 1D and same length.")
+#         if t.size < 2:
+#             raise ValueError("TimeSeriesBC needs at least two points.")
+#         if not np.all(np.diff(t) > 0):
+#             raise ValueError("times must be strictly increasing.")
+
+#         self.times = np.ascontiguousarray(t)
+#         self.values = np.ascontiguousarray(v)
+
+#         dt = np.diff(self.times)
+#         dv = np.diff(self.values)
+#         self._slopes = np.ascontiguousarray(dv / dt, dtype=np.float64)
+
+#         ex = extrapolate.lower()
+#         if ex not in {'hold', 'zero'}:
+#             raise ValueError("extrapolate must be 'hold' or 'zero'.")
+#         self._extrapolate_zero = (ex == 'zero')
+
+#         self._j = 0
+#         self._last_t = -np.inf  # optional, not required by the kernel
+
+#     def reset_cursor(self):
+#         self._j = 0
+#         self._last_t = -np.inf
+
+#     def get_value(self, t):
+#         t = float(t)
+#         val, new_j = _ts_eval_with_cursor(
+#             t, self.times, self.values, self._slopes, self._j, self._extrapolate_zero
+#         )
+#         self._j = new_j
+#         self._last_t = t
+#         return float(val)
+
+
 
