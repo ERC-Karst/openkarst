@@ -263,9 +263,16 @@ class FlowSimulation:
             )
         
         # Node heights
-        self.Z = np.full(self.network.Np, self.network['pore.coords'][:, 2], dtype=float)
+        #self.Z = np.full(self.network.Np, self.network['pore.coords'][:, 2], dtype=float)
+        self.Z = self.network['pore.coords'][:, 2]
         self.z1 = self.Z[self.n_indices1]
         self.z2 = self.Z[self.n_indices2]
+
+        # Arrays for nodal boundary conditions
+        self._bc_node_inflow_vol = np.zeros(self.network.Np, dtype=float)  # [m^3/s]
+        self._bc_node_flux = np.zeros(self.network.Np, dtype=float)        # [m/s]
+        self._bc_fixed_y_mask = np.zeros(self.network.Np, dtype=bool)      # Dirichlet mask
+        self._bc_fixed_y_vals = np.zeros(self.network.Np, dtype=float)     # Dirichlet values
         
         self.logger.info('Arrays initialized')
         
@@ -290,9 +297,10 @@ class FlowSimulation:
             # Get Manning coefficient from physical property settings
             self.conduit_manning = np.full(self.network.Nt, self.channel_manning, dtype=float)
             
-            self.conduit_lengths = np.full(
-                self.network.Nt, self.network['throat.lengths'], dtype=float
-            )
+            self.conduit_lengths = np.asarray(self.network['throat.lengths'], dtype=float)
+            #self.conduit_lengths = np.full(
+            #    self.network.Nt, self.network['throat.lengths'], dtype=float
+            #)
             
             # Set max_depths to a default value for open channel flow
             # This can affect the calculation of the second adaptive dt criterion
@@ -302,15 +310,9 @@ class FlowSimulation:
         
         else:
                 
-            self.conduit_diameters = np.full(
-                self.network.Nt, self.network['throat.diameters'], dtype=float
-            )
-            self.conduit_lengths = np.full(
-                self.network.Nt, self.network['throat.lengths'], dtype=float
-            )
-            self.conduit_epsilon = np.full(
-                self.network.Nt, self.network['throat.epsilon'], dtype=float
-            )
+            self.conduit_diameters = np.asarray(self.network['throat.diameters'], dtype=float)
+            self.conduit_lengths = np.asarray(self.network['throat.lengths'], dtype=float)
+            self.conduit_epsilon = np.asarray(self.network['throat.epsilon'], dtype=float)
              
             # Initialize array to store the maximum depth for each node
             # At each node max_depth is the diameter of the largest connected conduit
@@ -339,7 +341,11 @@ class FlowSimulation:
             else:
                 self.conduit_manning = np.zeros(self.network.Nt, dtype=float)
         
-        
+        # Sum of half-lengths of conduits connected to each node
+        self.half_lengths_sum_per_node = 0.5 * (
+            np.bincount(self.n_indices1, weights=self.conduit_lengths, minlength=self.network.Np) +
+            np.bincount(self.n_indices2, weights=self.conduit_lengths, minlength=self.network.Np)
+        )
             
         self.logger.info('Conduit properties initialized')
             
@@ -399,8 +405,12 @@ class FlowSimulation:
             while True:
                 self._initialize_state_variables()
                
+
+                # Compute boundary condition values
+                # This currently also computes 
+                self._cache_time_dependent_bcs()
+
                 # Perform the dynamic wave computation for the current time step
-                #converged = self._dynamic_wave()
                 converged, n_iterations = self._dynamic_wave()
                 self.picard_iterations_last = n_iterations
                 
@@ -705,45 +715,7 @@ class FlowSimulation:
 
             self.boundary_conditions['inflow'].append(bc)
 
-
-    # def set_boundary_conditions(
-    #         self,
-    #         waterdepth_boundary=None,
-    #         inflow_boundary=None,
-    #         critical_depth_boundary=None,
-    #         inflow_type='constant',  # constant, constant_timespan or ramp
-    #         start_time=0,            # Start time for constant_timespan or ramped inflow
-    #         end_time=200             # End time for constant_timespan or ramped inflow
-    # ):
-    #     """
-    #     Set the boundary conditions for the flow simulation.
-    
-    #     Args:
-    #         waterdepth_boundary (dict, optional): Dictionary of water depth 
-    #             boundary conditions {node_index: value}.
-    #         inflow_boundary (dict, optional): Dictionary of inflow boundary 
-    #             conditions {node_index: value or (initial_rate, peak_rate)}.
-    #         critical_depth_boundary (dict, optional): Dictionary of critical 
-    #             depth boundary conditions {node_index: value}.
-    #         inflow_type (str, optional): Type of inflow ('constant', 'constant_timespan', or 'ramp').
-    #         start_time (float, optional): Start time for constant_timespan or ramped inflow.
-    #         end_time (float, optional): End time for constant_timespan or ramped inflow.
-    #     """
-        
-    #     if waterdepth_boundary is not None:
-    #         self.waterdepth_boundary = waterdepth_boundary
-    
-    #     if inflow_boundary is not None:
-    #         self.inflow_boundary = inflow_boundary
-    
-    #     if critical_depth_boundary is not None:
-    #         self.critical_depth_boundary = critical_depth_boundary
-    
-
-    #     self.inflow_type = inflow_type
-    #     self.start_time = start_time
-    #     self.end_time = end_time
-       
+ 
             
     def set_stop_conditions(self, flowrate_condition=None, flowrate_threshold=0.98):
         
@@ -1552,36 +1524,21 @@ class FlowSimulation:
         
         # Precompute inflow values per node at current time
         # These flows are also computed when computing water depths
-        current_time = self.current_timestep * self.dt
-        inflow_at_nodes = {}
 
-        for bc in self.boundary_conditions.get("inflow", []):
-            value = bc.get_value(current_time)
-            for node in bc.target_ids:
-                inflow_at_nodes[node] = (bc.bc_type, value)
+        ############## JENNY
+        #inflow_at_nodes = np.zeros(self.network.Np, dtype=float)
+        #for bc in self.boundary_conditions.get("inflow", []):
+        #    if getattr(bc, 'bc_type', 'volumetric') == 'flux':
+        #        inflow_at_nodes[bc.target_ids] += bc.get_value(self.current_time)
 
-        # Identify conduits with at least one node having a flux boundary condition
-        relevant_conduits = np.where(
-            np.isin(self.n_indices1, list(inflow_at_nodes.keys())) |
-            np.isin(self.n_indices2, list(inflow_at_nodes.keys()))
-        )[0]
-
-        for conduit in relevant_conduits:
-            n1 = self.n_indices1[conduit]
-            n2 = self.n_indices2[conduit]
-
-            q_n1 = q_n2 = 0.0
-
-            inflow_n1 = inflow_at_nodes.get(n1)
-            inflow_n2 = inflow_at_nodes.get(n2)
-
-            if inflow_n1 is not None and inflow_n1[0] == 'flux':
-                q_n1 = inflow_n1[1] * w_mid[conduit]
-
-            if inflow_n2 is not None and inflow_n2[0] == 'flux':
-                q_n2 = inflow_n2[1] * w_mid[conduit]
-
-            q_correction[conduit] = 0.5 * (q_n1 + q_n2)
+        # Vectorized replacement loop:
+        #flux_n1 = inflow_at_nodes[self.n_indices1]   # Nt
+        #flux_n2 = inflow_at_nodes[self.n_indices2]   # Nt
+        #q_correction[:] = 0.5 * w_mid * (flux_n1 + flux_n2)
+        flux_n1 = self._bc_node_flux[self.n_indices1]
+        flux_n2 = self._bc_node_flux[self.n_indices2]
+        q_correction[:] = 0.5 * w_mid * (flux_n1 + flux_n2)
+        ##############
                              
         # Inertial terms (alpha is zero when pressurized)
         # Apply the momentum correction term to the inertia term
@@ -1716,108 +1673,54 @@ class FlowSimulation:
         
         # Set dQ to zero as this is summed each iteration
         self.dQ_new.fill(0.0)
-        
-        is_positive_flow = self.Q_new > 0.0
-        is_negative_flow = self.Q_new < 0.0
-   
-        # For positive flows, subtract from source node and add to target node
-        np.add.at(self.dQ_new, self.n_indices1[is_positive_flow],
-                  -self.Q_new[is_positive_flow])
-        np.add.at(self.dQ_new, self.n_indices2[is_positive_flow],
-                  self.Q_new[is_positive_flow])
-
-        # For negative flows, add to source node and subtract from target node
-        np.add.at(self.dQ_new, self.n_indices1[is_negative_flow],
-                  -self.Q_new[is_negative_flow])
-        np.add.at(self.dQ_new, self.n_indices2[is_negative_flow],
-                  self.Q_new[is_negative_flow])
- 
-                    
-        # # Apply inflow boundary conditions with node-specific and time-dependent inflows
-        # current_time = self.current_timestep * self.dt
-        # # Loop through inflow boundary conditions and apply inflows
-        # for node_index, inflow_value in self.inflow_boundary.items():
             
-        #     # Ensure inflow_value is numerical (flux or volumetric flowrate)
-        #     if isinstance(inflow_value, tuple):
-        #         # Handle both cases for flux or volumetric inflow
-        #         if inflow_value[0] == 'flux':
-        #             flux_value = inflow_value[1]
-                    
-        #             # Get the conduits connected to this node
-        #             connected_conduits = np.where(
-        #                 (self.n_indices1 == node_index) | (self.n_indices2 == node_index)
-        #             )[0]
-                    
-        #             # Consider half of each connected conduit length
-        #             half_conduit_lengths = 0.5 * self.conduit_lengths[connected_conduits]
-                    
-        #             # For channel geometry only
-        #             if self.geometry_channel:
-        #                 if self.channel_type == 'infinite':
-        #                     # Multiplied by unit width (1.0)
-        #                     inflow_value = flux_value * np.sum(half_conduit_lengths) # * 1.0
-        #                 else:  # Finite channel
-        #                     inflow_value = flux_value * self.channel_width * np.sum(half_conduit_lengths)
-        #             else:
-        #                 raise ValueError("Flux inputs are not yet handled for non-channel geometries.")
-        #         else:
-        #             # If the tuple is not a 'flux', assume it's a volumetric flowrate (m^3/s)
-        #             inflow_value = inflow_value[1]
+        # Subtract flow from source node (n1) and add to target node (n2); sign handled by weights
+        np.add(self.dQ_new,
+               -np.bincount(self.n_indices1, weights=self.Q_new, minlength=self.network.Np),
+               out=self.dQ_new)
+        np.add(self.dQ_new,
+               +np.bincount(self.n_indices2, weights=self.Q_new, minlength=self.network.Np),
+               out=self.dQ_new)
+ 
+        # # Apply time-dependent inflow BCs (new format)        
+        # _node_inflow_volumetric = np.zeros(self.network.Np, dtype=float)
+        # _node_flux = np.zeros(self.network.Np, dtype=float)
+
+        # for bc in self.boundary_conditions.get('inflow', []):
+        #     value = bc.get_value(self.current_time)
+        #     if getattr(bc, 'bc_type', 'volumetric') == 'flux':
+        #         _node_flux[bc.target_ids] += value
         #     else:
-        #         # If not a tuple, assume inflow_value is already a float (volumetric flowrate in m^3/s)
-        #         inflow_value = float(inflow_value)
-    
-        #     # Apply inflow based on the type of inflow
-        #     if self.inflow_type == 'constant':
-        #         # Apply constant inflow rate
-        #         self.dQ_new[node_index] += inflow_value
-        #     elif self.inflow_type == 'ramp':
-        #         # Handle ramped inflow
-        #         if isinstance(inflow_value, tuple) and len(inflow_value) == 2:
-        #             initial_rate, peak_rate = inflow_value
-        #             ramped_inflow = self._time_dependent_flowrate(
-        #                 current_time, self.start_time, self.end_time, initial_rate, peak_rate
-        #             )
-        #             self.dQ_new[node_index] += ramped_inflow
+        #         _node_inflow_volumetric[bc.target_ids] += value
+
+
+        # has_flux = np.any(_node_flux)   # True only if a flux BC is used
+
+        # if has_flux:
+        #     if self.geometry_channel:
+        #         if self.channel_type == 'infinite':
+        #             flux_to_vol = _node_flux * self.half_lengths_sum_per_node
         #         else:
-        #             raise ValueError(f"Expected a tuple for ramped inflow at node {node_index}, but got {inflow_value}")
-        #     elif self.inflow_type == 'constant_timespan':
-        #         # Apply constant inflow rate only within a specific time span
-        #         if self.start_time <= current_time <= self.end_time:
-        #             self.dQ_new[node_index] += inflow_value
-        #         else:
-        #             self.dQ_new[node_index] += 0  # No inflow if outside the time range
-    
-        # Apply time-dependent inflow BCs (new format)
-        current_time = self.current_timestep * self.dt
+        #             flux_to_vol = _node_flux * self.channel_width * self.half_lengths_sum_per_node
+        #     else:
+        #         # You can either refuse or convert using a definition you deem physical.
+        #         raise ValueError(
+        #             "Flux BCs detected but geometry_channel=False. "
+        #             "Use volumetric BCs or implement a flux→volume conversion for your geometry."
+        #         )
+        # else:
+        #     # If no flux BC present contribute nothing
+        #     flux_to_vol = 0.0  
 
-        for bc in self.boundary_conditions.get('inflow', []):
-            value = bc.get_value(current_time)
+        # # Add volumetric inflows in one go
+        # self.dQ_new += _node_inflow_volumetric + flux_to_vol
+        # ####################################################################
+        # ####################################################################
+        self.dQ_new += self._bc_node_inflow_vol
+        if isinstance(self._bc_flux_to_vol, np.ndarray) or self._bc_flux_to_vol != 0.0:
+            self.dQ_new += self._bc_flux_to_vol
 
-            for node in bc.target_ids:
-                # If bc_type is flux convert to volume otherwise assume it is volumetric
-                if getattr(bc, 'bc_type', 'volumetric') == 'flux':
-                    # Convert to volumetric inflow based on local geometry
-                    connected_conduits = np.where(
-                        (self.n_indices1 == node) | (self.n_indices2 == node)
-                    )[0]
-                    half_lengths = 0.5 * self.conduit_lengths[connected_conduits]
-
-                    if self.geometry_channel:
-                        if self.channel_type == 'infinite':
-                            inflow_volume = value * np.sum(half_lengths)
-                        else:
-                            inflow_volume = value * self.channel_width * np.sum(half_lengths)
-                    else:
-                        raise ValueError("Flux inputs are not supported for non-channel geometries.")
-                    
-                    self.dQ_new[node] += inflow_volume
-
-                else:
-                    # Apply directly as volumetric flowrate
-                    self.dQ_new[node] += value
-
+        
         # Compute the change in volume at each node (dV)
         dV = 0.5 * (self.dQ_old_t + self.dQ_new) * self.dt
         
@@ -1828,35 +1731,21 @@ class FlowSimulation:
         # Update water depths using under-relaxation
         self.y_new = (1.0 - self.w) * self.y_prev_i + self.w * self.y_new
     
-        # Apply fixed water depth BCs (new format)
-        for bc in self.boundary_conditions.get('waterdepth', []):
-            value = bc.get_value(current_time)
-            for node in bc.target_ids:
-                self.y_new[node] = value    
+        # # Apply fixed water depth BCs (new format)
+        # for bc in self.boundary_conditions.get('waterdepth', []):
+        #     value = bc.get_value(current_time)
+        #     for node in bc.target_ids:
+        #         self.y_new[node] = value
 
-        # # Apply fixed head boundary conditions
-        # for node_index, waterdepth_value in self.waterdepth_boundary.items():
-        #     self.y_new[node_index] = waterdepth_value
-        
-        # # Apply free outfall condition using critical depth
-        # for node_index in self.critical_depth_boundary:
-            
-        #     # Find all conduits connected to this node
-        #     connected_conduits = np.where(
-        #         (self.n_indices1 == node_index) | (self.n_indices2 == node_index)
-        #     )[0]
-        
-        #     # Compute the critical depth for each connected conduit
-        #     critical_depths = [
-        #         self._find_critical_depth(self.Q_new[conduit_index],
-        #                                   self.conduit_diameters[conduit_index]
-        #                                   )
-        #         for conduit_index in connected_conduits
-        #     ]   
-        
-        #     # Assign the maximum critical depth to the node
-        #     critical_depth = max(critical_depths) if critical_depths else 0.0
-        #     self.y_new[node_index] = critical_depth
+        ################## Jenny
+        #for bc in self.boundary_conditions.get('waterdepth', []):
+        #    value = bc.get_value(self.current_time)
+        #    self.y_new[bc.target_ids] = value
+        ################## Jenny
+
+        # Enforce water depth (_cache_time_dependent_bcs)
+        self.y_new[self._bc_fixed_y_mask] = self._bc_fixed_y_vals[self._bc_fixed_y_mask]    
+
     
         # Ensure water depths don't go negative
         self.y_new[self.y_new <= 0.0] = 0.0
@@ -1905,6 +1794,49 @@ class FlowSimulation:
             print(f'Max Re = {np.max(self.Re_conduit):.2f} '
                   f'Avg Re = {np.mean(self.Re_conduit):.2f}\n')
 
+
+    def _cache_time_dependent_bcs(self):
+        """Evaluate BC values at current time and cache per-node arrays."""
+        t = self.current_time
+
+        # Reset
+        self._bc_node_inflow_vol.fill(0.0)
+        self._bc_node_flux.fill(0.0)
+        self._bc_fixed_y_mask.fill(False)
+        self._bc_fixed_y_vals.fill(0.0)
+
+        # Inflow BCs split into volumetric [m3/s] and flux [m/s]
+        #self._bc_node_inflow_vol = np.zeros(self.network.Np, dtype=float)
+        #self._bc_node_flux = np.zeros(self.network.Np, dtype=float)
+
+        for bc in self.boundary_conditions.get('inflow', []):
+            v = bc.get_value(t)
+            if getattr(bc, 'bc_type', 'volumetric') == 'flux':
+                self._bc_node_flux[bc.target_ids] += v
+            else:
+                self._bc_node_inflow_vol[bc.target_ids] += v
+
+        # Dirichlet water depth BCs
+        #self._bc_fixed_y_mask = np.zeros(self.network.Np, dtype=bool)
+        #self._bc_fixed_y_vals = np.zeros(self.network.Np, dtype=float)
+        for bc in self.boundary_conditions.get('waterdepth', []):
+            v = bc.get_value(t)
+            self._bc_fixed_y_mask[bc.target_ids] = True
+            self._bc_fixed_y_vals[bc.target_ids] = v
+
+        # Precompute flux-to-volume conversion for channels
+        if np.any(self._bc_node_flux):
+            if self.geometry_channel:
+                if self.channel_type == 'infinite':
+                    self._bc_flux_to_vol = self._bc_node_flux * self.half_lengths_sum_per_node
+                else:
+                    self._bc_flux_to_vol = (self._bc_node_flux * self.channel_width *
+                                            self.half_lengths_sum_per_node)
+            else:
+                raise ValueError("Flux BCs detected but geometry_channel=False."
+                                "Use volumetric BCs or implement conversion for new geometry.")
+        else:
+            self._bc_flux_to_vol = 0.0
 
     def _check_picard_convergence(self):
         """
@@ -1997,7 +1929,7 @@ class FlowSimulation:
         
         return is_l2_converged
  
- 
+
     # Calculation of critical depths. This is computationally inefficient. Probably better to use
     # a lookup table with precomputed values and then interpolate.
     def _flow_area_cdepth(self, depth, diameter):
