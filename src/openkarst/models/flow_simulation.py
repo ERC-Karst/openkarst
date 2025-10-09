@@ -271,8 +271,15 @@ class FlowSimulation:
         # Arrays for nodal boundary conditions
         self._bc_node_inflow_vol = np.zeros(self.network.Np, dtype=float)  # [m^3/s]
         self._bc_node_flux = np.zeros(self.network.Np, dtype=float)        # [m/s]
+        self._bc_flux_to_vol = np.zeros(self.network.Np, dtype=float)      # [m^3/s]
         self._bc_fixed_y_mask = np.zeros(self.network.Np, dtype=bool)      # Dirichlet mask
         self._bc_fixed_y_vals = np.zeros(self.network.Np, dtype=float)     # Dirichlet values
+
+        # Scratch arrays reused in _compute_flows
+        self.f = np.zeros(self.network.Nt, dtype=float)             
+        self.dQ_friction = np.zeros(self.network.Nt, dtype=float)   
+        self.q_correction = np.zeros(self.network.Nt, dtype=float)   # momentum correction (flux only currently)
+        self.D_eff = np.zeros(self.network.Nt, dtype=float)    
         
         self.logger.info('Arrays initialized')
         
@@ -1513,46 +1520,38 @@ class FlowSimulation:
         Returns:
             None: This method updates the instance attribute `self.Q_new` directly.
         """
-                
-        # Initialize arrays
-        f = np.zeros(self.network.Nt, dtype=float)
-        dQ_friction = np.zeros(self.network.Nt, dtype=float)
-        q_correction = np.zeros(self.network.Nt, dtype=float)
-        
+
+        self.f.fill(0.0)
+        self.dQ_friction.fill(0.0)
+
+        # Not needed but easier to read...
+        f = self.f
+        dQ_friction = self.dQ_friction
+        q_correction = self.q_correction
+        D_eff = self.D_eff
+
         # Pressure term (upstream weighting)
         dQ_pressure = -self.gravity * a_mid_upwtd * (h2 - h1) / self.conduit_lengths * self.dt
         
-        # Precompute inflow values per node at current time
-        # These flows are also computed when computing water depths
-
-        ############## JENNY
-        #inflow_at_nodes = np.zeros(self.network.Np, dtype=float)
-        #for bc in self.boundary_conditions.get("inflow", []):
-        #    if getattr(bc, 'bc_type', 'volumetric') == 'flux':
-        #        inflow_at_nodes[bc.target_ids] += bc.get_value(self.current_time)
-
-        # Vectorized replacement loop:
-        #flux_n1 = inflow_at_nodes[self.n_indices1]   # Nt
-        #flux_n2 = inflow_at_nodes[self.n_indices2]   # Nt
-        #q_correction[:] = 0.5 * w_mid * (flux_n1 + flux_n2)
+        # Add correction term. This is currently only applied for flux BCs
         flux_n1 = self._bc_node_flux[self.n_indices1]
         flux_n2 = self._bc_node_flux[self.n_indices2]
         q_correction[:] = 0.5 * w_mid * (flux_n1 + flux_n2)
-        ##############
                              
         # Inertial terms (alpha is zero when pressurized)
         # Apply the momentum correction term to the inertia term
         dQ_inertia1 = alpha * 2 * v_mid * (self.a_mid_new - self.a_mid_old_t - q_correction * self.dt)
         dQ_inertia2 = alpha * v_mid * v_mid * (a2 - a1) / self.conduit_lengths * self.dt     
         
+        abs_vmid = np.abs(v_mid)
 
         # Case: Open channel geometry
         if self.geometry_channel == True:
 
             # Approximate Reynolds number using flow depth as hydraulic radius.
             # Notice that r_mid takes into account channel width (finite or infinite)
-            D_eff = 4.0 * r_mid
-            self.Re_conduit = (self.rho * np.abs(v_mid) * D_eff) / self.dyn_viscosity
+            D_eff[:] = 4.0 * r_mid
+            self.Re_conduit[:] = (self.rho * abs_vmid * D_eff) / self.dyn_viscosity
    
             # Compute friction term using Manning's equation for free-surface flow
             # Manning n is provided directly via physical properties
@@ -1568,13 +1567,12 @@ class FlowSimulation:
             if self.friction_model == "churchill":
 
                 # Define effective diameter
-                D_eff = np.empty_like(r_mid)
                 D_eff[self.is_full_y_mid] = self.conduit_diameters[self.is_full_y_mid]
                 D_eff[~self.is_full_y_mid] = 4 * r_mid[~self.is_full_y_mid]
 
                 # Reynolds number using D_eff
-                self.Re_conduit = (
-                    self.rho * np.abs(v_mid) * D_eff / self.dyn_viscosity
+                self.Re_conduit[:] = (
+                    self.rho * abs_vmid * D_eff / self.dyn_viscosity
                 )
 
                 # Define masks for flow regimes under pressurized conditions
@@ -1599,15 +1597,14 @@ class FlowSimulation:
                     ) ** (1 / 12)
               
                 # Compute friction dQ term for all conduits using Churchill
-                dQ_friction = (f * np.abs(v_mid) / (8 * r_mid) * self.dt)
+                dQ_friction[:] = (f * abs_vmid / (8 * r_mid) * self.dt)
 
             # Hybrid friction (Churchill + Manning for free-surface flows)
             else:
 
-                D_eff = np.empty_like(r_mid)
                 D_eff[self.is_full_y_mid]  = self.conduit_diameters[self.is_full_y_mid]
                 D_eff[~self.is_full_y_mid] = 4.0 * r_mid[~self.is_full_y_mid]
-                self.Re_conduit = (self.rho * np.abs(v_mid) * D_eff) / self.dyn_viscosity
+                self.Re_conduit[:] = (self.rho * abs_vmid * D_eff) / self.dyn_viscosity
 
                 # Define masks for flow regimes under pressurized conditions
                 laminar_flow_mask = (self.Re_conduit <= 2300) & self.is_full_y_mid
@@ -1642,10 +1639,10 @@ class FlowSimulation:
                 )
         
         # Compute dQ components and new flows Q_new
-        self.Q_new = (self.Q_old_t + dQ_pressure + dQ_inertia1 + dQ_inertia2)/(1 + dQ_friction)
+        self.Q_new[:] = (self.Q_old_t + dQ_pressure + dQ_inertia1 + dQ_inertia2)/(1 + dQ_friction)
        
         # Update flows using under-relaxation
-        self.Q_new = (1.0 - self.w) * self.Q_prev_i + self.w * self.Q_new
+        self.Q_new[:] = (1.0 - self.w) * self.Q_prev_i + self.w * self.Q_new
         
         # Check for flow rate sign changes to address potential numerical instabilities.
         # Currently not needed, but retained for future debugging.
@@ -1682,45 +1679,14 @@ class FlowSimulation:
                +np.bincount(self.n_indices2, weights=self.Q_new, minlength=self.network.Np),
                out=self.dQ_new)
  
-        # # Apply time-dependent inflow BCs (new format)        
-        # _node_inflow_volumetric = np.zeros(self.network.Np, dtype=float)
-        # _node_flux = np.zeros(self.network.Np, dtype=float)
+        # Add nodal inflows from BCs (direct volumetric or converted from flux)
+        #self.dQ_new += self._bc_node_inflow_vol
+        #if isinstance(self._bc_flux_to_vol, np.ndarray) or self._bc_flux_to_vol != 0.0:
+        #    self.dQ_new += self._bc_flux_to_vol
 
-        # for bc in self.boundary_conditions.get('inflow', []):
-        #     value = bc.get_value(self.current_time)
-        #     if getattr(bc, 'bc_type', 'volumetric') == 'flux':
-        #         _node_flux[bc.target_ids] += value
-        #     else:
-        #         _node_inflow_volumetric[bc.target_ids] += value
-
-
-        # has_flux = np.any(_node_flux)   # True only if a flux BC is used
-
-        # if has_flux:
-        #     if self.geometry_channel:
-        #         if self.channel_type == 'infinite':
-        #             flux_to_vol = _node_flux * self.half_lengths_sum_per_node
-        #         else:
-        #             flux_to_vol = _node_flux * self.channel_width * self.half_lengths_sum_per_node
-        #     else:
-        #         # You can either refuse or convert using a definition you deem physical.
-        #         raise ValueError(
-        #             "Flux BCs detected but geometry_channel=False. "
-        #             "Use volumetric BCs or implement a flux→volume conversion for your geometry."
-        #         )
-        # else:
-        #     # If no flux BC present contribute nothing
-        #     flux_to_vol = 0.0  
-
-        # # Add volumetric inflows in one go
-        # self.dQ_new += _node_inflow_volumetric + flux_to_vol
-        # ####################################################################
-        # ####################################################################
         self.dQ_new += self._bc_node_inflow_vol
-        if isinstance(self._bc_flux_to_vol, np.ndarray) or self._bc_flux_to_vol != 0.0:
-            self.dQ_new += self._bc_flux_to_vol
+        self.dQ_new += self._bc_flux_to_vol
 
-        
         # Compute the change in volume at each node (dV)
         dV = 0.5 * (self.dQ_old_t + self.dQ_new) * self.dt
         
@@ -1729,29 +1695,16 @@ class FlowSimulation:
         self.y_new = self.y_old_t + dy
                  
         # Update water depths using under-relaxation
-        self.y_new = (1.0 - self.w) * self.y_prev_i + self.w * self.y_new
+        self.y_new[:] = (1.0 - self.w) * self.y_prev_i + self.w * self.y_new
     
-        # # Apply fixed water depth BCs (new format)
-        # for bc in self.boundary_conditions.get('waterdepth', []):
-        #     value = bc.get_value(current_time)
-        #     for node in bc.target_ids:
-        #         self.y_new[node] = value
-
-        ################## Jenny
-        #for bc in self.boundary_conditions.get('waterdepth', []):
-        #    value = bc.get_value(self.current_time)
-        #    self.y_new[bc.target_ids] = value
-        ################## Jenny
-
         # Enforce water depth (_cache_time_dependent_bcs)
         self.y_new[self._bc_fixed_y_mask] = self._bc_fixed_y_vals[self._bc_fixed_y_mask]    
 
-    
         # Ensure water depths don't go negative
         self.y_new[self.y_new <= 0.0] = 0.0
         
         # Compute change in water depths
-        self.dydt = np.abs(self.y_new - self.y_old_t) / self.dt
+        self.dydt[:] = np.abs(self.y_new - self.y_old_t) / self.dt
                 
         return
     
@@ -1799,15 +1752,12 @@ class FlowSimulation:
         """Evaluate BC values at current time and cache per-node arrays."""
         t = self.current_time
 
-        # Reset
+        # Reset arrays
         self._bc_node_inflow_vol.fill(0.0)
         self._bc_node_flux.fill(0.0)
+        self._bc_flux_to_vol.fill(0.0)
         self._bc_fixed_y_mask.fill(False)
         self._bc_fixed_y_vals.fill(0.0)
-
-        # Inflow BCs split into volumetric [m3/s] and flux [m/s]
-        #self._bc_node_inflow_vol = np.zeros(self.network.Np, dtype=float)
-        #self._bc_node_flux = np.zeros(self.network.Np, dtype=float)
 
         for bc in self.boundary_conditions.get('inflow', []):
             v = bc.get_value(t)
@@ -1828,15 +1778,14 @@ class FlowSimulation:
         if np.any(self._bc_node_flux):
             if self.geometry_channel:
                 if self.channel_type == 'infinite':
-                    self._bc_flux_to_vol = self._bc_node_flux * self.half_lengths_sum_per_node
+                    self._bc_flux_to_vol[:] = self._bc_node_flux * self.half_lengths_sum_per_node
                 else:
-                    self._bc_flux_to_vol = (self._bc_node_flux * self.channel_width *
+                    self._bc_flux_to_vol[:] = (self._bc_node_flux * self.channel_width *
                                             self.half_lengths_sum_per_node)
             else:
                 raise ValueError("Flux BCs detected but geometry_channel=False."
                                 "Use volumetric BCs or implement conversion for new geometry.")
-        else:
-            self._bc_flux_to_vol = 0.0
+            
 
     def _check_picard_convergence(self):
         """
