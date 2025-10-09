@@ -1543,6 +1543,7 @@ class FlowSimulation:
         dQ_inertia1 = alpha * 2 * v_mid * (self.a_mid_new - self.a_mid_old_t - q_correction * self.dt)
         dQ_inertia2 = alpha * v_mid * v_mid * (a2 - a1) / self.conduit_lengths * self.dt     
         
+        # Precompute 
         abs_vmid = np.abs(v_mid)
 
         # Case: Open channel geometry
@@ -1767,8 +1768,6 @@ class FlowSimulation:
                 self._bc_node_inflow_vol[bc.target_ids] += v
 
         # Dirichlet water depth BCs
-        #self._bc_fixed_y_mask = np.zeros(self.network.Np, dtype=bool)
-        #self._bc_fixed_y_vals = np.zeros(self.network.Np, dtype=float)
         for bc in self.boundary_conditions.get('waterdepth', []):
             v = bc.get_value(t)
             self._bc_fixed_y_mask[bc.target_ids] = True

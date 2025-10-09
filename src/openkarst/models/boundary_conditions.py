@@ -130,7 +130,6 @@ class BoxBC(BoundaryCondition):
             return self.v_after
 
 
-
 class TimeSeriesBC(BoundaryCondition):
     """Time-dependent boundary condition using linear interpolation.
 
@@ -178,3 +177,6 @@ class TimeSeriesBC(BoundaryCondition):
             return 0.0 if self.extrapolate == 'zero' else float(self.values[-1])
         else:
             return float(np.interp(t, self.times, self.values))
+
+
+
