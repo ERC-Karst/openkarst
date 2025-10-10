@@ -293,17 +293,18 @@ class FlowSimulation:
         self.q_correction = np.zeros(self.network.Nt, dtype=float)   # momentum correction (flux only currently)
         self.D_eff = np.zeros(self.network.Nt, dtype=float)
 
-        # Transport arrays
-        self.C = np.zeros(self.network.Np, dtype=float)      # concentration [M/L^3]
-        self.C_new = np.zeros(self.network.Np, dtype=float)
-        self.M = np.zeros(self.network.Np, dtype=float)      # mass [M]
+         # Transport arrays (only initialize when transport is enabled)
+        if self.simulation_settings.enable_transport:
+            self.C = np.zeros(self.network.Np, dtype=float)      # concentration [M/L^3]
+            self.C_new = np.zeros(self.network.Np, dtype=float)
+            self.M = np.zeros(self.network.Np, dtype=float)      # mass [M]
+            self._bc_C_mask = np.zeros(self.network.Np, dtype=bool)   # Dirichlet C
+            self._bc_C_vals = np.zeros(self.network.Np, dtype=float)
+            self._Cin_node = np.zeros(self.network.Np, dtype=float)   # concentration of incoming water at inflow nodes
 
+        # Always available for hydraulics; used by transport only if enabled:
         self.V_node = np.zeros(self.network.Np, dtype=float)  # [m^3]
-        self._dV_last = np.zeros(self.network.Np, dtype=float)
-
-        self._bc_C_mask = np.zeros(self.network.Np, dtype=bool)   # Dirichlet C
-        self._bc_C_vals = np.zeros(self.network.Np, dtype=float)
-        self._Cin_node = np.zeros(self.network.Np, dtype=float)   # concentration of incoming water at inflow nodes    
+        self._dV_last = np.zeros(self.network.Np, dtype=float)    
         
         self.logger.info('Arrays initialized')
         
@@ -415,7 +416,9 @@ class FlowSimulation:
             Dict[str, np.ndarray]: A dictionary containing the simulation results
             stored as numpy arrays.
         """
-        
+        # Check if user wants to save concentration or mass but has not enabled transport
+        self._validate_transport_outputs(desired_outputs)
+
         results_container = initialize_results_container(desired_outputs, self.logger)
         output_interval = desired_outputs.get('output_interval', 1.0)
         next_output_time = output_interval
@@ -456,7 +459,9 @@ class FlowSimulation:
                 self._compute_error_norms()
 
                 # Compute AD Transport with updated flow field
-                self._advance_transport()
+                # Only if enable_transport is True
+                if self.simulation_settings.enable_transport:
+                    self._advance_transport()
                 
                 # Compute new step size based on Froude and Courant number 
                 if self.adaptive_timesteps and self.current_timestep > 0:
@@ -570,35 +575,35 @@ class FlowSimulation:
         np.copyto(self.Q, initial_Q)
         np.copyto(self.y, initial_y)
 
-        # Compute initial nodal volumes for transport
-        # NOTE: Move into its own private function?
-        y0   = np.array(initial_y, dtype=float)
-        y1   = y0[self.n_indices1]
-        y2   = y0[self.n_indices2]
-        y_mid = 0.5*(y1 + y2)
+        # # Compute initial nodal volumes for transport
+        # # NOTE: Move into its own private function?
+        # y0   = np.array(initial_y, dtype=float)
+        # y1   = y0[self.n_indices1]
+        # y2   = y0[self.n_indices2]
+        # y_mid = 0.5*(y1 + y2)
 
-        # Get slot widths at mid (and set pressurization masks) via surface-area routine
-        n_surface_a, slot_w1, slot_w2, slot_w_mid, w_mid = self._compute_surface_area(y1, y2, y_mid)
+        # # Get slot widths at mid (and set pressurization masks) via surface-area routine
+        # n_surface_a, slot_w1, slot_w2, slot_w_mid, w_mid = self._compute_surface_area(y1, y2, y_mid)
 
-        # Cross-sectional discharge areas at ends and mid
-        A1, A2, A_mid = self._compute_discharge_areas(y1, y2, y_mid, slot_w_mid)
+        # # Cross-sectional discharge areas at ends and mid
+        # A1, A2, A_mid = self._compute_discharge_areas(y1, y2, y_mid, slot_w_mid)
 
-        # Conduit volumes (Simpsons rule)
-        L = np.asarray(self.conduit_lengths, dtype=float)
-        V_conduit = (L / 6.0) * (A1 + 4.0*A_mid + A2)   # [m^3]
+        # # Conduit volumes (Simpsons rule)
+        # L = np.asarray(self.conduit_lengths, dtype=float)
+        # V_conduit = (L / 6.0) * (A1 + 4.0*A_mid + A2)   # [m^3]
 
-        # Distribute half of each conduit volume to its end nodes
-        self.V_node = np.zeros(self.network.Np, dtype=float)
-        np.add.at(self.V_node, self.n_indices1, 0.5 * V_conduit)
-        np.add.at(self.V_node, self.n_indices2, 0.5 * V_conduit)
-        self.V_node[self.V_node < 0.0] = 0.0  # for safety
+        # # Distribute half of each conduit volume to its end nodes
+        # self.V_node = np.zeros(self.network.Np, dtype=float)
+        # np.add.at(self.V_node, self.n_indices1, 0.5 * V_conduit)
+        # np.add.at(self.V_node, self.n_indices2, 0.5 * V_conduit)
+        # self.V_node[self.V_node < 0.0] = 0.0  # for safety
 
-        # Initialize transport mass if concentration already provided
-        # NOTE: This is set by the user via set_initial_concentrations
-        # (which should typically set after set_initial_conditions)
-        # Need to be careful to make sure the user cant go wrong here  
-        #if np.any(self.C):
-        #    self.M = self.C * np.maximum(self.V_node, 1e-20)
+        # # Initialize transport mass if concentration already provided
+        # # NOTE: This is set by the user via set_initial_concentrations
+        # # (which should typically set after set_initial_conditions)
+        # # Need to be careful to make sure the user cant go wrong here  
+        # #if np.any(self.C):
+        # #    self.M = self.C * np.maximum(self.V_node, 1e-20)
 
 
     def set_waterdepth_BC(self, nodes, values, mode='add', extrapolate='hold'):
@@ -787,7 +792,19 @@ class FlowSimulation:
         else:
             self.stop_condition_set = False
         
+    # def set_observation_points(self, nodes, variables, interval=1.0):
+    #     self.observation_recorder = ObservationRecorder(nodes, variables, interval)
+
     def set_observation_points(self, nodes, variables, interval=1.0):
+
+        # Check if user wants C and M saved in observation and stop is transport is not enabled
+        wants_trans_output = any(v in ("concentrations", "mass") for v in variables)
+        if wants_trans_output and not getattr(self.simulation_settings, "enable_transport", False):
+            raise ValueError(
+                "Observation variables include 'concentrations' and/or 'mass'"
+                "but enable_transport=False. Enable transport or remove these variables."
+            )
+        
         self.observation_recorder = ObservationRecorder(nodes, variables, interval)
     
     def get_observation_dataframe(self):
@@ -2078,12 +2095,56 @@ class FlowSimulation:
             return initial_rate
         
 
-    # New Transport functions
-    def set_initial_concentration(self, C0):
-        np.copyto(self.C, C0)
-        # Mass will be set after V_node is initialized (first step) or here if V_node is known.
-        if np.any(self.V_node):
-            self.M = self.C * self.V_node
+    # # New Transport functions
+    # def set_initial_concentration(self, C0):
+    #     np.copyto(self.C, C0)
+    #     # Mass will be set after V_node is initialized (first step) or here if V_node is known.
+    #     if np.any(self.V_node):
+    #         self.M = self.C * self.V_node
+
+    def set_initial_concentrations(self, C0=0.0):
+        """
+        Initialize transport state (C, M, V_node) from current hydraulics (y, Q).
+        Requires simulation_settings.enable_transport == True.
+        """
+        # If enable_transport is False raise warning and stop
+        if not getattr(self.simulation_settings, "enable_transport", False):
+            msg = ("set_initial_concentration() called but enable_transport=False. "
+                "Enable transport (solver_settings.enable_transport=True) before initializing concentrations.")
+            try:
+                self.logger.warning(msg)
+            except Exception:
+                pass
+            raise RuntimeError(msg)
+
+        # Build initial V_node from discharge areas (works for free-surface & pressurized)
+        y0   = self.y.copy()
+        y1   = y0[self.n_indices1]
+        y2   = y0[self.n_indices2]
+        y_mid = 0.5*(y1 + y2)
+
+        # Get current pressurization masks 
+        self._compute_conduit_state(y1, y2, y_mid)
+
+        # Get slot width & areas
+        _, _, _, slot_w_mid, _ = self._compute_surface_area(y1, y2, y_mid)
+        A1, A2, A_mid = self._compute_discharge_areas(y1, y2, y_mid, slot_w_mid)
+
+        L = self.conduit_lengths.astype(float)
+        V_conduit = (L/6.0) * (A1 + 4.0*A_mid + A2)
+
+        # Distribute half of each conduit volume to its end nodes
+        self.V_node[:] = 0.0
+        np.add.at(self.V_node, self.n_indices1, 0.5 * V_conduit)
+        np.add.at(self.V_node, self.n_indices2, 0.5 * V_conduit)
+        self.V_node[self.V_node < 0.0] = 0.0  # safety
+
+        # Set initial concentration and mass
+        self.C[:] = C0
+        self.M[:] = self.C * self.V_node
+
+
+        
 
     def set_concentration_BC(self, nodes, values, mode='add'):
         if not isinstance(nodes, list): nodes = [nodes]
@@ -2106,6 +2167,16 @@ class FlowSimulation:
         for n, v in zip(nodes, values):
             self._Cin_node[n] = float(v)
    
+    def _validate_transport_outputs(self, desired_outputs):
+        wants_transport = any(
+            desired_outputs.get(k, False)
+            for k in ("concentrations", "mass")
+        )
+        if wants_transport and not getattr(self.simulation_settings, "enable_transport", False):
+            raise ValueError(
+                "User requests to save transport fields (e.g., 'concentrations' or 'mass') "
+                "but enable_transport=False. Enable transport or remove these outputs."
+            )
 
     def _advance_transport(self):
         """
