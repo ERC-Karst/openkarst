@@ -17,6 +17,7 @@ from typing import Optional, Dict, Any
 from openkarst.config.physical_properties import PhysicalProperties
 from openkarst.config.solver_settings import SolverSettings
 from openkarst.config.simulation_settings import SimulationSettings
+from openkarst.config.transport_settings import TransportSettings
 from openkarst.config.validate_settings import validate_settings
 from openkarst.config.apply_settings import apply_settings
 
@@ -31,12 +32,12 @@ from openkarst.models.boundary_conditions import ConstantBC, BoxBC, TimeSeriesBC
 
 class FlowSimulation:
     """
-    Simulates free surface and pressurized flow through a karst conduit network using the
-    dynamic wave equation.
+    Simulates free surface and pressurized flow including transport through a karst conduit
+    network using the dynamic wave equation.
 
-    This class models the flow of water through a network of conduits, considering both
+    This class models the flow of water and transport through a network of conduits, considering both
     free surface and pressurized flow conditions. It utilizes the dynamic wave equation
-    to compute the flow rates, water depths, and other relevant properties over time.
+    to compute the flow rates, water depths, concentrations and other relevant properties over time.
 
     Attributes:
         GEOMETRY_CHANNEL (int): Indicator for channel geometry. Set to 1 for channel validation.
@@ -44,6 +45,7 @@ class FlowSimulation:
         physical_properties (PhysicalProperties): Object containing the physical properties of the simulation.
         solver_settings (SolverSettings): Object containing the solver settings.
         simulation_settings (SimulationSettings): Object containing the simulation settings.
+        transport_settings (TransportSettings): Object containing the transport settings.
         logging_settings (LoggingSettings): Object containing the logger settings.
         network (openpnm.network.GenericNetwork): The OpenPNM network used in the simulation.
         waterdepth_boundary (dict): Dictionary storing water depth boundary conditions.
@@ -51,7 +53,7 @@ class FlowSimulation:
         critical_depth_boundary (dict): Dictionary storing critical depth boundary conditions.
 
     Methods:
-        __init__(self, openpnm_network, physical_properties=None, solver_settings=None, simulation_settings=None):
+        __init__(self, openpnm_network, physical_properties=None, solver_settings=None, simulation_settings=None, transport_settings=None):
             Initializes the FlowSimulation class with the provided settings and network.
         _initialize_arrays(self):
             Initializes the arrays used in the simulation.
@@ -119,6 +121,7 @@ class FlowSimulation:
                  physical_properties: Optional[Dict[str, Any]] = None,
                  solver_settings: Optional[Dict[str, Any]] = None,
                  simulation_settings: Optional[Dict[str, Any]] = None,
+                 transport_settings: Optional[Dict[str, Any]] = None,
                  logging_settings: Optional[Dict[str, Any]] = None):
         """
         Initializes the FlowSimulation class with provided settings and network.
@@ -135,6 +138,7 @@ class FlowSimulation:
             physical_properties: Instance of PhysicalProperties with provided or default settings.
             solver_settings: Instance of SolverSettings with provided or default settings.
             simulation_settings: Instance of SimulationSettings with provided or default settings.
+            transport_settings: Instance of TransportSettings with provided or default settings.
             network: The OpenPNM network to be used in the simulation.
             waterdepth_boundary (dict): Dictionary for water depth boundary conditions.
             inflow_boundary (dict): Dictionary for inflow boundary conditions.
@@ -153,10 +157,14 @@ class FlowSimulation:
         self.simulation_settings= (SimulationSettings(**simulation_settings)
                                    if simulation_settings else SimulationSettings()
                                    )
+        self.transport_settings= (TransportSettings(**transport_settings)
+                                   if transport_settings else TransportSettings()
+                                   )
 
         validate_settings(self.physical_properties,
                           self.solver_settings,
                           self.simulation_settings,
+                          self.transport_settings,
                           self.logger
                           )
         
@@ -164,6 +172,7 @@ class FlowSimulation:
                        self.physical_properties,
                        self.solver_settings,
                        self.simulation_settings,
+                       self.transport_settings,
                        self.logger
                        )
         
@@ -193,6 +202,8 @@ class FlowSimulation:
                          self.solver_settings)
         self.logger.info('FlowSimulation initialized with simulation settings: %s',
                          self.simulation_settings)
+        self.logger.info('FlowSimulation initialized with transport settings: %s',
+                         self.transport_settings)
         
         
     def _initialize_arrays(self):
@@ -230,6 +241,7 @@ class FlowSimulation:
             z2 (ndarray): Array of node heights for n_indices2.
         """
 
+        # Flow arrays
         self.Q = np.zeros(self.network.Nt, dtype=float)  # Flow rates
         self.Q_new = np.zeros(self.network.Nt, dtype=float)
         self.Q_prev_i = np.zeros(self.network.Nt, dtype=float)
@@ -279,7 +291,19 @@ class FlowSimulation:
         self.f = np.zeros(self.network.Nt, dtype=float)             
         self.dQ_friction = np.zeros(self.network.Nt, dtype=float)   
         self.q_correction = np.zeros(self.network.Nt, dtype=float)   # momentum correction (flux only currently)
-        self.D_eff = np.zeros(self.network.Nt, dtype=float)    
+        self.D_eff = np.zeros(self.network.Nt, dtype=float)
+
+        # Transport arrays
+        self.C = np.zeros(self.network.Np, dtype=float)      # concentration [M/L^3]
+        self.C_new = np.zeros(self.network.Np, dtype=float)
+        self.M = np.zeros(self.network.Np, dtype=float)      # mass [M]
+
+        self.V_node = np.zeros(self.network.Np, dtype=float)  # [m^3]
+        self._dV_last = np.zeros(self.network.Np, dtype=float)
+
+        self._bc_C_mask = np.zeros(self.network.Np, dtype=bool)   # Dirichlet C
+        self._bc_C_vals = np.zeros(self.network.Np, dtype=float)
+        self._Cin_node = np.zeros(self.network.Np, dtype=float)   # concentration of incoming water at inflow nodes    
         
         self.logger.info('Arrays initialized')
         
@@ -305,13 +329,10 @@ class FlowSimulation:
             self.conduit_manning = np.full(self.network.Nt, self.channel_manning, dtype=float)
             
             self.conduit_lengths = np.asarray(self.network['throat.lengths'], dtype=float)
-            #self.conduit_lengths = np.full(
-            #    self.network.Nt, self.network['throat.lengths'], dtype=float
-            #)
             
             # Set max_depths to a default value for open channel flow
             # This can affect the calculation of the second adaptive dt criterion
-            self.max_depths = np.full(self.network.Np, 1.0, dtype=float)
+            self.max_depths = np.full(self.network.Np, 1e-8, dtype=float)
             
             self.Re_conduit = np.zeros(self.network.Nt, dtype=float)
         
@@ -433,6 +454,9 @@ class FlowSimulation:
 
                 # Compute L2 and MAD error norms for each timestep
                 self._compute_error_norms()
+
+                # Compute AD Transport with updated flow field
+                self._advance_transport()
                 
                 # Compute new step size based on Froude and Courant number 
                 if self.adaptive_timesteps and self.current_timestep > 0:
@@ -533,7 +557,7 @@ class FlowSimulation:
     
     def set_initial_conditions(self, initial_Q, initial_y):
         """
-        Set the initial conditions for flow rates and water depths.
+        Set the initial conditions for flow and derive transport volumes.
 
         This method sets the initial flow rates and water depths for the
         simulation.
@@ -545,6 +569,36 @@ class FlowSimulation:
         
         np.copyto(self.Q, initial_Q)
         np.copyto(self.y, initial_y)
+
+        # Compute initial nodal volumes for transport
+        # NOTE: Move into its own private function?
+        y0   = np.array(initial_y, dtype=float)
+        y1   = y0[self.n_indices1]
+        y2   = y0[self.n_indices2]
+        y_mid = 0.5*(y1 + y2)
+
+        # Get slot widths at mid (and set pressurization masks) via surface-area routine
+        n_surface_a, slot_w1, slot_w2, slot_w_mid, w_mid = self._compute_surface_area(y1, y2, y_mid)
+
+        # Cross-sectional discharge areas at ends and mid
+        A1, A2, A_mid = self._compute_discharge_areas(y1, y2, y_mid, slot_w_mid)
+
+        # Conduit volumes (Simpsons rule)
+        L = np.asarray(self.conduit_lengths, dtype=float)
+        V_conduit = (L / 6.0) * (A1 + 4.0*A_mid + A2)   # [m^3]
+
+        # Distribute half of each conduit volume to its end nodes
+        self.V_node = np.zeros(self.network.Np, dtype=float)
+        np.add.at(self.V_node, self.n_indices1, 0.5 * V_conduit)
+        np.add.at(self.V_node, self.n_indices2, 0.5 * V_conduit)
+        self.V_node[self.V_node < 0.0] = 0.0  # for safety
+
+        # Initialize transport mass if concentration already provided
+        # NOTE: This is set by the user via set_initial_concentrations
+        # (which should typically set after set_initial_conditions)
+        # Need to be careful to make sure the user cant go wrong here  
+        #if np.any(self.C):
+        #    self.M = self.C * np.maximum(self.V_node, 1e-20)
 
 
     def set_waterdepth_BC(self, nodes, values, mode='add', extrapolate='hold'):
@@ -770,6 +824,10 @@ class FlowSimulation:
         self.y = self.y_new
         self.a_mid = self.a_mid_new
         self.dQ = self.dQ_new
+
+        # Transport: Accept the volume change after each timestep 
+        self.V_node += self._dV_last
+        self.V_node[self.V_node < 0.0] = 0.0  # For safety
 
     def _dynamic_wave(self):
         """
@@ -1690,6 +1748,9 @@ class FlowSimulation:
 
         # Compute the change in volume at each node (dV)
         dV = 0.5 * (self.dQ_old_t + self.dQ_new) * self.dt
+
+        # Save change in nodal volume for transport
+        self._dV_last = dV
         
         # Compute change in flow depths and new depths
         dy = dV / n_surface_a
@@ -2015,4 +2076,107 @@ class FlowSimulation:
         # Outside the defined period, return the initial flow rate
         else:
             return initial_rate
+        
+
+    # New Transport functions
+    def set_initial_concentration(self, C0):
+        np.copyto(self.C, C0)
+        # Mass will be set after V_node is initialized (first step) or here if V_node is known.
+        if np.any(self.V_node):
+            self.M = self.C * self.V_node
+
+    def set_concentration_BC(self, nodes, values, mode='add'):
+        if not isinstance(nodes, list): nodes = [nodes]
+        if not isinstance(values, list): values = [values]*len(nodes)
+        if mode == 'remove':
+            self._bc_C_mask[nodes] = False
+            self._bc_C_vals[nodes] = 0.0
+            return
+        if mode == 'overwrite':
+            self._bc_C_mask[:] = False
+            self._bc_C_vals[:] = 0.0
+        for n, v in zip(nodes, values):
+            self._bc_C_mask[n] = True
+            self._bc_C_vals[n] = float(v)
+
+    def set_inflow_concentration(self, nodes, values):
+        """Concentration of water entering via inflow BCs at these nodes."""
+        if not isinstance(nodes, list): nodes = [nodes]
+        if not isinstance(values, list): values = [values]*len(nodes)
+        for n, v in zip(nodes, values):
+            self._Cin_node[n] = float(v)
    
+
+    def _advance_transport(self):
+        """
+        Conservative explicit FV transport with time substepping.
+        Uses true nodal volume (self.V_node), upwind advection, centered diffusion,
+        inflow mass sources (Cin*Qin), and optional first-order decay.
+        Hydraulics (Q, a_mid, lengths) are frozen during this call.
+        """
+        # Volumes and early exits
+        Vn = np.maximum(self.V_node, 1e-20)  # [m^3]
+        # Initialize mass once if needed
+        if not np.any(self.M) and np.any(self.C):
+            self.M = self.C * Vn
+
+        # Edge data
+        i = self.n_indices1
+        j = self.n_indices2
+        L = np.maximum(self.conduit_lengths, 1e-12)
+        Qe = self.Q_new.copy()                  # [m^3/s], sign i->j
+        Ae = np.maximum(self.a_mid, 1e-16)      # [m^2]
+        ve = Qe / Ae                            # [m/s]
+        De = self.molecular_diffusivity + self.alpha_l * np.abs(ve)  # [m^2/s]
+
+        # Transport time step limits (advection and diffusion)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            dt_adv_edges = np.where(np.abs(ve) > 1e-12, L / np.abs(ve), np.inf)
+        dt_adv = np.min(dt_adv_edges[np.isfinite(dt_adv_edges)]) if np.any(np.isfinite(dt_adv_edges)) else np.inf
+        dt_diff_edges = L*L / np.maximum(2.0*De, 1e-30)
+        dt_diff = np.min(dt_diff_edges) if np.size(dt_diff_edges) else np.inf
+
+        dt_target = self.dt
+        dt_lim = self.transport_cfl * min(dt_adv, dt_diff) if (dt_adv < np.inf) else self.transport_cfl * dt_diff
+        n_sub = max(1, int(np.ceil(dt_target / np.maximum(dt_lim, 1e-12))))
+        dt_s = dt_target / n_sub
+
+        # Nodal mass source from boundary inflows (volumetric and flux-to-vol)
+        Qin_node = self._bc_node_inflow_vol + self._bc_flux_to_vol  # [m^3/s]
+        mass_src = Qin_node * self._Cin_node                        # [M/s]
+
+        # Subcycling
+        for _ in range(n_sub):
+            Cn = np.where(Vn > 0.0, self.M / Vn, 0.0)  # current concentration
+
+            # Upwind advection flux on edges
+            up_from_i = Qe > 0.0
+            Cup = np.where(up_from_i, Cn[i], Cn[j])
+            Fadv = Qe * Cup     # [M/s]
+
+            # Centered diffusive flux
+            G = (Cn[j] - Cn[i]) / L
+            Fdiff = - (Ae * De) * G  # [M/s]
+
+            # Assemble net nodal rates (edge contributions are conservative)
+            net_rate = np.zeros(self.network.Np, dtype=float)
+            np.add.at(net_rate, i, -(Fadv + Fdiff))
+            np.add.at(net_rate, j, +(Fadv + Fdiff))
+
+            # Add nodal mass sources and first-order decay
+            net_rate += mass_src
+            decay = - self.decay_rate * self.M
+
+            # Advance mass
+            self.M = self.M + dt_s * (net_rate + decay)
+            self.M[self.M < 0.0] = 0.0  # safety
+
+            # Enforce Dirichlet C (if any)
+            if np.any(self._bc_C_mask):
+                self.C_new = self.M / np.maximum(Vn, 1e-20)
+                self.C_new[self._bc_C_mask] = self._bc_C_vals[self._bc_C_mask]
+                # Keep mass consistent with imposed C
+                self.M[self._bc_C_mask] = self.C_new[self._bc_C_mask] * Vn[self._bc_C_mask]
+
+        # Final concentration
+        self.C = self.M / np.maximum(Vn, 1e-20)

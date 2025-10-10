@@ -7,7 +7,7 @@ Created on Fri Jul 19 10:38:20 2024
 @contact: jannes.kordilla@idaea.csic.es
 """
 
-def validate_settings(physical_properties, solver_settings, simulation_settings, logger):
+def validate_settings(physical_properties, solver_settings, simulation_settings, transport_settings, logger):
 
     # Physical properties   
     if not (isinstance(physical_properties.water_density, (int, float)) and 
@@ -127,6 +127,31 @@ def validate_settings(physical_properties, solver_settings, simulation_settings,
     if not (isinstance(simulation_settings.print_info_interval, int) and 
             simulation_settings.print_info_interval >= 1):
         raise ValueError("Error: 'print_info_interval' must be an integer greater than or equal to 1.")
+    
+    # Transport settings
+    if not (isinstance(transport_settings.molecular_diffusivity, (int, float)) and 
+            1e-14 <= transport_settings.molecular_diffusivity < 1e-5):
+        raise ValueError("Error: 'molecular_diffusivity' must be type int/float and greater equal 1e-14 and "
+                        "less than 1e-5 (m^2/s).")
+    
+    if not (isinstance(transport_settings.alpha_l, (int, float)) and 
+            1e-3 <= transport_settings.alpha_l < 1000):
+        raise ValueError("Error: 'alpha_l' must be type int/float and greater equal 1e-3 and "
+                        "less than 1000 (m).")
+    
+    if not (isinstance(transport_settings.decay_rate, (int, float)) and 
+            0.0 <= transport_settings.decay_rate < 0.1):
+        raise ValueError("Error: 'decay_rate' must be type int/float and greater equal 0.0 and "
+                        "less than 0.1 (1/s).")
+    
+    if not (isinstance(transport_settings.transport_cfl, (int, float)) and 
+            0.1 <= transport_settings.transport_cfl < 1.0):
+        raise ValueError("Error: 'transport_cfl' must be type int/float and greater equal 0.1 and "
+                    "less than 1.0.")
+    
+    
+
+    transport_cfl: float = 0.8 
     
     logger.info('Settings validated')
     
