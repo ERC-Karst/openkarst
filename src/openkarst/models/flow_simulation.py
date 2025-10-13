@@ -2325,8 +2325,6 @@ class FlowSimulation:
 
         # Node volumes
         Vn = self.V_node
-        #if not np.any(self.M) and np.any(self.C):
-        #    self.M = self.C * Vn
 
         # Conduit and hydraulic information
         i = self.n_indices1
@@ -2360,19 +2358,24 @@ class FlowSimulation:
         for _ in range(n_sub):
             Cn = np.where(Vn > 0.0, self.M / Vn, 0.0)
 
-            # Upwind advection
-            up_from_i = Qe > 0.0
-            Cup  = np.where(up_from_i, Cn[i], Cn[j])
+            # Upstream advection
+            # If flow is from i -> j (Qe>0): use C[i]
+            # If flow is from j -> i (Qe<0): use C[j]
+            Cup = np.where(Qe > 0.0, Cn[i], Cn[j])
             Fadv = Qe * Cup
 
             # Centered diffusion
+            # Positive G means C[j] > C[i]
             G    = (Cn[j] - Cn[i]) / L
             Fdiff= - (Ae * De) * G
 
-            # Conservative conduit assembly
+            # Assemble total mass rate per node
+            # Each conduit contributes:
+            # - outflow from i: -(Fadv + Fdiff)
+            # - inflow to j: +(Fadv + Fdiff)
             net_rate = np.zeros(self.network.Np, dtype=float)
-            np.add.at(net_rate, i, -(Fadv + Fdiff))
-            np.add.at(net_rate, j, +(Fadv + Fdiff))
+            np.add.at(net_rate, i, -(Fadv + Fdiff)) # remove mass leaving node i
+            np.add.at(net_rate, j, +(Fadv + Fdiff)) # add mass arriving at node j
 
             # Add inflow mass only
             net_rate += mass_src
@@ -2383,81 +2386,3 @@ class FlowSimulation:
 
         # Final concentration
         self.C = self.M / np.maximum(Vn, 1e-20)
-
-
-
-
-
-    # def _advance_transport(self):
-    #     """
-    #     Conservative explicit FV transport with time substepping.
-    #     Uses true nodal volume (self.V_node), upwind advection, centered diffusion,
-    #     inflow mass sources (Cin*Qin), and optional first-order decay.
-    #     Hydraulics (Q, a_mid, lengths) are frozen during this call.
-    #     """
-    #     # Volumes and early exits
-    #     Vn = np.maximum(self.V_node, 1e-20)  # [m^3]
-    #     # Initialize mass once if needed
-    #     if not np.any(self.M) and np.any(self.C):
-    #         self.M = self.C * Vn
-
-    #     # Edge data
-    #     i = self.n_indices1
-    #     j = self.n_indices2
-    #     L = np.maximum(self.conduit_lengths, 1e-12)
-    #     Qe = self.Q_new.copy()                  # [m^3/s], sign i->j
-    #     Ae = np.maximum(self.a_mid, 1e-16)      # [m^2]
-    #     ve = Qe / Ae                            # [m/s]
-    #     De = self.molecular_diffusivity + self.alpha_l * np.abs(ve)  # [m^2/s]
-
-    #     # Transport time step limits (advection and diffusion)
-    #     with np.errstate(divide='ignore', invalid='ignore'):
-    #         dt_adv_edges = np.where(np.abs(ve) > 1e-12, L / np.abs(ve), np.inf)
-    #     dt_adv = np.min(dt_adv_edges[np.isfinite(dt_adv_edges)]) if np.any(np.isfinite(dt_adv_edges)) else np.inf
-    #     dt_diff_edges = L*L / np.maximum(2.0*De, 1e-30)
-    #     dt_diff = np.min(dt_diff_edges) if np.size(dt_diff_edges) else np.inf
-
-    #     dt_target = self.dt
-    #     dt_lim = self.transport_cfl * min(dt_adv, dt_diff) if (dt_adv < np.inf) else self.transport_cfl * dt_diff
-    #     n_sub = max(1, int(np.ceil(dt_target / np.maximum(dt_lim, 1e-12))))
-    #     dt_s = dt_target / n_sub
-
-    #     # Nodal mass source from boundary inflows (volumetric and flux-to-vol)
-    #     Qin_node = self.bc_node_inflow_vol + self.bc_flux_to_vol  # [m^3/s]
-    #     mass_src = Qin_node * self.Cin_node                        # [M/s]
-
-    #     # Subcycling
-    #     for _ in range(n_sub):
-    #         Cn = np.where(Vn > 0.0, self.M / Vn, 0.0)  # current concentration
-
-    #         # Upwind advection flux on edges
-    #         up_from_i = Qe > 0.0
-    #         Cup = np.where(up_from_i, Cn[i], Cn[j])
-    #         Fadv = Qe * Cup     # [M/s]
-
-    #         # Centered diffusive flux
-    #         G = (Cn[j] - Cn[i]) / L
-    #         Fdiff = - (Ae * De) * G  # [M/s]
-
-    #         # Assemble net nodal rates (edge contributions are conservative)
-    #         net_rate = np.zeros(self.network.Np, dtype=float)
-    #         np.add.at(net_rate, i, -(Fadv + Fdiff))
-    #         np.add.at(net_rate, j, +(Fadv + Fdiff))
-
-    #         # Add nodal mass sources and first-order decay
-    #         net_rate += mass_src
-    #         decay = - self.decay_rate * self.M
-
-    #         # Advance mass
-    #         self.M = self.M + dt_s * (net_rate + decay)
-    #         self.M[self.M < 0.0] = 0.0  # safety
-
-    #         # Enforce Dirichlet C (if any)
-    #         if np.any(self.bc_C_mask):
-    #             self.C_new = self.M / np.maximum(Vn, 1e-20)
-    #             self.C_new[self.bc_C_mask] = self.bc_C_vals[self.bc_C_mask]
-    #             # Keep mass consistent with imposed C
-    #             self.M[self.bc_C_mask] = self.C_new[self.bc_C_mask] * Vn[self.bc_C_mask]
-
-    #     # Final concentration
-    #     self.C = self.M / np.maximum(Vn, 1e-20)
