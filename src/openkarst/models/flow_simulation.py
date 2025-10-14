@@ -281,26 +281,29 @@ class FlowSimulation:
         self.z2 = self.Z[self.n_indices2]
 
         # Arrays for nodal boundary conditions
-        self.bc_node_inflow_vol = np.zeros(self.network.Np, dtype=float)  # [m^3/s]
-        self.bc_node_flux = np.zeros(self.network.Np, dtype=float)        # [m/s]
-        self.bc_flux_to_vol = np.zeros(self.network.Np, dtype=float)      # [m^3/s]
-        self.bc_fixed_y_mask = np.zeros(self.network.Np, dtype=bool)      # Dirichlet mask
-        self.bc_fixed_y_vals = np.zeros(self.network.Np, dtype=float)     # Dirichlet values
+        self.bc_inflow_vol_node = np.zeros(self.network.Np, dtype=float) # [m^3/s]
+        self.bc_flux_node = np.zeros(self.network.Np, dtype=float) # [m/s]
+        self.bc_flux_to_vol_node = np.zeros(self.network.Np, dtype=float) # [m^3/s]
+        self.bc_prescribed_y_mask = np.zeros(self.network.Np, dtype=bool) # Dirichlet mask [m] 
+        self.bc_prescribed_y_vals = np.zeros(self.network.Np, dtype=float) # Dirichlet values [m] 
+        self.bc_Qin_node = np.zeros(self.network.Np, dtype=float) # total external inflow [m^3/s] 
+
 
         # Scratch arrays reused in _compute_flows
         self.f = np.zeros(self.network.Nt, dtype=float)             
         self.dQ_friction = np.zeros(self.network.Nt, dtype=float)   
-        self.q_correction = np.zeros(self.network.Nt, dtype=float)   # momentum correction (flux only currently)
+        self.q_correction = np.zeros(self.network.Nt, dtype=float) # momentum correction (flux only currently)
         self.D_eff = np.zeros(self.network.Nt, dtype=float)
 
          # Transport arrays (only initialize when transport is enabled)
         if self.simulation_settings.enable_transport:
-            self.C = np.zeros(self.network.Np, dtype=float)      # concentration [M/L^3]
+            self.C = np.zeros(self.network.Np, dtype=float) # concentration [kg/m^3]
             self.C_new = np.zeros(self.network.Np, dtype=float)
-            self.M = np.zeros(self.network.Np, dtype=float)      # mass [M]
-            self.bc_C_mask = np.zeros(self.network.Np, dtype=bool)   # Dirichlet C
-            self.bc_C_vals = np.zeros(self.network.Np, dtype=float)
-            self.Cin_node = np.zeros(self.network.Np, dtype=float)   # concentration of incoming water at inflow nodes
+            self.M = np.zeros(self.network.Np, dtype=float) # mass [kg]
+            self.bc_prescribed_C_mask = np.zeros(self.network.Np, dtype=bool) # Dirichlet C
+            self.bc_prescribed_C_vals = np.zeros(self.network.Np, dtype=float)
+            self.bc_Cin_node = np.zeros(self.network.Np, dtype=float) # concentration of incoming water at inflow nodes
+            self.bc_mass_inflow_rate_node  = np.zeros(self.network.Np, dtype=float) # [kg/s]
 
         # Always available for hydraulics; used by transport only if enabled:
         self.V_node = np.zeros(self.network.Np, dtype=float)  # [m^3]
@@ -439,7 +442,7 @@ class FlowSimulation:
 
                 # Compute boundary condition values
                 # This currently also computes 
-                self._cache_time_dependent_bcs()
+                self._cache_hydraulic_bcs()
 
                 # Perform the dynamic wave computation for the current time step
                 converged, n_iterations = self._dynamic_wave()
@@ -1609,8 +1612,8 @@ class FlowSimulation:
         dQ_pressure = -self.gravity * a_mid_upwtd * (h2 - h1) / self.conduit_lengths * self.dt
         
         # Add correction term. This is currently only applied for flux BCs
-        flux_n1 = self.bc_node_flux[self.n_indices1]
-        flux_n2 = self.bc_node_flux[self.n_indices2]
+        flux_n1 = self.bc_flux_node[self.n_indices1]
+        flux_n2 = self.bc_flux_node[self.n_indices2]
         q_correction[:] = 0.5 * w_mid * (flux_n1 + flux_n2)
                              
         # Inertial terms (alpha is zero when pressurized)
@@ -1756,12 +1759,12 @@ class FlowSimulation:
                out=self.dQ_new)
  
         # Add nodal inflows from BCs (direct volumetric or converted from flux)
-        #self.dQ_new += self.bc_node_inflow_vol
-        #if isinstance(self.bc_flux_to_vol, np.ndarray) or self.bc_flux_to_vol != 0.0:
-        #    self.dQ_new += self.bc_flux_to_vol
+        #self.dQ_new += self.bc_inflow_vol_node
+        #if isinstance(self.bc_flux_to_vol_node, np.ndarray) or self.bc_flux_to_vol_node != 0.0:
+        #    self.dQ_new += self.bc_flux_to_vol_node
 
-        self.dQ_new += self.bc_node_inflow_vol
-        self.dQ_new += self.bc_flux_to_vol
+        self.dQ_new += self.bc_inflow_vol_node
+        self.dQ_new += self.bc_flux_to_vol_node
 
         # Compute the change in volume at each node (dV)
         dV = 0.5 * (self.dQ_old_t + self.dQ_new) * self.dt
@@ -1776,8 +1779,8 @@ class FlowSimulation:
         # Update water depths using under-relaxation
         self.y_new[:] = (1.0 - self.w) * self.y_prev_i + self.w * self.y_new
     
-        # Enforce water depth (_cache_time_dependent_bcs)
-        self.y_new[self.bc_fixed_y_mask] = self.bc_fixed_y_vals[self.bc_fixed_y_mask]    
+        # Enforce water depth (_cache_hydraulic_bcs)
+        self.y_new[self.bc_prescribed_y_mask] = self.bc_prescribed_y_vals[self.bc_prescribed_y_mask]    
 
         # Ensure water depths don't go negative
         self.y_new[self.y_new <= 0.0] = 0.0
@@ -1827,41 +1830,81 @@ class FlowSimulation:
                   f'Avg Re = {np.mean(self.Re_conduit):.2f}\n')
 
 
-    def _cache_time_dependent_bcs(self):
+    def _cache_hydraulic_bcs(self):
         """Evaluate BC values at current time and cache per-node arrays."""
         t = self.current_time
 
         # Reset arrays
-        self.bc_node_inflow_vol.fill(0.0)
-        self.bc_node_flux.fill(0.0)
-        self.bc_flux_to_vol.fill(0.0)
-        self.bc_fixed_y_mask.fill(False)
-        self.bc_fixed_y_vals.fill(0.0)
+        self.bc_inflow_vol_node.fill(0.0)
+        self.bc_flux_node.fill(0.0)
+        self.bc_flux_to_vol_node.fill(0.0)
+        self.bc_prescribed_y_mask.fill(False)
+        self.bc_prescribed_y_vals.fill(0.0)
 
         for bc in self.boundary_conditions.get('inflow', []):
             v = bc.get_value(t)
             if getattr(bc, 'bc_type', 'volumetric') == 'flux':
-                self.bc_node_flux[bc.target_ids] += v
+                self.bc_flux_node[bc.target_ids] += v
             else:
-                self.bc_node_inflow_vol[bc.target_ids] += v
+                self.bc_inflow_vol_node[bc.target_ids] += v
 
         # Dirichlet water depth BCs
         for bc in self.boundary_conditions.get('waterdepth', []):
             v = bc.get_value(t)
-            self.bc_fixed_y_mask[bc.target_ids] = True
-            self.bc_fixed_y_vals[bc.target_ids] = v
+            self.bc_prescribed_y_mask[bc.target_ids] = True
+            self.bc_prescribed_y_vals[bc.target_ids] = v
 
         # Precompute flux-to-volume conversion for channels
-        if np.any(self.bc_node_flux):
+        if np.any(self.bc_flux_node):
             if self.geometry_channel:
                 if self.channel_type == 'infinite':
-                    self.bc_flux_to_vol[:] = self.bc_node_flux * self.half_lengths_sum_per_node
+                    self.bc_flux_to_vol_node[:] = self.bc_flux_node * self.half_lengths_sum_per_node
                 else:
-                    self.bc_flux_to_vol[:] = (self.bc_node_flux * self.channel_width *
+                    self.bc_flux_to_vol_node[:] = (self.bc_flux_node * self.channel_width *
                                             self.half_lengths_sum_per_node)
             else:
                 raise ValueError("Flux BCs detected but geometry_channel=False."
                                 "Use volumetric BCs or implement conversion for new geometry.")
+        
+        # Total external inflow per node
+        self.bc_Qin_node = self.bc_inflow_vol_node + self.bc_flux_to_vol_node
+
+    def _cache_transport_bcs(self, t=None):
+        """Evaluate transport BC values at current time and cache per-node arrays."""
+
+        t = self.current_time
+
+        # ensure hydraulic cache was run (for bc_Qin_node)
+        #if not hasattr(self, "bc_Qin_node"):
+        #    self._cache_hydraulic_bcs()
+
+        # allocate on first use if needed
+        # if not hasattr(self, "bc_Cin_node"):
+        #     self.bc_Cin_node = np.zeros(self.network.Np, dtype=float)
+        #     self.bc_prescribed_C_vals = np.zeros(self.network.Np, dtype=float)
+        #     self.bc_prescribed_C_mask = np.zeros(self.network.Np, dtype=bool)
+        #     self.bc_mass_inflow_rate_node = np.zeros(self.network.Np, dtype=float)
+
+        # reset arrays
+        self.bc_Cin_node.fill(0.0)
+        self.bc_prescribed_C_vals.fill(0.0)
+        self.bc_prescribed_C_mask.fill(False)
+        self.bc_mass_inflow_rate_node.fill(0.0)
+
+        # inflow concentration Cin(t)
+        for bc in self.boundary_conditions.get('inflow_concentration', []):
+            v = bc.get_value(t)
+            self.bc_Cin_node[bc.target_ids] = v  # last one wins; switch to += if you want mixing
+
+        # Dirichlet / reservoir concentration Cb(t) at head-BC nodes
+        for bc in self.boundary_conditions.get('waterdepth_concentration', []):
+            v = bc.get_value(t)
+            self.bc_prescribed_C_vals[bc.target_ids] = v
+            self.bc_prescribed_C_mask[bc.target_ids] = True
+
+        # mass inflow rate from external water inflow
+        self.bc_mass_inflow_rate_node[:] = self.bc_Qin_node * self.bc_Cin_node
+
             
 
     def _check_picard_convergence(self):
@@ -2315,70 +2358,176 @@ class FlowSimulation:
             self.boundary_conditions['inflow_concentration'].append(bc)
 
 
+    def set_waterdepth_concentration_BC(self, nodes, values, mode='add', extrapolate='hold', validate=False):
+        """
+        Sets concentration boundary conditions at nodes with constant water-depth (Dirichlet head) BCs.
+
+        This defines the boundary concentration C_b(t) associated with nodes where water depth is
+        prescribed via `set_waterdepth_BC(...)`. The concentration is applied only when flow
+        enters the domain through those nodes (i.e., positive external inflow due to the
+        hydraulic solution).
+
+        Args:
+            nodes (int or list of int): Index or indices of nodes where the water-depth concentration
+                BC is applied.
+
+            values (float, tuple, or list): Concentration definitions. If a single value is provided,
+                it is broadcast to all specified nodes. Supported formats:
+                - float: constant concentration (e.g., mg/L or kg/m³).
+                - tuple:
+                    - ('box', value, t0, t1 [, value_before=0.0, value_after=0.0]):
+                        constant concentration during [t0, t1], optional values outside.
+                    - ('timeseries', times, values):
+                        interpolated time series of concentrations over time.
+
+            mode (str, optional): Defines how new BCs interact with existing ones.
+                Options:
+                - 'add' (default): adds new BCs; raises an error if a BC already exists at a node.
+                - 'overwrite': replaces any existing BCs at the given nodes.
+                - 'remove': removes BCs from the specified nodes.
+
+            extrapolate (str, optional): Extrapolation behavior for timeseries BCs.
+                Applies only to the 'timeseries' format.
+                - 'hold' (default): holds end values constant outside the defined time range.
+                - 'zero': sets BC value to zero outside the range.
+
+        Raises:
+            ValueError: If an unrecognized BC format is provided; a duplicate node is given in 'add' mode;
+                or (when validate=True) a node is not a water-depth BC node.
+
+        Notes:
+            The actual inflow/outflow at these nodes is determined by the hydraulic solution. This BC
+            contributes a mass source term Q_in(head) * C_b(t) only when the net external discharge
+            creates inflow at the node.
+        """
+        # init dict
+        if not hasattr(self, 'boundary_conditions'):
+            self.boundary_conditions = {}
+        if 'waterdepth_concentration' not in self.boundary_conditions:
+            self.boundary_conditions['waterdepth_concentration'] = []
+
+        # normalize inputs
+        if not isinstance(nodes, list):
+            nodes = [nodes]
+        if isinstance(values, tuple):
+            values = [values] * len(nodes)
+        if not isinstance(values, list):
+            values = [values] * len(nodes)
+
+        # modes
+        if mode == 'remove':
+            self.boundary_conditions['waterdepth_concentration'] = [
+                bc for bc in self.boundary_conditions['waterdepth_concentration']
+                if all(n not in nodes for n in bc.target_ids)
+            ]
+            return
+
+        for node, val in zip(nodes, values):
+            if mode == 'overwrite':
+                self.boundary_conditions['waterdepth_concentration'] = [
+                    bc for bc in self.boundary_conditions['waterdepth_concentration']
+                    if node not in bc.target_ids
+                ]
+            elif mode == 'add':
+                for bc in self.boundary_conditions['waterdepth_concentration']:
+                    if node in bc.target_ids:
+                        raise ValueError(
+                            f"Water-depth concentration BC already exists at node {node}. "
+                            "Use mode='overwrite' to replace it."
+                        )
+
+            # build BC object
+            if isinstance(val, (int, float)):
+                bc = ConstantBC([node], value=float(val))
+            elif isinstance(val, tuple) and val[0] == 'box':
+                _, v_during, t0, t1, *rest = val
+                v_before = rest[0] if len(rest) > 0 else 0.0
+                v_after  = rest[1] if len(rest) > 1 else 0.0
+                bc = BoxBC([node], v_during, t0, t1, v_before, v_after)
+            elif isinstance(val, tuple) and val[0] == 'timeseries':
+                _, times, conc_values = val[:3]
+                bc = TimeSeriesBC([node], times=times, values=conc_values, extrapolate=extrapolate)
+            else:
+                raise ValueError(
+                    f"Unrecognized water-depth concentration format at node {node}: {val}"
+                )
+
+            self.boundary_conditions['waterdepth_concentration'].append(bc)
+
     def _advance_transport(self):
         """
-        Minimal AD transport:
-        - Conservative upwind advection + centered diffusion
-        - FOr now ONLY inflow mass source: Qin_node * Cin_node(t)
+        Minimal AD transport (explicit FV with CFL substepping).
+
+        Physics:
+        - Upwind advection on edges, centered diffusion.
+        - Boundary handling:
+            * Inflow BCs: node mass source = Qin_node * Cin_node(t).
+            * Water-depth (Dirichlet head) concentration: enforce Dirichlet C = Cb(t)
+                at those nodes each substep (no separate mass source).
         """
         import numpy as np
 
-        # Node volumes
+        # Nodal volume
         Vn = self.V_node
 
-        # Conduit and hydraulic information
+        # Conduit / hydraulic data
         i = self.n_indices1
         j = self.n_indices2
-        L  = self.conduit_lengths
+        L = self.conduit_lengths
         Qe = self.Q_new.copy()
         Ae = self.a_mid # NOTE: should this be a_mid_upwtd in the case of free-surface flows???
-        ve = Qe / Ae #NOTE: SHould I take self._v_mid_last here? This gets computed anyway for adaptive timesteps
+        ve = Qe / Ae
         De = self.molecular_diffusivity + self.alpha_l * np.abs(ve)
 
-        # Substepping (CFL): Compute advection and diffusion constraint
-        dt_adv  = np.min(L / np.maximum(np.abs(ve), 1e-16))
-        dt_diff = np.min(L**2 / np.maximum(2.0 * De, 1e-16))
+        # CFL for substepping
+        dt_adv  = np.min(L / np.maximum(np.abs(ve), 1e-12))
+        dt_diff = np.min(L**2 / np.maximum(2.0 * De, 1e-30))
         dt_lim  = self.transport_cfl * min(dt_adv, dt_diff)
+        n_sub   = max(1, int(np.ceil(self.dt / np.maximum(dt_lim, 1e-12))))
+        dt_s    = self.dt / n_sub
 
-        # Subdivide the current dt (flow) if neccessary
-        n_sub = max(1, int(np.ceil(self.dt / dt_lim)))
-        dt_s  = self.dt / n_sub
+        #self.bc_Cin_node.fill(0.0)
+        #self.bc_prescribed_C_vals.fill(0.0)
+        #self.bc_prescribed_C_mask.fill(False)
+        #self.bc_mass_inflow_rate_node.fill(0.0)
+        self._cache_transport_bcs(self.current_time)
 
-        # For now ONLY inflow mass source: Qin_node * Cin_node(t)
-        # Build current Cin_node from BC objects
-        self.Cin_node.fill(0.0)
-        for bc in self.boundary_conditions.get('inflow_concentration', []):
-            v = bc.get_value(self.current_time)   # concentration at time t
-            self.Cin_node[bc.target_ids] = v
+        # Dirty for now...
+        dirichlet_mode = True   # set False to use Robin/inflow type
 
-        Qin_node = self.bc_node_inflow_vol + self.bc_flux_to_vol  # m^3/s
-        mass_src = Qin_node * self.Cin_node                       # kg/s
-
-        # Start subcycling with n_sub steps
+        # --- Substepping
         for _ in range(n_sub):
+            # Current concentrations from mass
             Cn = np.where(Vn > 0.0, self.M / Vn, 0.0)
 
+            if dirichlet_mode and np.any(self.bc_prescribed_C_mask):
+                # Hard Dirichlet: fix node value and sync mass
+                m = self.bc_prescribed_C_mask
+                Cn[m]     = self.bc_prescribed_C_vals[m]
+                self.M[m] = self.bc_prescribed_C_vals[m] * Vn[m]
+                Ceff = Cn  # fluxes use clamped values
+            else:
+                # Robin / inflow-only: use Cb only in flux evaluation (no mass clamp)
+                Ceff = Cn.copy()
+                if np.any(self.bc_prescribed_C_mask):
+                    Ceff[self.bc_prescribed_C_mask] = self.bc_prescribed_C_vals[self.bc_prescribed_C_mask]
+
             # Upstream advection
-            # If flow is from i -> j (Qe>0): use C[i]
-            # If flow is from j -> i (Qe<0): use C[j]
-            Cup = np.where(Qe > 0.0, Cn[i], Cn[j])
+            upstream_from_i = (Qe > 0.0)
+            Cup  = np.where(upstream_from_i, Ceff[i], Ceff[j])
             Fadv = Qe * Cup
 
-            # Centered diffusion
-            # Positive G means C[j] > C[i]
-            G    = (Cn[j] - Cn[i]) / L
-            Fdiff= - (Ae * De) * G
+            # Diffusive flux (centered)
+            G     = (Ceff[j] - Ceff[i]) / L
+            Fdiff = - (Ae * De) * G
 
-            # Assemble total mass rate per node
-            # Each conduit contributes:
-            # - outflow from i: -(Fadv + Fdiff)
-            # - inflow to j: +(Fadv + Fdiff)
+            # Assemble net mass rate
             net_rate = np.zeros(self.network.Np, dtype=float)
-            np.add.at(net_rate, i, -(Fadv + Fdiff)) # remove mass leaving node i
-            np.add.at(net_rate, j, +(Fadv + Fdiff)) # add mass arriving at node j
+            np.add.at(net_rate, i, -(Fadv + Fdiff))
+            np.add.at(net_rate, j, +(Fadv + Fdiff))
 
-            # Add inflow mass only
-            net_rate += mass_src
+            # External inflow mass source (from hydraulic Qin * Cin)
+            net_rate += self.bc_mass_inflow_rate_node
 
             # Advance mass
             self.M = self.M + dt_s * net_rate
@@ -2386,3 +2535,103 @@ class FlowSimulation:
 
         # Final concentration
         self.C = self.M / np.maximum(Vn, 1e-20)
+
+
+
+
+
+    # def _advance_transport(self):
+    #     """
+    #     Minimal AD transport:
+    #     - Conservative upwind advection + centered diffusion
+    #     - FOr now ONLY inflow mass source: Qin_node * Cin_node(t)
+    #     """
+    #     import numpy as np
+
+    #     # Node volumes
+    #     Vn = self.V_node
+
+    #     # Conduit and hydraulic information
+    #     i = self.n_indices1
+    #     j = self.n_indices2
+    #     L  = self.conduit_lengths
+    #     Qe = self.Q_new.copy()
+    #     Ae = self.a_mid # NOTE: should this be a_mid_upwtd in the case of free-surface flows???
+    #     ve = Qe / Ae #NOTE: SHould I take self._v_mid_last here? This gets computed anyway for adaptive timesteps
+    #     De = self.molecular_diffusivity + self.alpha_l * np.abs(ve)
+
+    #     # Substepping (CFL): Compute advection and diffusion constraint
+    #     dt_adv  = np.min(L / np.maximum(np.abs(ve), 1e-16))
+    #     dt_diff = np.min(L**2 / np.maximum(2.0 * De, 1e-16))
+    #     dt_lim  = self.transport_cfl * min(dt_adv, dt_diff)
+
+    #     # Subdivide the current dt (flow) if neccessary
+    #     n_sub = max(1, int(np.ceil(self.dt / dt_lim)))
+    #     dt_s  = self.dt / n_sub
+
+    #     # Build current Cin_node from BC objects
+    #     self.Cin_node.fill(0.0)
+    #     for bc in self.boundary_conditions.get('inflow_concentration', []):
+    #         v = bc.get_value(self.current_time)   # concentration at time t
+    #         self.Cin_node[bc.target_ids] = v
+
+    #     Qin_node = self.bc_inflow_vol_node + self.bc_flux_to_vol_node  # m^3/s
+    #     mass_src_inflow = Qin_node * self.Cin_node                # kg/s
+
+    #     # # --- Head-driven inflow from water-depth (Dirichlet) nodes ---
+    #     # # Net internal discharge per node from edges (sign i->j in Qe)
+    #     # net_Q_internal = np.zeros(self.network.Np, dtype=float)
+    #     # np.add.at(net_Q_internal, i, -Qe)  # flow leaving i is negative
+    #     # np.add.at(net_Q_internal, j, +Qe)  # flow entering j is positive
+
+    #     # # External discharge required to balance mass at boundary:
+    #     # # positive => inflow from outside; negative => outflow to outside
+    #     # Qext = -net_Q_internal
+
+    #     # # Inflow part only
+    #     # Q_in_head = np.maximum(Qext, 0.0)
+
+    #     # # Evaluate water-depth concentrations Cb(t) only where user set them
+    #     # Cb = np.zeros(self.network.Np, dtype=float)
+    #     # for bc in self.boundary_conditions.get('waterdepth_concentration', []):
+    #     #     Cb[bc.target_ids] = bc.get_value(self.current_time)
+
+    #     # # Head-driven mass source
+    #     # mass_src_head = Q_in_head * Cb
+
+    #     # Assemble total mass considering inflow and waterdepth concentration
+    #     # i.e. via set_inflow_concentration_BC and set_waterdepth_concentration_BC
+    #     mass_src = mass_src_inflow #+ mass_src_head
+
+    #     # Start subcycling with n_sub steps
+    #     for _ in range(n_sub):
+    #         Cn = np.where(Vn > 0.0, self.M / Vn, 0.0)
+
+    #         # Upstream advection
+    #         # If flow is from i -> j (Qe>0): use C[i]
+    #         # If flow is from j -> i (Qe<0): use C[j]
+    #         Cup = np.where(Qe > 0.0, Cn[i], Cn[j])
+    #         Fadv = Qe * Cup
+
+    #         # Centered diffusion
+    #         # Positive G means C[j] > C[i]
+    #         G    = (Cn[j] - Cn[i]) / L
+    #         Fdiff= - (Ae * De) * G
+
+    #         # Assemble total mass rate per node
+    #         # Each conduit contributes:
+    #         # - outflow from i: -(Fadv + Fdiff)
+    #         # - inflow to j: +(Fadv + Fdiff)
+    #         net_rate = np.zeros(self.network.Np, dtype=float)
+    #         np.add.at(net_rate, i, -(Fadv + Fdiff)) # remove mass leaving node i
+    #         np.add.at(net_rate, j, +(Fadv + Fdiff)) # add mass arriving at node j
+
+    #         # Add inflow mass only
+    #         net_rate += mass_src
+
+    #         # Advance mass
+    #         self.M = self.M + dt_s * net_rate
+    #         self.M[self.M < 0.0] = 0.0
+
+    #     # Final concentration
+    #     self.C = self.M / np.maximum(Vn, 1e-20)
