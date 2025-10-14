@@ -1874,17 +1874,6 @@ class FlowSimulation:
 
         t = self.current_time
 
-        # ensure hydraulic cache was run (for bc_Qin_node)
-        #if not hasattr(self, "bc_Qin_node"):
-        #    self._cache_hydraulic_bcs()
-
-        # allocate on first use if needed
-        # if not hasattr(self, "bc_Cin_node"):
-        #     self.bc_Cin_node = np.zeros(self.network.Np, dtype=float)
-        #     self.bc_prescribed_C_vals = np.zeros(self.network.Np, dtype=float)
-        #     self.bc_prescribed_C_mask = np.zeros(self.network.Np, dtype=bool)
-        #     self.bc_mass_inflow_rate_node = np.zeros(self.network.Np, dtype=float)
-
         # reset arrays
         self.bc_Cin_node.fill(0.0)
         self.bc_prescribed_C_vals.fill(0.0)
@@ -1894,9 +1883,9 @@ class FlowSimulation:
         # inflow concentration Cin(t)
         for bc in self.boundary_conditions.get('inflow_concentration', []):
             v = bc.get_value(t)
-            self.bc_Cin_node[bc.target_ids] = v  # last one wins; switch to += if you want mixing
+            self.bc_Cin_node[bc.target_ids] = v 
 
-        # Dirichlet / reservoir concentration Cb(t) at head-BC nodes
+        # Dirichlet concentration at waterdepth nodes
         for bc in self.boundary_conditions.get('waterdepth_concentration', []):
             v = bc.get_value(t)
             self.bc_prescribed_C_vals[bc.target_ids] = v
@@ -2486,13 +2475,18 @@ class FlowSimulation:
         n_sub   = max(1, int(np.ceil(self.dt / np.maximum(dt_lim, 1e-12))))
         dt_s    = self.dt / n_sub
 
-        #self.bc_Cin_node.fill(0.0)
-        #self.bc_prescribed_C_vals.fill(0.0)
-        #self.bc_prescribed_C_mask.fill(False)
-        #self.bc_mass_inflow_rate_node.fill(0.0)
+        # Obtain cached values (constant or time-dependent)
         self._cache_transport_bcs(self.current_time)
 
-        # Dirty for now...
+        # NOTE: Boundary handling switch:
+        # True -> Dirichlet-C at prescribed nodes: fix C = C_b(t) each substep and sync M = C_b * Vn.
+        # False -> Inflow-only / Robin-like: do NOT fix mass at prescribed nodes; use C_b(t) only
+        # when computing fluxes. This means:
+        # - Advection: if flow enters through a conduit touching a prescribed node,
+        # the upstream concentration is C_b(t); if flow leaves, the upstream is interior,
+        # so C_b(t) does not back-contaminate the domain.
+        # - Diffusion: uses the gradient to C_b(t), enabling exchange with the external
+        # source without directly overwriting the node state.
         dirichlet_mode = True   # set False to use Robin/inflow type
 
         # --- Substepping
@@ -2505,9 +2499,9 @@ class FlowSimulation:
                 m = self.bc_prescribed_C_mask
                 Cn[m]     = self.bc_prescribed_C_vals[m]
                 self.M[m] = self.bc_prescribed_C_vals[m] * Vn[m]
-                Ceff = Cn  # fluxes use clamped values
+                Ceff = Cn  # fluxes use fixed values
             else:
-                # Robin / inflow-only: use Cb only in flux evaluation (no mass clamp)
+                # Robin / inflow-only: use Cb only in flux evaluation (no mass fixed)
                 Ceff = Cn.copy()
                 if np.any(self.bc_prescribed_C_mask):
                     Ceff[self.bc_prescribed_C_mask] = self.bc_prescribed_C_vals[self.bc_prescribed_C_mask]
