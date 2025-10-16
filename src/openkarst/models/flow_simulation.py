@@ -10,6 +10,7 @@ Created on Thu Jul 18 23:56:06 2024
 import numpy as np
 import math
 import scipy.optimize as optimize
+from numbers import Real
 
 from termcolor import colored
 from typing import Optional, Dict, Any
@@ -611,34 +612,47 @@ class FlowSimulation:
 
     def set_waterdepth_BC(self, nodes, values, mode='add', extrapolate='hold'):
         """
-        Sets water depth boundary conditions at specified nodes.
+        Set water depth (Dirichlet) boundary conditions at specified nodes.
+
+        This method assigns constant or time-dependent water depth boundary
+        conditions to one or more nodes in the network. Scalars are broadcast
+        automatically to all specified nodes.
 
         Args:
-            nodes (int or list of int): Index or indices of nodes to which water depth boundary 
-                conditions are applied.
+            nodes (int, list of int, or np.ndarray):
+                Index or indices of nodes where water depth boundary conditions
+                are applied.
 
-            values (float, tuple, or list): Boundary condition definitions. If a single value is 
+            values (float, tuple, list, or np.ndarray):
+                Boundary condition definitions. If a single scalar or tuple is
                 provided, it is broadcast to all specified nodes. Supported formats:
-                - float: constant water depth.
-                - tuple:
-                    - ('ramp', v0, v1, t0, t1): ramping value between t0 and t1.
-                    - ('timeseries', times, values): interpolated time series.
-                    - ('box', value, t0, t1 [, value_before=0.0, value_after=0.0]): constant value 
-                    during [t0, t1], optional values outside.
 
-            mode (str, optional): Defines how new BCs interact with existing ones. Options:
-                - 'add' (default): adds new BCs; raises error if a BC already exists at a node.
-                - 'overwrite': replaces any existing BCs.
-                - 'remove': removes BCs from the specified nodes.
+                * **float** or **int**: constant water depth.
+                * **tuple**:
+                    - `('timeseries', times, values)`: interpolated time series.
+                    - `('box', value, t0, t1 [, value_before=0.0, value_after=0.0])`:
+                      constant value during `[t0, t1]`, with optional values before and after.
+                * **list** or **1D np.ndarray**: per-node values, one entry per node.
+                * **0D np.ndarray** (e.g., `np.array(0.2)`): treated as scalar and broadcast.
 
-            extrapolate (str, optional): Extrapolation behavior for timeseries BCs. Applies only to 
-                'timeseries' format.
-                - 'hold' (default): holds end values outside defined time range.
-                - 'zero': sets BC value to zero outside the range.
+            mode (str, optional):
+                Defines how new BCs interact with existing ones:
+                - `'add'` (default): add new BCs; raises an error if a BC already exists
+                  at a node.
+                - `'overwrite'`: replace any existing BCs at the given nodes.
+                - `'remove'`: remove BCs from the specified nodes.
+
+            extrapolate (str, optional):
+                Extrapolation behavior for `'timeseries'` BCs:
+                - `'hold'` (default): hold the first/last value constant outside the defined range.
+                - `'zero'`: set BC value to zero outside the defined range.
 
         Raises:
-            ValueError: If an unrecognized BC format is provided or a duplicate node is given in 'add' mode.
+            ValueError: If an unrecognized BC format is provided, if duplicate
+                nodes are given in `'add'` mode, or if the number of values
+                does not match the number of nodes.
         """
+
         # Initialize boundary_conditions dictionary if missing
         if not hasattr(self, 'boundary_conditions'):
             self.boundary_conditions = {}
@@ -646,9 +660,25 @@ class FlowSimulation:
         if 'waterdepth' not in self.boundary_conditions:
             self.boundary_conditions['waterdepth'] = []
 
-        # Ensure node indices are a list
-        if not isinstance(nodes, list):
-            nodes = [nodes]
+        # Accept list or numpy array and convert to list
+        if isinstance(nodes, (int, np.integer)):
+            nodes = [int(nodes)]
+        else:
+            nodes = [int(n) for n in list(nodes)]
+
+        if isinstance(values, tuple):
+            values = [values] * len(nodes)
+
+        elif isinstance(values, np.ndarray) and values.ndim == 0:
+            # 0-D array to scalar
+            values = [values.item()] * len(nodes)
+
+        elif isinstance(values, (list, np.ndarray)):
+            if len(values) != len(nodes):
+                raise ValueError(f"Length mismatch: {len(nodes)} nodes but {len(values)} values.")
+            
+        else:
+            values = [values] * len(nodes)
 
         # Mode: remove BCs and exit early
         if mode == 'remove':
@@ -657,14 +687,6 @@ class FlowSimulation:
                 if all(n not in nodes for n in bc.target_ids)
             ]
             return
-
-        # Broadcast same tuple (e.g., timeseries) to all nodes
-        if isinstance(values, tuple):
-            values = [values] * len(nodes)
-
-        # Broadcast scalar or constant to all nodes
-        if not isinstance(values, list):
-            values = [values] * len(nodes)
 
         # Loop over each node-value pair
         for node, val in zip(nodes, values):
@@ -679,8 +701,8 @@ class FlowSimulation:
                         raise ValueError(f"Water depth BC already exists at node {node}. Use mode='overwrite' to replace it.")
 
             # Create appropriate BC object
-            if isinstance(val, (int, float)):
-                bc = ConstantBC([node], value=val)
+            if isinstance(val, Real):
+                bc = ConstantBC([node], value=float(val))
             elif isinstance(val, tuple) and val[0] == 'box':
                 _, v_during, t0, t1, *rest = val
                 v_before = rest[0] if len(rest) > 0 else 0.0
@@ -697,36 +719,47 @@ class FlowSimulation:
 
     def set_inflow_BC(self, nodes, values, mode='add', inflow_type='volumetric', extrapolate='hold'):
         """
-        Sets inflow boundary conditions at specified nodes.
+        Set inflow boundary conditions at specified nodes.
+
+        This method assigns constant or time-dependent inflow boundary conditions
+        (either volumetric or flux-type) to one or more nodes. Scalars are automatically
+        broadcast to all specified nodes.
 
         Args:
-            nodes (int or list of int): Index or indices of nodes where inflow BCs are applied.
+            nodes (int, list of int, or np.ndarray):
+                Index or indices of nodes where inflow boundary conditions are applied.
 
-            values (float, tuple, or list): Boundary condition definitions. If a single value is 
-                provided, it is broadcast to all specified nodes. Supported formats:
-                - float: constant inflow (m³/s for 'volumetric', or m/s for 'flux').
-                - tuple:
-                    - ('ramp', q0, q1, t0, t1): ramping value between t0 and t1.
-                    - ('timeseries', times, values): interpolated time series.
-                    - ('box', value, t0, t1 [, value_before=0.0, value_after=0.0]): constant value 
-                    during [t0, t1], optional values outside.
+            values (float, tuple, list, or np.ndarray):
+                Boundary condition definitions. If a single scalar or tuple is provided,
+                it is broadcast to all specified nodes. Supported formats:
 
-            mode (str, optional): Defines how new BCs interact with existing ones. Options:
-                - 'add' (default): adds new BCs; raises error if a BC already exists at a node.
-                - 'overwrite': replaces any existing BCs.
-                - 'remove': removes BCs from the specified nodes.
+                * **float** or **int**: constant inflow.
+                * **tuple**:
+                    - `('timeseries', times, values)`: interpolated time series.
+                    - `('box', value, t0, t1 [, value_before=0.0, value_after=0.0])`:
+                      constant inflow during `[t0, t1]`, with optional values before and after.
+                * **list** or **1D np.ndarray**: per-node inflow definitions, one entry per node.
+                * **0D np.ndarray** (e.g., `np.array(0.2)`): treated as a scalar and broadcast.
 
-            inflow_type (str, optional): Specifies type of inflow.
-                - 'volumetric' (default): total flow rate in m³/s.
-                - 'flux': area-normalized rate in m/s.
+            mode (str, optional):
+                Defines how new boundary conditions interact with existing ones:
+                - `'add'` (default): add new BCs; raises an error if a BC already exists at a node.
+                - `'overwrite'`: replace existing BCs at the given nodes.
+                - `'remove'`: remove BCs from the specified nodes.
 
-            extrapolate (str, optional): Extrapolation behavior for timeseries BCs. Applies only to 
-                'timeseries' format.
-                - 'hold' (default): holds end values outside defined time range.
-                - 'zero': sets BC value to zero outside the range.
+            inflow_type (str, optional):
+                Specifies the inflow type:
+                - `'volumetric'` (default): total flow rate in m³/s.
+                - `'flux'`: area-normalized rate in m/s.
+
+            extrapolate (str, optional):
+                Extrapolation behavior for `'timeseries'` BCs:
+                - `'hold'` (default): hold the first/last value constant outside the defined range.
+                - `'zero'`: set BC value to zero outside the defined range.
 
         Raises:
-            ValueError: If an unrecognized BC format is provided or a duplicate node is given in 'add' mode.
+            ValueError: If an unrecognized BC format is provided, if duplicate nodes are given in
+                `'add'` mode, or if the number of values does not match the number of nodes.
         """
         # Initialize boundary_conditions dictionary if missing
         if not hasattr(self, 'boundary_conditions'):
@@ -735,25 +768,33 @@ class FlowSimulation:
         if 'inflow' not in self.boundary_conditions:
             self.boundary_conditions['inflow'] = []
 
-        # Ensure node indices are a list
-        if not isinstance(nodes, list):
-            nodes = [nodes]
+        # Accept list or numpy array and convert to list
+        if isinstance(nodes, (int, np.integer)):
+            nodes = [int(nodes)]
+        else:
+            nodes = [int(n) for n in list(nodes)]
 
-        # Mode: remove BCs and exit early
+        if isinstance(values, tuple):
+                values = [values] * len(nodes)
+
+        elif isinstance(values, np.ndarray) and values.ndim == 0:
+            # 0-D array to scalar
+            values = [values.item()] * len(nodes)
+
+        elif isinstance(values, (list, np.ndarray)):
+            if len(values) != len(nodes):
+                raise ValueError(f"Length mismatch: {len(nodes)} nodes but {len(values)} values.")
+            
+        else:
+            values = [values] * len(nodes)
+
+                # Mode: remove BCs and exit early
         if mode == 'remove':
             self.boundary_conditions['inflow'] = [
                 bc for bc in self.boundary_conditions['inflow']
                 if all(n not in nodes for n in bc.target_ids)
             ]
             return
-
-        # Broadcast same tuple (e.g., timeseries) to all nodes
-        if isinstance(values, tuple):
-            values = [values] * len(nodes)
-
-        # Broadcast scalar or constant to all nodes    
-        if not isinstance(values, list):
-            values = [values] * len(nodes)
 
         # Loop over each node-value pair
         for node, val in zip(nodes, values):
@@ -768,8 +809,8 @@ class FlowSimulation:
                         raise ValueError(f"Inflow BC already exists at node {node}. Use mode='overwrite' to replace it.")
 
             # Create appropriate BC object
-            if isinstance(val, (int, float)):
-                bc = ConstantBC([node], value=val, bc_type=inflow_type)
+            if isinstance(val, Real):
+                bc = ConstantBC([node], value=float(val))
             elif isinstance(val, tuple) and val[0] == 'box':
                 _, v_during, t0, t1, *rest = val
                 v_before = rest[0] if len(rest) > 0 else 0.0
@@ -2176,74 +2217,6 @@ class FlowSimulation:
         self.M[:] = self.C * self.V_node
 
 
-        
-
-    # def set_concentration_BC(self, nodes, values, mode='add'):
-    #     if not isinstance(nodes, list): nodes = [nodes]
-    #     if not isinstance(values, list): values = [values]*len(nodes)
-    #     if mode == 'remove':
-    #         self.bc_C_mask[nodes] = False
-    #         self.bc_C_vals[nodes] = 0.0
-    #         return
-    #     if mode == 'overwrite':
-    #         self.bc_C_mask[:] = False
-    #         self.bc_C_vals[:] = 0.0
-    #     for n, v in zip(nodes, values):
-    #         self.bc_C_mask[n] = True
-    #         self.bc_C_vals[n] = float(v)
-
-    # def set_reservoir_concentration(self, nodes, values, mode='add'):
-    #     """
-    #     Reservoir concentration C_b used at nodes that have a constant head/depth (Dirichlet-y).
-    #     When flow enters from this boundary, incoming water has concentration C_b.
-    #     When flow leaves, solute exits at node concentration (open boundary).
-    #     """
-    #     self.set_concentration_BC(nodes, values, mode=mode)  # reuse existing arrays
-
-
-    # def set_inflow_concentration(self, nodes, values):
-    #     """
-    #     Concentration of water entering via *volumetric/flux inflow* BCs.
-    #     Mass source = Q_in * C_in (per node).
-    #     """
-    #     if not isinstance(nodes, list): nodes = [nodes]
-    #     if not isinstance(values, list): values = [values]*len(nodes)
-    #     for n, v in zip(nodes, values):
-    #         self.Cin_node[n] = float(v)
-
-
-    # def set_boundary_concentration(self, nodes, value):
-    #     """
-    #     Convenience:
-    #     - If node has an inflow BC -> set_inflow_concentration(C_in=value)
-    #     - Else if node has a head/depth BC -> set_reservoir_concentration(C_b=value)
-    #     - Else: warn (no flow BC on node).
-    #     """
-    #     if not isinstance(nodes, list): nodes = [nodes]
-    #     for n in nodes:
-    #         has_head = any((bc for bc in self.boundary_conditions.get('waterdepth', [])
-    #                         if n in bc.target_ids))
-    #         has_inflow = any((bc for bc in self.boundary_conditions.get('inflow', [])
-    #                         if n in bc.target_ids))
-    #         if has_inflow and has_head:
-    #             raise ValueError(f"Node {n} has both inflow and head flow BCs.")
-    #         if has_inflow:
-    #             self.set_inflow_concentration(n, value)
-    #         elif has_head:
-    #             self.set_reservoir_concentration(n, value)
-    #         else:
-    #             self.logger.warning(f"set_boundary_concentration: node {n} has no flow BC; ignoring.")
-
-    # def set_mass_source(self, nodes, values, mode='add'):
-    #     """Direct point source/sink S [M/s] at nodes (independent of flow BCs)."""
-    #     if not hasattr(self, 'bc_mass_src'):
-    #         self.bc_mass_src = np.zeros(self.network.Np, dtype=float)
-    #     if not isinstance(nodes, list): nodes = [nodes]
-    #     if not isinstance(values, list): values = [values]*len(nodes)
-    #     if mode == 'overwrite':
-    #         self.bc_mass_src[:] = 0.0
-    #     for n, v in zip(nodes, values):
-    #         self.bc_mass_src[n] += float(v)
 
     def _validate_transport_outputs(self, desired_outputs):
         wants_transport = any(
@@ -2259,39 +2232,48 @@ class FlowSimulation:
     
     def set_inflow_concentration_BC(self, nodes, values, mode='add', extrapolate='hold'):
         """
-        Sets inflow concentration boundary conditions at specified nodes for transport simulations.
+        Set inflow concentration boundary conditions at specified nodes.
 
-        This defines the tracer concentration C_in(t) associated with hydraulic inflows
-        (e.g., those defined via `set_inflow_BC`). The specified concentration values are
-        multiplied by the inflow discharge at each node to compute mass input rates.
+        This defines the tracer concentration `C_{in}(t)` associated with hydraulic
+        inflows (e.g., those defined via `set_inflow_BC`). The mass input rate is computed
+        later as `Q_in(node, t) * C_in(node, t)`.
 
         Args:
-            nodes (int or list of int): Index or indices of nodes where inflow concentration
-                BCs are applied.
+            nodes (int, list[int], or np.ndarray):
+                Index or indices of nodes where the inflow concentration BC is applied.
 
-            values (float, tuple, or list): Concentration definitions. If a single value is 
-                provided, it is broadcast to all specified nodes. Supported formats:
-                - float: constant inflow concentration (e.g., mg/L or kg/m³).
-                - tuple:
-                    - ('box', value, t0, t1 [, value_before=0.0, value_after=0.0]):
-                        constant concentration during [t0, t1], optional values outside.
-                    - ('timeseries', times, values):
-                        interpolated time series of concentrations over time.
+            values (float | int | tuple | list | np.ndarray):
+                Concentration definitions. If a single scalar or tuple is provided, it is
+                broadcast to all specified nodes. Supported formats:
 
-            mode (str, optional): Defines how new BCs interact with existing ones.
-                Options:
-                - 'add' (default): adds new BCs; raises an error if a BC already exists at a node.
-                - 'overwrite': replaces any existing BCs.
-                - 'remove': removes BCs from the specified nodes.
+                * float or int: constant concentration (e.g., mg/L or kg/m³).
+                * tuple:
+                    - `('timeseries', times, values)`: interpolated time series.
+                    - `('box', value, t0, t1 [, value_before=0.0, value_after=0.0])`:
+                    constant concentration during `[t0, t1]`, with optional values
+                    before and after.
+                * list or 1D np.ndarray: per-node concentrations, one entry per node.
+                * 0D np.ndarray (e.g., `np.array(0.2)`): treated as a scalar and broadcast.
 
-            extrapolate (str, optional): Extrapolation behavior for timeseries BCs.
-                Applies only to the 'timeseries' format.
-                - 'hold' (default): holds end values constant outside the defined time range.
-                - 'zero': sets BC value to zero outside the range.
+            mode (str, optional):
+                How new BCs interact with existing ones:
+                - `'add'` (default): add new BCs; raises if a BC already exists at a node.
+                - `'overwrite'`: replace any existing BCs at the given nodes.
+                - `'remove'`: remove BCs from the specified nodes.
+
+            extrapolate (str, optional):
+                Extrapolation behavior for `'timeseries'` BCs:
+                - `'hold'` (default): hold first/last value constant outside the defined range.
+                - `'zero'`: set value to zero outside the defined range.
 
         Raises:
-            ValueError: If an unrecognized BC format is provided or a duplicate node is given
-                in 'add' mode.
+            ValueError: If an unrecognized BC format is provided, if a duplicate node
+                exists in `'add'` mode, or if the number of per-node values does not
+                match the number of nodes.
+
+        Notes:
+            This BC contributes a mass source term only when the hydraulic solution yields
+            positive external inflow at a node.
         """
                 
         # init dict
@@ -2300,12 +2282,24 @@ class FlowSimulation:
         if 'inflow_concentration' not in self.boundary_conditions:
             self.boundary_conditions['inflow_concentration'] = []
 
-        # normalize inputs
-        if not isinstance(nodes, list):
-            nodes = [nodes]
+        # Accept list or numpy array and convert to list
+        if isinstance(nodes, (int, np.integer)):
+            nodes = [int(nodes)]
+        else:
+            nodes = [int(n) for n in list(nodes)]
+
         if isinstance(values, tuple):
             values = [values] * len(nodes)
-        if not isinstance(values, list):
+
+        elif isinstance(values, np.ndarray) and values.ndim == 0:
+            # 0-D array to scalar
+            values = [values.item()] * len(nodes)
+
+        elif isinstance(values, (list, np.ndarray)):
+            if len(values) != len(nodes):
+                raise ValueError(f"Length mismatch: {len(nodes)} nodes but {len(values)} values.")
+            
+        else:
             values = [values] * len(nodes)
 
         # modes
@@ -2331,8 +2325,8 @@ class FlowSimulation:
                         )
 
             # build BC object
-            if isinstance(val, (int, float)):
-                bc = ConstantBC([node], value=float(val))  # value is concentration
+            if isinstance(val, Real):
+                bc = ConstantBC([node], value=float(val))
             elif isinstance(val, tuple) and val[0] == 'box':
                 _, v_during, t0, t1, *rest = val
                 v_before = rest[0] if len(rest) > 0 else 0.0
@@ -2347,47 +2341,51 @@ class FlowSimulation:
             self.boundary_conditions['inflow_concentration'].append(bc)
 
 
-    def set_waterdepth_concentration_BC(self, nodes, values, mode='add', extrapolate='hold', validate=False):
+    def set_waterdepth_concentration_BC(self, nodes, values, mode='add', extrapolate='hold'):
         """
-        Sets concentration boundary conditions at nodes with constant water-depth (Dirichlet head) BCs.
+        Set concentration boundary conditions at nodes with prescribed water depth (Dirichlet head BCs).
 
-        This defines the boundary concentration C_b(t) associated with nodes where water depth is
-        prescribed via `set_waterdepth_BC(...)`. The concentration is applied only when flow
-        enters the domain through those nodes (i.e., positive external inflow due to the
-        hydraulic solution).
+        This defines the boundary concentration C_b(t) associated with nodes where the water depth
+        is prescribed via `set_waterdepth_BC(...)`. The concentration is applied only when water
+        flows into the domain through those nodes (i.e., when external inflow is positive due to
+        the hydraulic solution).
 
         Args:
-            nodes (int or list of int): Index or indices of nodes where the water-depth concentration
-                BC is applied.
+            nodes (int, list of int, or np.ndarray):
+                Index or indices of nodes where the water-depth concentration boundary condition
+                is applied.
 
-            values (float, tuple, or list): Concentration definitions. If a single value is provided,
-                it is broadcast to all specified nodes. Supported formats:
-                - float: constant concentration (e.g., mg/L or kg/m³).
-                - tuple:
-                    - ('box', value, t0, t1 [, value_before=0.0, value_after=0.0]):
-                        constant concentration during [t0, t1], optional values outside.
-                    - ('timeseries', times, values):
-                        interpolated time series of concentrations over time.
+            values (float, tuple, list, or np.ndarray):
+                Concentration definitions. If a single scalar or tuple is provided, it is broadcast
+                to all specified nodes. Supported formats:
 
-            mode (str, optional): Defines how new BCs interact with existing ones.
-                Options:
-                - 'add' (default): adds new BCs; raises an error if a BC already exists at a node.
-                - 'overwrite': replaces any existing BCs at the given nodes.
-                - 'remove': removes BCs from the specified nodes.
+                * **float** or **int**: constant concentration (e.g., mg/L or kg/m³).
+                * **tuple**:
+                    - `('timeseries', times, values)`: interpolated time series.
+                    - `('box', value, t0, t1 [, value_before=0.0, value_after=0.0])`:
+                      constant concentration during `[t0, t1]`, with optional values before and after.
+                * **list** or **1D np.ndarray**: per-node concentrations, one entry per node.
+                * **0D np.ndarray** (e.g., `np.array(0.2)`): treated as a scalar and broadcast.
 
-            extrapolate (str, optional): Extrapolation behavior for timeseries BCs.
-                Applies only to the 'timeseries' format.
-                - 'hold' (default): holds end values constant outside the defined time range.
-                - 'zero': sets BC value to zero outside the range.
+            mode (str, optional):
+                Defines how new BCs interact with existing ones:
+                - `'add'` (default): add new BCs; raises an error if a BC already exists at a node.
+                - `'overwrite'`: replace any existing BCs at the given nodes.
+                - `'remove'`: remove BCs from the specified nodes.
+
+            extrapolate (str, optional):
+                Extrapolation behavior for `'timeseries'` BCs:
+                - `'hold'` (default): hold the first/last value constant outside the defined range.
+                - `'zero'`: set BC value to zero outside the defined range.
 
         Raises:
-            ValueError: If an unrecognized BC format is provided; a duplicate node is given in 'add' mode;
-                or (when validate=True) a node is not a water-depth BC node.
+            ValueError: If an unrecognized BC format is provided, if duplicate nodes are given in
+                `'add'` mode, or if the number of values does not match the number of nodes.
 
         Notes:
-            The actual inflow/outflow at these nodes is determined by the hydraulic solution. This BC
-            contributes a mass source term Q_in(head) * C_b(t) only when the net external discharge
-            creates inflow at the node.
+            The actual inflow or outflow at these nodes is determined by the hydraulic solution.
+            This boundary condition contributes a mass inflow term only when the local discharge
+            corresponds to inflow (Q_in > 0).
         """
         # init dict
         if not hasattr(self, 'boundary_conditions'):
@@ -2395,12 +2393,25 @@ class FlowSimulation:
         if 'waterdepth_concentration' not in self.boundary_conditions:
             self.boundary_conditions['waterdepth_concentration'] = []
 
-        # normalize inputs
-        if not isinstance(nodes, list):
-            nodes = [nodes]
+
+        # Accept list or numpy array and convert to list
+        if isinstance(nodes, (int, np.integer)):
+            nodes = [int(nodes)]
+        else:
+            nodes = [int(n) for n in list(nodes)]
+
         if isinstance(values, tuple):
-            values = [values] * len(nodes)
-        if not isinstance(values, list):
+                values = [values] * len(nodes)
+
+        elif isinstance(values, np.ndarray) and values.ndim == 0:
+            # 0-D array to scalar
+            values = [values.item()] * len(nodes)
+
+        elif isinstance(values, (list, np.ndarray)):
+            if len(values) != len(nodes):
+                raise ValueError(f"Length mismatch: {len(nodes)} nodes but {len(values)} values.")
+            
+        else:
             values = [values] * len(nodes)
 
         # modes
@@ -2426,7 +2437,7 @@ class FlowSimulation:
                         )
 
             # build BC object
-            if isinstance(val, (int, float)):
+            if isinstance(val, Real):
                 bc = ConstantBC([node], value=float(val))
             elif isinstance(val, tuple) and val[0] == 'box':
                 _, v_during, t0, t1, *rest = val
@@ -2487,7 +2498,7 @@ class FlowSimulation:
         # so C_b(t) does not back-contaminate the domain.
         # - Diffusion: uses the gradient to C_b(t), enabling exchange with the external
         # source without directly overwriting the node state.
-        dirichlet_mode = True   # set False to use Robin/inflow type
+        dirichlet_mode = False   # set False to use Robin/inflow type
 
         # --- Substepping
         for _ in range(n_sub):

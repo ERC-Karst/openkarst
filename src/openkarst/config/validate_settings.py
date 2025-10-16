@@ -148,9 +148,9 @@ def validate_settings(physical_properties, solver_settings, simulation_settings,
                         "less than 0.1 (1/s).")
     
     if not (isinstance(transport_settings.transport_cfl, (int, float)) and 
-            0.1 <= transport_settings.transport_cfl < 1.0):
-        raise ValueError("Error: 'transport_cfl' must be type int/float and greater equal 0.1 and "
-                    "less than 1.0.")
+            0.0 <= transport_settings.transport_cfl < 2.0):
+        raise ValueError("Error: 'transport_cfl' must be type int/float and greater equal 0.0 and "
+                    "less than 2.0.")
     
     
     logger.info('Settings validated')
