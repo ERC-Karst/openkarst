@@ -423,7 +423,7 @@ class FlowSimulation:
         # Check if user wants to save concentration or mass but has not enabled transport
         self._validate_transport_outputs(desired_outputs)
 
-        # Check boundary conditions for overlaps and transport flag
+        # Check boundary conditions for overlaps and transport consistency
         self._check_bc_conflicts()
 
         results_container = initialize_results_container(desired_outputs, self.logger)
@@ -860,7 +860,7 @@ class FlowSimulation:
         else:
             raise RuntimeError("No observation recorder initialized.")
         
-    def check_bc_conflicts(self):
+    def _check_bc_conflicts(self):
         """
         Validates that boundary condition assignments are physically consistent.
 
