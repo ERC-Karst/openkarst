@@ -880,6 +880,9 @@ class FlowSimulation:
                 corresponding water-depth BC.
                 - A node cannot have an inflow concentration BC without a
                 corresponding inflow BC.
+            5. If transport is disabled:
+                - Any transport BC (inflow_concentration or waterdepth_concentration)
+                is invalid.
 
         Raises:
             ValueError: If any conflicting or inconsistent boundary conditions are detected.
@@ -912,6 +915,14 @@ class FlowSimulation:
                 n for bc in bcs.get("inflow_concentration", []) for n in bc.target_ids
             )
 
+        # Transport disabled: do not allow transport BCs
+        if not getattr(self.simulation_settings, "enable_transport", False):
+            if wd_conc_nodes or inflow_conc_nodes:
+                raise ValueError(
+                    "Transport BCs are defined (inflow_concentration or waterdepth_concentration) "
+                    "but transport is disabled. Enable transport or remove these BCs."
+                )
+            
         # Do not allow multiple hydraulic BCs at the same node
         if wd_nodes & inflow_nodes:
             raise ValueError(
