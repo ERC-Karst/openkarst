@@ -423,6 +423,9 @@ class FlowSimulation:
         # Check if user wants to save concentration or mass but has not enabled transport
         self._validate_transport_outputs(desired_outputs)
 
+        # Check boundary conditions for overlaps and transport flag
+        self._check_bc_conflicts()
+
         results_container = initialize_results_container(desired_outputs, self.logger)
         output_interval = desired_outputs.get('output_interval', 1.0)
         next_output_time = output_interval
@@ -856,6 +859,100 @@ class FlowSimulation:
             return self.observation_recorder.to_dataframe()
         else:
             raise RuntimeError("No observation recorder initialized.")
+        
+    def check_bc_conflicts(self):
+        """
+        Validates that boundary condition assignments are physically consistent.
+
+        This function enforces exclusive behavior and logical consistency between
+        hydraulic and transport boundary conditions. It ensures that nodes are not
+        assigned multiple incompatible BCs and that transport BCs only exist where
+        the corresponding hydraulic BCs are defined.
+
+        Rules enforced:
+            1. A node cannot have both a prescribed water depth BC and an inflow BC.
+            2. A node cannot have both a prescribed water depth BC and a critical depth BC.
+            3. A node cannot have both an inflow BC and a critical depth BC.
+            4. If transport is enabled:
+                - A node cannot have both inflow concentration BC and water-depth
+                concentration BC.
+                - A node cannot have a water-depth concentration BC without a
+                corresponding water-depth BC.
+                - A node cannot have an inflow concentration BC without a
+                corresponding inflow BC.
+
+        Raises:
+            ValueError: If any conflicting or inconsistent boundary conditions are detected.
+        """
+
+        # Collect nodes having a BC type
+        # Use sets as they remove duplicates (i.e. nodes with multiple BCs appear only once)
+        wd_nodes = set()
+        inflow_nodes = set()
+        crit_nodes = set()
+        wd_conc_nodes = set()
+        inflow_conc_nodes = set()
+
+        if hasattr(self, "boundary_conditions"):
+            bcs = self.boundary_conditions
+
+            wd_nodes.update(
+                n for bc in bcs.get("waterdepth", []) for n in bc.target_ids
+            )
+            inflow_nodes.update(
+                n for bc in bcs.get("inflow", []) for n in bc.target_ids
+            )
+            crit_nodes.update(
+                n for bc in bcs.get("critical_depth", []) for n in bc.target_ids
+            )
+            wd_conc_nodes.update(
+                n for bc in bcs.get("waterdepth_concentration", []) for n in bc.target_ids
+            )
+            inflow_conc_nodes.update(
+                n for bc in bcs.get("inflow_concentration", []) for n in bc.target_ids
+            )
+
+        # Do not allow multiple hydraulic BCs at the same node
+        if wd_nodes & inflow_nodes:
+            raise ValueError(
+                f"Conflict: nodes {sorted(wd_nodes & inflow_nodes)} have both "
+                "prescribed water depth and inflow BCs."
+            )
+
+        if wd_nodes & crit_nodes:
+            raise ValueError(
+                f"Conflict: nodes {sorted(wd_nodes & crit_nodes)} have both "
+                "prescribed water depth and critical depth BCs."
+            )
+
+        if inflow_nodes & crit_nodes:
+            raise ValueError(
+                f"Conflict: nodes {sorted(inflow_nodes & crit_nodes)} have both "
+                "inflow and critical depth BCs."
+            )
+
+        # Transport BC consistency
+        if getattr(self.simulation_settings, "enable_transport", False):
+            if wd_conc_nodes & inflow_conc_nodes:
+                raise ValueError(
+                    f"Conflict: nodes {sorted(wd_conc_nodes & inflow_conc_nodes)} "
+                    "have both inflow concentration and water-depth concentration BCs."
+                )
+
+            if wd_conc_nodes - wd_nodes:
+                raise ValueError(
+                    f"Invalid BC: nodes {sorted(wd_conc_nodes - wd_nodes)} "
+                    "have a water-depth concentration BC but no water-depth BC."
+                )
+
+            if inflow_conc_nodes - inflow_nodes:
+                raise ValueError(
+                    f"Invalid BC: nodes {sorted(inflow_conc_nodes - inflow_nodes)} "
+                    "have an inflow concentration BC but no inflow BC."
+                )
+
+        # BCs are consistent according to the checks
+        self.logger.info("Boundary condition consistency check passed.")
         
     def _initialize_state_variables(self):
         """
