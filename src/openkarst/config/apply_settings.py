@@ -7,7 +7,7 @@ Created on Fri Jul 19 10:54:37 2024
 @contact: jannes.kordilla@idaea.csic.es
 """
 
-def apply_settings(simulation, physical_properties, solver_settings, simulation_settings, logger):
+def apply_settings(simulation, physical_properties, solver_settings, simulation_settings, transport_settings, logger):
     """
     Apply various settings to the simulation object.
 
@@ -26,7 +26,8 @@ def apply_settings(simulation, physical_properties, solver_settings, simulation_
         simulation_settings: An object containing simulation settings such as 
             minimum water depth, minimum flow rate, Courant number, adaptive 
             timesteps, initial timestep, maximum timestep, maximum simulation 
-            time, steady state flag, and print info interval.
+            time, steady state flag, print info interval, enable transport flag,
+            molecular diffusivity, longitudinal dispersivity, decay rate and transport CFL.
         logger: A logging object used to log the application of settings.
 
     Returns:
@@ -55,5 +56,10 @@ def apply_settings(simulation, physical_properties, solver_settings, simulation_
     simulation.t_max = simulation_settings.t_max
     simulation.steady_state = simulation_settings.steady_state
     simulation.print_info_interval = simulation_settings.print_info_interval
+    simulation.enable_transport = simulation_settings.enable_transport
+    simulation.molecular_diffusivity = transport_settings.molecular_diffusivity
+    simulation.alpha_l = transport_settings.alpha_l
+    simulation.decay_rate = transport_settings.decay_rate
+    simulation.transport_cfl = transport_settings.transport_cfl
     
     logger.info('Settings applied')

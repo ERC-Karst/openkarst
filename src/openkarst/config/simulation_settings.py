@@ -21,3 +21,4 @@ class SimulationSettings:
     t_max: float = 0.0
     steady_state: bool = False
     print_info_interval: int = 1
+    enable_transport: bool = False

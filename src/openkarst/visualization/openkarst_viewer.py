@@ -25,6 +25,8 @@ import threading
 import time
 import webbrowser
 import plotly.colors as pc
+from plotly.subplots import make_subplots
+
 
 COLOR_CYCLE = pc.qualitative.Plotly
 
@@ -276,11 +278,56 @@ def launch_openkarst_viewer(results, geometry, obs_df=None):
                 yaxis=dict(title='Y [m]', range=y_range),
                 zaxis=dict(title='Elevation [m]', range=z_range),
             ),
-            title=f"Water depth at t = {t[time_idx]:.1f} s"
+            title=f"Water surface elevation at t = {t[time_idx]:.1f} s"
         )
 
         return fig
 
+
+    # def update_obs_plot_callback(time_idx, node_ids):
+    #     if obs_df is None or not node_ids:
+    #         return go.Figure()
+
+    #     current_time = results['time'][time_idx]
+    #     fig = go.Figure()
+
+    #     all_x = []
+    #     all_y = []
+
+    #     for node_id in node_ids:
+    #         df_full = obs_df[obs_df['node'] == node_id]
+    #         df_visible = df_full[df_full['time'] <= current_time]
+
+    #         fig.add_trace(go.Scatter(
+    #             x=df_visible['time'],
+    #             y=df_visible['inflow'],
+    #             mode='lines+markers',
+    #             name=f'Node {node_id}',
+    #             line=dict(color=OBS_NODE_COLORS.get(node_id, 'blue'))
+    #         ))
+
+    #         all_x.extend(df_full['time'])
+    #         all_y.extend(df_full['inflow'])
+
+    #     x_min, x_max = min(all_x), max(all_x)
+    #     y_min, y_max = min(all_y), max(all_y)
+
+    #     fig.update_layout(
+    #         title='Cumulative outflow at selected nodes',
+    #         margin=dict(l=40, r=40, t=40, b=40),
+    #         xaxis=dict(
+    #             title='Time [s]',
+    #             range=[x_min, x_max],
+    #             fixedrange=True
+    #         ),
+    #         yaxis=dict(
+    #             title='Flow [m<sup>3</sup>/s]',
+    #             range=[y_min, y_max],
+    #             fixedrange=True
+    #         )
+    #     )
+
+    #     return fig
     @app.callback(
         Output("obs-plot", "figure"),
         Input("time-slider", "value"),
@@ -291,45 +338,78 @@ def launch_openkarst_viewer(results, geometry, obs_df=None):
             return go.Figure()
 
         current_time = results['time'][time_idx]
-        fig = go.Figure()
+
+        # Detect whether concentration data exist
+        has_concentration = 'concentrations' in obs_df.columns
+
+        # Create figure with or without secondary y-axis
+        if has_concentration:
+            fig = make_subplots(specs=[[{"secondary_y": True}]])
+        else:
+            fig = go.Figure()
 
         all_x = []
-        all_y = []
+        all_y_flow = []
+        all_y_conc = []
 
         for node_id in node_ids:
             df_full = obs_df[obs_df['node'] == node_id]
             df_visible = df_full[df_full['time'] <= current_time]
 
-            fig.add_trace(go.Scatter(
-                x=df_visible['time'],
-                y=df_visible['inflow'],
-                mode='lines+markers',
-                name=f'Node {node_id}',
-                line=dict(color=OBS_NODE_COLORS.get(node_id, 'blue'))
-            ))
+            # Primary axis: inflow/discharge
+            fig.add_trace(
+                go.Scatter(
+                    x=df_visible['time'],
+                    y=df_visible['inflow'],
+                    mode='lines+markers',
+                    name=f'Q — Node {node_id}',
+                    line=dict(color=OBS_NODE_COLORS.get(node_id, 'blue')),
+                    legendgroup=f'node-{node_id}'
+                ),
+                secondary_y=False if has_concentration else None
+            )
 
             all_x.extend(df_full['time'])
-            all_y.extend(df_full['inflow'])
+            all_y_flow.extend(df_full['inflow'])
 
-        x_min, x_max = min(all_x), max(all_x)
-        y_min, y_max = min(all_y), max(all_y)
+            # Secondary axis: concentration, only if available
+            if has_concentration:
+                fig.add_trace(
+                    go.Scatter(
+                        x=df_visible['time'],
+                        y=df_visible['concentrations'],
+                        mode='lines',
+                        name=f'C — Node {node_id}',
+                        line=dict(color=OBS_NODE_COLORS.get(node_id, 'blue'), dash='dash'),
+                        legendgroup=f'node-{node_id}'
+                    ),
+                    secondary_y=True
+                )
+                all_y_conc.extend(df_full['concentrations'])
+
+        # Axis limits
+        x_min, x_max = (min(all_x), max(all_x)) if all_x else (0, 1)
+        y1_min, y1_max = (min(all_y_flow), max(all_y_flow)) if all_y_flow else (0, 1)
 
         fig.update_layout(
-            title='Cumulative outflow at selected nodes',
+            #title='Outflow (Q)' + (' and Concentration (C)' if has_concentration else '') + ' at selected nodes',
             margin=dict(l=40, r=40, t=40, b=40),
-            xaxis=dict(
-                title='Time [s]',
-                range=[x_min, x_max],
-                fixedrange=True
-            ),
-            yaxis=dict(
-                title='Flow [m<sup>3</sup>/s]',
-                range=[y_min, y_max],
-                fixedrange=True
-            )
+            legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='left', x=0),
+            xaxis=dict(title='Time [s]', range=[x_min, x_max], fixedrange=True)
         )
 
+        if has_concentration:
+            y2_min, y2_max = (min(all_y_conc), max(all_y_conc)) if all_y_conc else (0, 1)
+            fig.update_yaxes(title_text='Flow [m<sup>3</sup>/s]', range=[y1_min, y1_max],
+                            fixedrange=True, secondary_y=False)
+            fig.update_yaxes(title_text='Concentration [kg/m<sup>3</sup>]', range=[y2_min, y2_max],
+                            fixedrange=True, secondary_y=True)
+        else:
+            fig.update_yaxes(title_text='Flow [m<sup>3</sup>/s]', range=[y1_min, y1_max],
+                            fixedrange=True)
+
         return fig
+
 
     def run_app():
         app.run_server(debug=False, use_reloader=False)
