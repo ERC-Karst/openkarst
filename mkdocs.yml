@@ -43,5 +43,6 @@ theme:
   
 
 extra:
+  version: "0.3.0"
   paths:
     - src

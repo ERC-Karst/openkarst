@@ -4,12 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "openkarst"
-version = "0.1.0"
+version = "0.3.0"
 description = "A package for simulating flow in karst conduit networks"
 readme = "README.md"
 license = { text = "MIT" }
 authors = [
-    { name = "Jannes Kordilla", email = "jannes.kordilla@idaea.csic.es" }
+    { name = "Jannes Kordilla", email = "jannes.kordilla@csic.es" }
 ]
 urls = { "Homepage" = "https://github.com/ERC-Karst/openkarst" }
 classifiers = [
