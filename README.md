@@ -1,6 +1,7 @@
 # openKARST
 [![DOI](https://img.shields.io/badge/DOI-10.1016%2Fj.cageo.2025.106066-blue)](https://doi.org/10.1016/j.cageo.2025.106066)
 ![version](https://img.shields.io/badge/version-0.3.0-blue.svg)
+[Project Website → openkarst.org](https://openkarst.org)
 
 openKARST is a Python package for modeling and simulating flow in karst networks. It provides tools for setting up, running, and visualizing flow simulations.
 
