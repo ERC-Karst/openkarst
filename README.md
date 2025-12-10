@@ -21,7 +21,8 @@ openKARST is a Python package for modeling and simulating flow in karst networks
 
 ## Documentation
 
-For detailed documentation, how to setup and use the code visit the [Documentation](docs/index.md).
+For full documentation, visit the [openKARST Documentation](https://erc-karst.github.io/openkarst/).
+
 
 ## Contributing
 
