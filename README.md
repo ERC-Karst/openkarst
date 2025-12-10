@@ -1,6 +1,7 @@
 # openKARST
 [![DOI](https://img.shields.io/badge/DOI-10.1016%2Fj.cageo.2025.106066-blue)](https://doi.org/10.1016/j.cageo.2025.106066)
 ![version](https://img.shields.io/badge/version-0.3.0-blue.svg)
+[![docs](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://erc-karst.github.io/openkarst/)
 
 [Project Website → openkarst.org](https://openkarst.org)
 
