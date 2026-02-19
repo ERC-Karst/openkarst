@@ -1619,6 +1619,10 @@ class FlowSimulation:
             dt_new = self.dt_init
 
         # Enforce max limit
+        #self.dt = min(dt_new, self.dt_max)
+        
+        # Enforce limits (dt_init is lower bound)
+        dt_new = max(dt_new, self.dt_init)
         self.dt = min(dt_new, self.dt_max)
 
                     

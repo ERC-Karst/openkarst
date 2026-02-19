@@ -45,7 +45,7 @@ def main():
         'relaxation_factor': 0.6,    # Dimensionless
         'max_iterations': 20,        # Maximum Picard iterations
         'picard_depth_tol': 1e-5,    # Picard depth tolerance (meters)
-        'ss_rel_l2tol': 1e-3,         # L2 tolerance for steady-state
+        'ss_rel_l2tol': 1e-6,         # L2 tolerance for steady-state
         'ss_rel_madtol': 1e-8         # Median tolerance for steady-state
     }
     
@@ -53,9 +53,9 @@ def main():
         'min_waterdepth': 1e-10,      # Minimum water depth (meters)
         'min_flowrate': 1e-10,        # Minimum flow rate (m^3/s)
         'courant': 0.8,               # Courant number
-        'adaptive_timesteps': True,   # Use adaptive timestepping
-        'dt_init': 0.01,             # Initial (or constant) timestep (seconds)
-        'dt_max': 1.0,               # Maximum allowable time step
+        'adaptive_timesteps': False,  # Use adaptive timestepping
+        'dt_init': 0.1,               # Initial (or constant) timestep (seconds)
+        'dt_max': 1.0,                # Maximum allowable time step
         'steady_state': False,        # Steady-state (True) or transient (False)
         't_max': 4000.0,              # Maximum time for transient simulations (seconds)
         'print_info_interval': 100,   # Print info every # time steps
@@ -226,24 +226,24 @@ def update(frame):
     ax.set_title(f'Time: {t_history[frame]:.1f} (s)')
     return [lc]
 
-update_interval = 1 # plot every x steps
-ani = animation.FuncAnimation(fig,
-                              update, 
-                              frames=range(0, len(H_history), 
-                              update_interval),
-                              init_func=init,
-                              blit=False,
-                              repeat=False)
+# update_interval = 1 # plot every x steps
+# ani = animation.FuncAnimation(fig,
+#                               update, 
+#                               frames=range(0, len(H_history), 
+#                               update_interval),
+#                               init_func=init,
+#                               blit=False,
+#                               repeat=False)
 
-# Hardcoded ffmpeg path
-ffmpeg_path = '/Users/jkordil_idaea/Downloads/ffmpeg'
-plt.rcParams['animation.ffmpeg_path'] = ffmpeg_path
+# # Hardcoded ffmpeg path
+# ffmpeg_path = '/Users/jkordil_idaea/Downloads/ffmpeg'
+# plt.rcParams['animation.ffmpeg_path'] = ffmpeg_path
 
-# Save the animation
-video_path= 'test.mp4'
-Writer = animation.writers['ffmpeg']
-writer = Writer(fps=60, codec='h264', metadata=dict(artist='Me'))
-ani.save(video_path, writer=writer)
+# # Save the animation
+# video_path= 'test.mp4'
+# Writer = animation.writers['ffmpeg']
+# writer = Writer(fps=60, codec='h264', metadata=dict(artist='Me'))
+# ani.save(video_path, writer=writer)
 
 
 ######################################################################
