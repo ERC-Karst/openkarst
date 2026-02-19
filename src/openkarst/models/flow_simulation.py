@@ -437,7 +437,8 @@ class FlowSimulation:
             self.dt = self.dt_init
             self.current_time = 0.0
             self.current_timestep = 0
-            self.relative_l2_norm = 0.0
+            self.relative_y_l2_norm = 0.0
+            self.relative_Q_l2_norm = 0.0
             self.relative_mad_norm = 0.0
             self.picard_iterations_last = 0
             
@@ -2110,25 +2111,35 @@ class FlowSimulation:
         
     def _compute_error_norms(self):
         """
-        Compute the relative L2 and MAD norms between the new state and the old state.
-    
-        This method calculates the L2 norm and the median absolute deviation (MAD)
-        between the new state (`self.y_new`) and the old state (`self.y_old_t`).
-        It then computes the relative L2 norm and the relative MAD norm.
-    
-        If the L2 norm or the MAD of `self.y_new` is zero, the corresponding relative
-        norm is set to zero.
-    
-        Attributes:
-            relative_l2_norm (float): The relative L2 norm between `self.y_new` and `self.y_old_t`.
-            relative_mad_norm (float): The relative MAD norm between `self.y_new` and `self.y_old_t`.
+        Compute relative error norms between the new and old states.
+
+        This method computes relative L2 norms for both `y` and `Q`, as well as
+        a relative median absolute deviation (MAD) norm for `y`, comparing the
+        new state (`self.y_new`, `self.Q_new`) with the previous state
+        (`self.y_old_t`, `self.Q_old_t`).
+
+        The relative norms are computed by dividing the absolute norm of the
+        difference by the norm of the new state. If the norm of the new state
+        is zero, the corresponding relative norm is set to 0.0 to avoid division
+        by zero.
+
+        Sets:
+            self.relative_y_l2_norm (float): Relative L2 norm of `y`.
+            self.relative_Q_l2_norm (float): Relative L2 norm of `Q`.
+            self.relative_mad_norm (float): Relative MAD norm of `y`.
         """
         
-        l2_norm = np.linalg.norm(self.y_new - self.y_old_t)
+        y_l2_norm = np.linalg.norm(self.y_new - self.y_old_t)
         if np.linalg.norm(self.y_new) != 0:
-            self.relative_l2_norm = l2_norm / np.linalg.norm(self.y_new)
+            self.relative_y_l2_norm = y_l2_norm / np.linalg.norm(self.y_new)
         else:
-            self.relative_l2_norm = 0.0
+            self.relative_y_l2_norm = 0.0
+
+        Q_l2_norm = np.linalg.norm(self.Q_new - self.Q_old_t)
+        if np.linalg.norm(self.Q_new) != 0:
+            self.relative_Q_l2_norm = Q_l2_norm / np.linalg.norm(self.Q_new)
+        else:
+            self.relative_Q_l2_norm = 0.0
         
         mad = np.median(np.abs(self.y_new - self.y_old_t))
         if np.median(np.abs(self.y_new)) != 0:
@@ -2138,29 +2149,64 @@ class FlowSimulation:
         
     def _check_steady_state_convergence(self):
         """
-        Check if the system has reached steady state convergence.
-    
-        This method checks whether the system has reached steady state convergence
-        by evaluating the relative L2 norm and the relative MAD norm, which are
-        computed previously using the `_compute_error_norms` method.
-    
-        The system is considered to have reached steady state convergence if both
-        the relative L2 norm and the relative MAD norm are below their respective
-        tolerances.
-    
+        Check whether steady-state convergence has been reached.
+
+        This method evaluates convergence based on the previously computed
+        relative L2 norms of water depth (`y`) and discharge (`Q`). The system
+        is considered converged when both relative norms are below the steady-
+        state tolerance `self.ss_rel_l2tol`.
+
+        The relative norms (`self.relative_y_l2_norm` and
+        `self.relative_Q_l2_norm`) are computed by calling `_compute_error_norms()`.
+
         Returns:
-            bool: True if the system has converged based on the relative L2 and MAD norms, False otherwise.
+            bool: True if both `y` and `Q` satisfy the steady-state convergence
+            criterion, False otherwise.
         """
 
+        # # is_l2_converged = (
+        # #     (self.relative_mad_norm < self.ss_rel_madtol) and
+        # #     (self.relative_l2_norm < self.ss_rel_l2tol)
+        # # )
         # is_l2_converged = (
-        #     (self.relative_mad_norm < self.ss_rel_madtol) and
-        #     (self.relative_l2_norm < self.ss_rel_l2tol)
+        #     self.relative_l2_norm < self.ss_rel_l2tol
         # )
-        is_l2_converged = (
-            self.relative_l2_norm < self.ss_rel_l2tol
-        )
         
-        return is_l2_converged
+        
+        # return is_l2_converged
+        # --- 1) Water depth convergence
+        # --- 1) Depth convergence (already computed)
+        # is_y_converged = (
+        #     self.relative_l2_norm < self.ss_rel_l2tol
+        # )
+        # #rel_l2_tol
+
+        # # --- 2) Relative flow change
+        # ss_rel_Qtol = 1e-6
+        # l2_norm = np.linalg.norm(self.Q_new - self.Q_old_t)
+
+        # l2_Q = np.linalg.norm(self.Q_new)
+
+        # if l2_Q != 0.0:
+        #     relative_flow_l2 = l2_norm / l2_Q
+        # else:
+        #     relative_flow_l2 = l2_norm
+
+        # #print(relative_flow_l2)    
+
+        # is_Q_converged = (relative_flow_l2 < ss_rel_Qtol)
+
+        # return is_y_converged and is_Q_converged
+
+        is_y_converged = (
+            self.relative_y_l2_norm < self.ss_rel_l2tol
+        )
+
+        is_Q_converged = (
+            self.relative_Q_l2_norm < self.ss_rel_l2tol
+        )
+
+        return is_y_converged and is_Q_converged
  
 
     # Calculation of critical depths. This is computationally inefficient. Probably better to use
