@@ -41,5 +41,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE.txt) 
 
 If you use openKARST in your research, please cite:
 
-Kordilla, J., et al. (2025). *openKARST: A novel open-source flow simulator for karst systems*. Computers & Geosciences, 106066.  
+Kordilla, J., et al. (2026). *openKARST: A novel open-source flow simulator for karst systems*. Computers & Geosciences, 106066.  
 https://doi.org/10.1016/j.cageo.2025.106066
