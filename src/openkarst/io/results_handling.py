@@ -41,7 +41,9 @@ def initialize_results_container(desired_outputs: Dict[str, bool], logger):
         'l2_norms',
         'mad_norms',
         'reynolds_numbers',
-        'picard_iterations'
+        'picard_iterations',
+        'concentrations',
+        'mass'
     }
 
     invalid_keys = [key for key in desired_outputs if key not in allowed_keys and key != 'output_interval']
@@ -84,12 +86,16 @@ def store_results(simulation_instance, results_container):
     if 'time_step_size' in results_container:
         results_container['time_step_size'].append(simulation_instance.dt)
     if 'l2_norms' in results_container:
-        results_container['l2_norms'].append(simulation_instance.relative_l2_norm)
+        results_container['l2_norms'].append(simulation_instance.relative_y_l2_norm)
     if 'mad_norms' in results_container:           
         results_container['mad_norms'].append(simulation_instance.relative_mad_norm)
     if 'reynolds_numbers' in results_container:
         results_container['reynolds_numbers'].append(np.copy(simulation_instance.Re_conduit))
     if 'picard_iterations' in results_container:
         results_container['picard_iterations'].append(simulation_instance.picard_iterations_last)
+    if 'concentrations' in results_container:
+        results_container['concentrations'].append(np.copy(simulation_instance.C))
+    if 'mass' in results_container:
+        results_container['mass'].append(np.copy(simulation_instance.M))
 
     return results_container

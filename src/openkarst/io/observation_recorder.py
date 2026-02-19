@@ -20,6 +20,8 @@ class ObservationRecorder:
         variables (list of str): Variables to record. Options include:
             - 'water_depth': records water depth at the node.
             - 'inflow': records inflow (from dQ_new) into the node.
+            - 'concentrations': records concentrations at the node (AD-Transport)
+            - 'mass': records mass at the node (AD-Transport)
         interval (float): Time interval between recordings, in seconds.
         next_record_time (float): Simulation time at which the next recording is due.
         records (list of dict): Internal buffer storing observation rows.
@@ -60,6 +62,10 @@ class ObservationRecorder:
                 row['water_depth'] = flow_sim.y_new[node]
             if 'inflow' in self.variables:
                 row['inflow'] = flow_sim.dQ_new[node]
+            if 'concentrations' in self.variables:
+                row['concentrations'] = flow_sim.C[node]
+            if 'mass' in self.variables:
+                row['mass'] = flow_sim.M[node]
             self.records.append(row)
 
     def to_dataframe(self):
