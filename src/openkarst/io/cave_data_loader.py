@@ -71,6 +71,7 @@ class CaveDataLoader:
                 node_id, x, y, z = line.strip().split(';')
                 G.add_node(int(node_id), coords=[float(x), float(y), float(z)])
         
+
         # Load edges from the file, skipping the header
         with open(self.edges_file, 'r') as file:
             next(file)  # Skip the header line
@@ -85,13 +86,23 @@ class CaveDataLoader:
                 node_id, cswidth, csheight = line.strip().split(';')
                 average_diameter = (float(cswidth) + float(csheight)) / 2
                 node_diameters[int(node_id)] = average_diameter
+
+        #Check if the data follows openkarst requirements
+        #Verify that node start at zero and is consecutive/ does not contain gaps (0,1,2,3...)  
+        if min(G.nodes()) != 0 or max(G.nodes()) + 1 != len(G.nodes()) :
+            print("Node numbering is not correct for openKARST.\n Please process the data as in the following example: https://github.com/ERC-Karst/KNdata-public/blob/main/notebooks/3.Load_and_prep_for_openkarst.ipynb")
+        
+        #Verify is every node has a diameter
+        if len(G.nodes) > len(node_diameters):
+            print("Some diameters are missing. \n Please process the data as in the following example: https://github.com/ERC-Karst/KNdata-public/blob/main/notebooks/3.Load_and_prep_for_openkarst.ipynb")
+ 
         
         # Assign average diameters to each edge by averaging diameters of connected nodes
         edge_diameters = {}
         for node_a, node_b in G.edges():
             avg_diameter = (node_diameters[node_a] + node_diameters[node_b]) / 2
             edge_diameters[tuple(sorted((node_a, node_b)))] = avg_diameter
-            
+       
         # Create an openPNM geometry object
         cn_geometry = op.io.network_from_networkx(G)
         
