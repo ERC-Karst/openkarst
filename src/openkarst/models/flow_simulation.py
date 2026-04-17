@@ -1072,8 +1072,20 @@ class FlowSimulation:
     
             
             # Compute velocity and Frounde number at conduit center 
-            v_mid = self.Q_prev_i / self.a_mid_new
-            froude = np.abs(v_mid) / np.sqrt(self.gravity *  self.a_mid_new / w_mid)
+            #v_mid = self.Q_prev_i / self.a_mid_new
+            # Slot is only taken into account for free-surface cases
+            if self.geometry_channel:
+                v_mid = self.Q_prev_i / self.a_mid_new
+            else:
+                full_pipe_area = np.pi * (0.5 * self.conduit_diameters)**2
+                v_mid = np.where(
+                    self.is_full_y_mid,
+                    self.Q_prev_i / full_pipe_area,
+                    self.Q_prev_i / self.a_mid_new
+                )
+
+            froude = np.abs(v_mid) / np.sqrt(self.gravity * self.a_mid_new / w_mid)
+
 
             # Store to use for adaptive timestep update outside of dynamic_wave
             self._v_mid_last = v_mid
@@ -1479,28 +1491,10 @@ class FlowSimulation:
         
         return slot_widths
         
+    
+    # # Slot is only taken into account for free-surface cases
     def _compute_discharge_areas(self, y1, y2, y_mid, slot_widths):
-        """
-        Compute the discharge areas for given water depths and slot widths.
 
-        This method calculates the discharge areas at both ends and the middle of the 
-        conduits based on the water depths and slot widths. For channel geometry, a 
-        constant width is used, while for other geometries, the areas are computed 
-        considering both pressurized and free surface conditions.
-
-        Args:
-            y1 (numpy.ndarray): Water depths at the first end of the conduits.
-            y2 (numpy.ndarray): Water depths at the second end of the conduits.
-            y_mid (numpy.ndarray): Water depths at the middle of the conduits.
-            slot_widths (numpy.ndarray): Slot widths for the conduits.
-
-        Returns:
-            tuple: Discharge areas at the first end (a1), second end (a2),
-                   and middle (self.a_mid_new) of the conduits.
-        """
-        
-
-        # 1.0 unit width for anayltical solutions, 0.12 for laboratory experiment (Delestre)
         if self.geometry_channel == True:
             if self.channel_type == 'finite':
                 a1 = self.channel_width * y1
@@ -1509,32 +1503,24 @@ class FlowSimulation:
             else:
                 a1 = 1.0 * y1
                 a2 = 1.0 * y2
-                self.a_mid_new = 1.0 * y_mid          
-        else:  
-            
+                self.a_mid_new = 1.0 * y_mid
+        else:
             radii = self.conduit_diameters * 0.5
+            full_area = np.pi * radii**2
+
             theta1 = 2 * np.arccos(np.clip((radii - y1) / radii, -1, 1))
             theta2 = 2 * np.arccos(np.clip((radii - y2) / radii, -1, 1))
             theta_mid = 2 * np.arccos(np.clip((radii - y_mid) / radii, -1, 1))
-            
-            a1 = np.where(
-                self.is_full_y1,
-                np.pi * radii**2 + (y1 - self.conduit_diameters) * slot_widths,
-                (radii**2 * (theta1 - np.sin(theta1))) / 2
-            )
-            
-            a2 = np.where(
-                self.is_full_y2,
-                np.pi * radii**2 + (y2 - self.conduit_diameters) * slot_widths,
-                (radii**2 * (theta2 - np.sin(theta2))) / 2
-            )
-            
-            self.a_mid_new = np.where(
-                self.is_full_y_mid,
-                np.pi * radii**2 + (y_mid - self.conduit_diameters) * slot_widths,
-                (radii**2 * (theta_mid - np.sin(theta_mid))) / 2
-            )
-    
+
+            free_a1 = (radii**2 * (theta1 - np.sin(theta1))) / 2
+            free_a2 = (radii**2 * (theta2 - np.sin(theta2))) / 2
+            free_amid = (radii**2 * (theta_mid - np.sin(theta_mid))) / 2
+
+            # Pressurized: use full-conduit area only
+            a1 = np.where(self.is_full_y1, full_area, free_a1)
+            a2 = np.where(self.is_full_y2, full_area, free_a2)
+            self.a_mid_new = np.where(self.is_full_y_mid, full_area, free_amid)
+
         return a1, a2, self.a_mid_new
     
     def _compute_alpha(self, froude_number):
@@ -1650,12 +1636,24 @@ class FlowSimulation:
             elif self.channel_type == 'finite':
                 hydraulic_radii = (self.channel_width * flow_depths) / (self.channel_width + 2 * flow_depths)
             
+        # else:
+        #     # Calculate hydraulic radius for both free surface and pressurized conditions
+        #     radii = self.conduit_diameters * 0.5
+        #     theta = 2 * np.arccos(np.clip((radii - flow_depths) / radii, -1, 1))
+        #     wetted_perimeter = np.where(is_full, 2 * np.pi * radii + slot_width, radii * theta)
+        #     hydraulic_radii = flow_areas / wetted_perimeter
+
+        # Slot is only taken into account for free-surface cases
         else:
-            # Calculate hydraulic radius for both free surface and pressurized conditions
             radii = self.conduit_diameters * 0.5
             theta = 2 * np.arccos(np.clip((radii - flow_depths) / radii, -1, 1))
-            wetted_perimeter = np.where(is_full, 2 * np.pi * radii + slot_width, radii * theta)
-            hydraulic_radii = flow_areas / wetted_perimeter
+            wetted_perimeter = radii * theta
+
+            hydraulic_radii = np.where(
+                is_full,
+                self.conduit_diameters / 4.0,
+                flow_areas / wetted_perimeter
+            )
             
         return hydraulic_radii 
                        
@@ -1784,8 +1782,18 @@ class FlowSimulation:
         D_eff = self.D_eff
 
         # Pressure term (upstream weighting)
-        dQ_pressure = -self.gravity * a_mid_upwtd * (h2 - h1) / self.conduit_lengths * self.dt
-        
+        #dQ_pressure = -self.gravity * a_mid_upwtd * (h2 - h1) / self.conduit_lengths * self.dt
+        ### 14.4.26, slot not taken into account for pressurized flows
+        if self.geometry_channel:
+            a_pressure = a_mid_upwtd
+        else:
+            full_pipe_area = np.pi * (0.5 * self.conduit_diameters)**2
+            a_pressure = np.where(self.is_full_y_mid, full_pipe_area, a_mid_upwtd)
+
+        dQ_pressure = (
+            -self.gravity * a_pressure * (h2 - h1) / self.conduit_lengths * self.dt
+        )
+    
         # Add correction term. This is currently only applied for flux BCs
         flux_n1 = self.bc_flux_node[self.n_indices1]
         flux_n2 = self.bc_flux_node[self.n_indices2]
