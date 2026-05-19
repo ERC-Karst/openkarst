@@ -2,12 +2,23 @@
   <img src="assets/openkarst_header_color.png" alt="openKARST logo" width="420">
 </p>
 
-# openKARST
-[![DOI](https://img.shields.io/badge/DOI-10.1016%2Fj.cageo.2025.106066-blue)](https://doi.org/10.1016/j.cageo.2025.106066)
-![version](https://img.shields.io/badge/version-0.3.0-blue.svg)
-[![docs](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://erc-karst.github.io/openkarst/)
+<p align="center">
+  <strong>Open-source flow simulation for karst conduit networks</strong>
+</p>
 
-[Project Website → openkarst.org](https://openkarst.org)
+<p align="center">
+  <a href="https://doi.org/10.1016/j.cageo.2025.106066">
+    <img src="https://img.shields.io/badge/DOI-10.1016%2Fj.cageo.2025.106066-blue" alt="DOI">
+  </a>
+  <img src="https://img.shields.io/badge/version-0.3.0-blue.svg" alt="version">
+  <a href="https://erc-karst.github.io/openkarst/">
+    <img src="https://img.shields.io/badge/docs-latest-brightgreen.svg" alt="docs">
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://openkarst.org">Project Website → openkarst.org</a>
+</p>
 
 openKARST is a Python package for modeling and simulating flow in karst networks. It provides tools for setting up, running, and visualizing flow simulations.
 
