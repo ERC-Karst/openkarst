@@ -1,4 +1,5 @@
 site_name: openKARST Documentation
+site_url: https://erc-karst.github.io/openkarst/
 nav:
   - Home: index.md
   - Installation: installation.md
