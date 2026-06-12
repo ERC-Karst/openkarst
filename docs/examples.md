@@ -43,8 +43,7 @@ def main():
         'relaxation_factor': 0.6,    # Dimensionless
         'max_iterations': 20,        # Maximum Picard iterations
         'picard_depth_tol': 1e-7,    # Picard depth tolerance (meters)
-        'ss_rel_l2tol': 1e-3,        # L2 tolerance for steady-state
-        'ss_rel_madtol': 1e-8        # Median tolerance for steady-state
+        'ss_rel_l2tol': 1e-3         # L2 tolerance for steady-state
     }
     
     simulation_settings = {
@@ -191,8 +190,7 @@ def main():
         'relaxation_factor': 0.6,    # Dimensionless
         'max_iterations': 20,        # Maximum Picard iterations
         'picard_depth_tol': 1e-4,    # Picard depth tolerance (meters)
-        'ss_rel_l2tol': 1e-3,        # L2 tolerance for steady-state
-        'ss_rel_madtol': 1e-8         # Median tolerance for steady-state
+        'ss_rel_l2tol': 1e-3         # L2 tolerance for steady-state
     }
     
     simulation_settings = {
@@ -348,8 +346,7 @@ def main():
         'relaxation_factor': 0.6,    # Dimensionless
         'max_iterations': 20,        # Maximum Picard iterations
         'picard_depth_tol': 1e-5,    # Picard depth tolerance (meters)
-        'ss_rel_l2tol': 1e-6,        # L2 tolerance for steady-state
-        'ss_rel_madtol': 1e-8         # Median tolerance for steady-state
+        'ss_rel_l2tol': 1e-6         # L2 tolerance for steady-state
     }
     
     simulation_settings = {
