@@ -10,15 +10,10 @@ Created on Thu Jul 18 12:56:06 2024
 import os
 
 import numpy as np
-import matplotlib.pyplot as plt
-import networkx as nx
-
-# Needs pip install imageio-ffmpeg
-os.environ["IMAGEIO_FFMPEG_EXE"] = "/Users/jkordil_idaea/Downloads/ffmpeg" 
 
 from openkarst.io.cave_data_loader import CaveDataLoader
 from openkarst.models import FlowSimulation
-from openkarst.visualization.animation_pyvista import animate_network
+from openkarst.visualization.openkarst_viewer import launch_openkarst_viewer
 
 
 def main():
@@ -121,58 +116,23 @@ def main():
         values=water_depth,       # Single float, default constant BC
         mode='add'                # Default
     )
-    
+
+    # Record inlet and outlet time series for the viewer observation panel
+    flow_network.set_observation_points(
+        nodes=inflow_nodes + outflow_nodes,
+        variables=['water_depth', 'inflow'],
+        interval=output_settings['output_interval']
+    )
+
     # Run simulation and store results
     results = flow_network.run_simulation(desired_outputs = output_settings)
-    
-    # Get arrays from results container
-    Q_history = results['flowrates']
-    y_history = results['water_depths']
-    t_history = results['time']
-    
-    
-    animation_settings = {
-        'update_interval': 1,
-        'conduit_plotradius': 0.5,
-        'bar_plotradius': 0.5,
-        'node_plotsize': 5,
-        'depthscaling': 20,
-        'fig_width': 1600,
-        'fig_height': 800,
-        'zoom_factor': 1.0,
-        'background_color': 'black',
-        'isometric_view': False,
-        'create_animation': False,
-        'filename': "network_animation2.mp4"
-    }
-    
-    animate_network(cn_geometry=cn_geometry, 
-                    Q_history=Q_history, 
-                    y_history=y_history, 
-                    t_history=t_history, 
-                    **animation_settings)
-    
-    return results, cn_geometry
+
+    obs_df = flow_network.get_observation_dataframe()
+
+    launch_openkarst_viewer(results, cn_geometry, obs_df)
+
+    return results, cn_geometry, obs_df
 
 if __name__ == '__main__':
-    results, cn_geometry = main()
-    
-# Get arrays from results container
-Q_history = results['flowrates']
-y_history = results['water_depths']
-t_history = results['time']
-
-# Extract flow rates at node 21
-node_id = 21
-connected_throats = cn_geometry.find_neighbor_throats(pores=[node_id])
-flowrates_at_node = Q_history[:, connected_throats]
-total_flowrates_at_node = np.sum(flowrates_at_node, axis=1)
-
-# Plot the outflow at the conduit connected to the boundary node
-plt.figure()
-plt.plot(t_history, total_flowrates_at_node, label=f'Node {node_id}')
-plt.xlabel('Time (s)')
-plt.ylabel('Flowrate (m^3/s)')
-plt.title(f'Flowrate at Node {node_id} Over Time')
-plt.legend()
-plt.show()
+    main()
+    input("Viewer is running at http://127.0.0.1:8050. Press Enter to stop.\n")

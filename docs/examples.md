@@ -1,14 +1,6 @@
 # Examples
     
-After cloning all examples can be found in 'src/openkarst/examples' and can be run from there. The main.py in 'src/openkarst' by default comes with the content of Example 1. To run any of the examples or the main script, navigate to 'src/openkarst' or 'src/openkarst/examples' and use the python commands shown below. Alternatively use your preferred Python IDE (Spyder, PyCharm, VSCode) and run the main files.
-
-```bash
-
-python main.py
-
-```
-
-or
+After cloning, all examples can be found in 'src/openkarst/examples' and can be run from there. Navigate to 'src/openkarst/examples' and use the python commands shown below. Alternatively use your preferred Python IDE (Spyder, PyCharm, VSCode) and run the main files.
 
 ```bash
 
@@ -18,7 +10,7 @@ python main_example1.py
 
 ## Example 1: Basic setup
 
-The first example simulates flow along a linear conduit network with a constant inflow condition and a constant water depths boundary. Note that in order create movies via the PyVista animation function FFMPEG is required. Replace the directory with your location or properly set up your path. I failed to do so on my Mac in a virtual python environment ;)
+The first example simulates flow along a linear conduit network with a constant inflow condition and a constant water depths boundary. The results are visualized with the interactive openKARST viewer.
 
 ```python
 
@@ -26,12 +18,9 @@ import os
 import openpnm as op
 import numpy as np
 
-# Needs pip install imageio-ffmpeg or directly point to your FFMPEG location
-os.environ["IMAGEIO_FFMPEG_EXE"] = "/Users/jkordil_idaea/Downloads/ffmpeg" 
-
 from openkarst.network_generation import compute_conduit_lengths
-from openkarst.visualization.animation_pyvista import animate_network
 from openkarst.models import FlowSimulation
+from openkarst.visualization.openkarst_viewer import launch_openkarst_viewer
 ```
 
 Defining the simulation settings via dictionaries. Note that the order of settings does not matter and missing ones will be replaced by default values.
@@ -54,7 +43,7 @@ def main():
         'relaxation_factor': 0.6,    # Dimensionless
         'max_iterations': 20,        # Maximum Picard iterations
         'picard_depth_tol': 1e-7,    # Picard depth tolerance (meters)
-        'ss_rel_l2tol': 1e-7,        # L2 tolerance for steady-state
+        'ss_rel_l2tol': 1e-3,        # L2 tolerance for steady-state
         'ss_rel_madtol': 1e-8        # Median tolerance for steady-state
     }
     
@@ -63,7 +52,7 @@ def main():
         'min_flowrate': 1e-10,        # Minimum flow rate (m^3/s)
         'courant': 0.8,               # Courant number
         'adaptive_timesteps': True,   # Use adaptive timestepping
-        'dt_init': 0.001,             # Initial (or constant) timestep (seconds)
+        'dt_init': 0.01,              # Initial (or constant) timestep (seconds)
         'dt_max': 1.0,                # Maximum allowable time step
         'steady_state': False,         # Steady-state (True) or transient (False)
         't_max': 1000.0,              # Maximum time for transient simulations (seconds)
@@ -146,46 +135,31 @@ Now we set the boundary conditions: a constant volumetric inflow rate at the lef
     )
 ```
 
-Finally we call the run_simulation method to start the simulation and pass the desired output settings. To visualize the results we extract the required arrays from the results container and pass them to the animate_network function
+Finally we set observation points for the viewer, call the run_simulation method, and pass the results to the openKARST viewer.
 
 ```python
- # Run simulation and store results
+    # Record boundary-node time series for the viewer observation panel
+    flow_network.set_observation_points(
+        nodes=left_nodes + right_nodes,
+        variables=['water_depth', 'inflow'],
+        interval=output_settings['output_interval']
+    )
+
+    # Run simulation and store results
     results = flow_network.run_simulation(desired_outputs = output_settings)
-    
-    # Get arrays from results container
-    Q_history = results['flowrates']
-    y_history = results['water_depths']
-    t_history = results['time']
-    
-    
-    animation_settings = {
-        'update_interval': 1,
-        'conduit_plotradius': 0.5,
-        'bar_plotradius': 0.5,
-        'node_plotsize': 5,
-        'depthscaling': 20,
-        'fig_width': 1600,
-        'fig_height': 800,
-        'zoom_factor': 1.0,
-        'background_color': 'black',
-        'isometric_view': False,
-        'create_animation': False,
-        'filename': "network_animation2.mp4"
-    }
-    
-    animate_network(cn_geometry=cn_geometry, 
-                    Q_history=Q_history, 
-                    y_history=y_history, 
-                    t_history=t_history, 
-                    **animation_settings)
-                    
-    return results
+
+    obs_df = flow_network.get_observation_dataframe()
+
+    launch_openkarst_viewer(results, cn_geometry, obs_df)
+
+    return results, cn_geometry, obs_df
 
 if __name__ == '__main__':
-    results = main()
+    main()
+    input("Viewer is running at http://127.0.0.1:8050. Press Enter to stop.\n")
 ```
 
-![Visualizing the results with PyVista](images/pyvista_example1.png)
+![Visualizing the results with the openKARST viewer](images/openkarstviewer_example1.png)
 
 ## Example 2: Import of a cave network
 
@@ -195,15 +169,10 @@ In this example we import a karst cave network using the new project cave format
 
 import os
 import numpy as np
-import matplotlib.pyplot as plt
-import networkx as nx
-
-# Needs pip install imageio-ffmpeg
-os.environ["IMAGEIO_FFMPEG_EXE"] = "/Users/jkordil_idaea/Downloads/ffmpeg" 
 
 from openkarst.io.cave_data_loader import CaveDataLoader
 from openkarst.models import FlowSimulation
-from openkarst.visualization.animation_pyvista import animate_network
+from openkarst.visualization.openkarst_viewer import launch_openkarst_viewer
 
 
 def main():
@@ -222,7 +191,7 @@ def main():
         'relaxation_factor': 0.6,    # Dimensionless
         'max_iterations': 20,        # Maximum Picard iterations
         'picard_depth_tol': 1e-4,    # Picard depth tolerance (meters)
-        'ss_rel_l2tol': 1e-7,        # L2 tolerance for steady-state
+        'ss_rel_l2tol': 1e-3,        # L2 tolerance for steady-state
         'ss_rel_madtol': 1e-8         # Median tolerance for steady-state
     }
     
@@ -231,7 +200,7 @@ def main():
         'min_flowrate': 1e-12,        # Minimum flow rate (m^3/s)
         'courant': 0.8,               # Courant number
         'adaptive_timesteps': True,   # Use adaptive timestepping
-        'dt_init': 0.0001,             # Initial (or constant) timestep (seconds)
+        'dt_init': 0.01,              # Initial (or constant) timestep (seconds)
         'dt_max': 0.1,                # Maximum allowable time step
         'steady_state': False,         # Steady-state (True) or transient (False)
         't_max': 2000.0,              # Maximum time for transient simulations (seconds)
@@ -249,13 +218,13 @@ def main():
         'reynolds_numbers': True,
     }
     
-        logging_settings = {
+    logging_settings = {
         'base_dir': os.path.dirname(os.path.abspath(__file__)),
         'log_file': 'simulation.log'
     }
 ```
 
-We now use the CaveDataLoader class to create a loader object. We pass the file paths of nodes, edges and diameters to the loader object method load_cave_dat(). This will create a networkX graph, generate an openPNM geometry object, assign the diameters to the conduits, and return the openPNM geometry object. We then also assign a constant roughness value to all conduits. Notice the relative import of cave data from the parent folder openkarst/cave_data.
+We now use the CaveDataLoader class to create a loader object. We pass the file paths of nodes, edges and diameters to the loader object method load_cave_data(). This will create a networkX graph, generate an openPNM geometry object, assign the diameters to the conduits, and return the openPNM geometry object. We then also assign a constant roughness value to all conduits. Notice the relative import of cave data from the parent folder openkarst/cave_data.
 
 ```python
 
@@ -315,67 +284,32 @@ Now we set the boundary conditions for the inflow node (constant volumetric flow
     )
 ```
 
-We then call the run_simulation method to start the simulation and pass the desired output settings. As in the previous example we extract the required arrays from the results container and pass them to the animate_network function. In addition we also return the results container and the openPNM geometry object (cn_geometry) from the main() function for further plotting (here for example the outflow at the outlet conduit) and easier access in a variable explorer of your IDE.
+We then set observation points at the inlet and outlet nodes, run the simulation, and pass the results to the openKARST viewer. The main() function returns the results container, geometry object, and observation dataframe for easier access in a variable explorer of your IDE.
 
 ```python
 
- # Run simulation and store results
+    # Record inlet and outlet time series for the viewer observation panel
+    flow_network.set_observation_points(
+        nodes=inflow_nodes + outflow_nodes,
+        variables=['water_depth', 'inflow'],
+        interval=output_settings['output_interval']
+    )
+
+    # Run simulation and store results
     results = flow_network.run_simulation(desired_outputs = output_settings)
-    
-    # Get arrays from results container
-    Q_history = results['flowrates']
-    y_history = results['water_depths']
-    t_history = results['time']
-    
-    
-    animation_settings = {
-        'update_interval': 1,
-        'conduit_plotradius': 0.5,
-        'bar_plotradius': 0.5,
-        'node_plotsize': 5,
-        'depthscaling': 20,
-        'fig_width': 1600,
-        'fig_height': 800,
-        'zoom_factor': 1.0,
-        'background_color': 'black',
-        'isometric_view': False,
-        'create_animation': False,
-        'filename': "network_animation2.mp4"
-    }
-    
-    animate_network(cn_geometry=cn_geometry, 
-                    Q_history=Q_history, 
-                    y_history=y_history, 
-                    t_history=t_history, 
-                    **animation_settings)
-    
-    return results, cn_geometry
+
+    obs_df = flow_network.get_observation_dataframe()
+
+    launch_openkarst_viewer(results, cn_geometry, obs_df)
+
+    return results, cn_geometry, obs_df
 
 if __name__ == '__main__':
-    results, cn_geometry = main()
-    
-# Get arrays from results container
-Q_history = results['flowrates']
-y_history = results['water_depths']
-t_history = results['time']
-
-# Extract flow rates at node 21
-node_id = 21
-connected_throats = cn_geometry.find_neighbor_throats(pores=[node_id])
-flowrates_at_node = Q_history[:, connected_throats]
-total_flowrates_at_node = np.sum(flowrates_at_node, axis=1)
-
-# Plot the outflow at the conduit connected to the boundary node
-plt.figure()
-plt.plot(t_history, total_flowrates_at_node, label=f'Node {node_id}')
-plt.xlabel('Time (s)')
-plt.ylabel('Flowrate (m^3/s)')
-plt.title(f'Flowrate at Node {node_id} Over Time')
-plt.legend()
-plt.show()
+    main()
+    input("Viewer is running at http://127.0.0.1:8050. Press Enter to stop.\n")
 ```
 
-![Visualizing the results with PyVista](images/pyvista_example2.png)
+![Visualizing the results with the openKARST viewer](images/openkarstviewer_example2.png)
 
 ## Example 3: Comparison with analytical solution
 
@@ -393,11 +327,7 @@ import matplotlib.animation as animation
 from scipy.interpolate import interp1d
 from scipy.integrate import odeint
 
-# Needs pip install imageio-ffmpeg
-os.environ["IMAGEIO_FFMPEG_EXE"] = "/Users/jkordil_idaea/Downloads/ffmpeg" 
-
 from openkarst.network_generation import compute_conduit_lengths
-from openkarst.visualization.animation_pyvista import animate_network
 from openkarst.models import FlowSimulation
 
 
@@ -418,7 +348,7 @@ def main():
         'relaxation_factor': 0.6,    # Dimensionless
         'max_iterations': 20,        # Maximum Picard iterations
         'picard_depth_tol': 1e-5,    # Picard depth tolerance (meters)
-        'ss_rel_l2tol': 1e-7,        # L2 tolerance for steady-state
+        'ss_rel_l2tol': 1e-6,        # L2 tolerance for steady-state
         'ss_rel_madtol': 1e-8         # Median tolerance for steady-state
     }
     
@@ -426,8 +356,8 @@ def main():
         'min_waterdepth': 1e-10,      # Minimum water depth (meters)
         'min_flowrate': 1e-10,        # Minimum flow rate (m^3/s)
         'courant': 0.8,               # Courant number
-        'adaptive_timesteps': True,   # Use adaptive timestepping
-        'dt_init': 0.001,             # Initial (or constant) timestep (seconds)
+        'adaptive_timesteps': False,  # Use adaptive timestepping
+        'dt_init': 0.1,               # Initial (or constant) timestep (seconds)
         'dt_max': 1.0,                # Maximum allowable time step
         'steady_state': False,        # Steady-state (True) or transient (False)
         't_max': 4000.0,              # Maximum time for transient simulations (seconds)
@@ -445,7 +375,7 @@ def main():
         'reynolds_numbers': True,
     }
     
-        logging_settings = {
+    logging_settings = {
         'base_dir': os.path.dirname(os.path.abspath(__file__)),
         'log_file': 'simulation.log'
     }
@@ -523,7 +453,7 @@ Finally we create a FlowSimulation object and set the initial conditions (no flo
     inflow_node = 0
     outflow_node = 4999
 
-    flow_rate = 0.01                  # Flow rate in m^3/s at node 0
+    flow_rate = 2.0                   # Flow rate in m^3/s at node 0
     water_depth = water_height[4999]  # Water depth at node 4999
 
     # Apply constant volumetric inflow
@@ -545,7 +475,7 @@ Finally we create a FlowSimulation object and set the initial conditions (no flo
     return cn_geometry, results, water_height
 ```
 
-In the following we obtain the geometry object, the results container and the analytical water height from the main function and animate the transient dynamics until steady-state is reached. Note the hardcoded ffmpeg path that you need to modify on your system. We also modify the current directory to save video and figure to the current directory where the example is run.
+In the following we obtain the geometry object, the results container and the analytical water height from the main function and animate the transient dynamics until steady-state is reached. We also modify the current directory to save the figure to the current directory where the example is run.
 
 ```python
 
@@ -628,16 +558,6 @@ ani = animation.FuncAnimation(fig,
                               init_func=init,
                               blit=False,
                               repeat=False)
-
-# Hardcoded ffmpeg path, replace with your own path or correctly set up the python path
-ffmpeg_path = '/Users/jkordil_idaea/Downloads/ffmpeg'
-plt.rcParams['animation.ffmpeg_path'] = ffmpeg_path
-
-# Save the animation
-video_path= 'test.mp4'
-Writer = animation.writers['ffmpeg']
-writer = Writer(fps=60, codec='h264', metadata=dict(artist='Me'))
-ani.save(video_path, writer=writer)
 
 ```
 
@@ -734,7 +654,6 @@ For both inflow and water depth, the following formats are supported for `values
 - A **tuple**:
   - `('box', value, t_start, t_end [, value_before=0.0, value_after=0.0])`: step function.
   - `('timeseries', times, values)`: interpolated time series (with optional `extrapolate` behavior).
-  - `('ramp', q0, q1, t0, t1)`: shorthand for ramping up/down, equivalent to a box BC.
 
 ---
 
@@ -754,16 +673,18 @@ flow_network.set_inflow_BC(
 
 ---
 
-### Example: Time-dependent inflow (ramp, box, timeseries)
+### Example: Time-dependent inflow (box, timeseries)
 
 ```python
-# Ramping inflow between t=0 and t=200 s
+# Ramping inflow between t=0 and t=200 s with time series BCs
+times = [0, 200]
+
 flow_network.set_inflow_BC(
     nodes=[100, 101, 102],
     values=[
-        ('ramp', 0.01, 0.05, 0, 200),
-        ('ramp', 0.02, 0.03, 0, 200),
-        ('ramp', 0.015, 0.025, 0, 200)
+        ('timeseries', times, [0.01, 0.05]),
+        ('timeseries', times, [0.02, 0.03]),
+        ('timeseries', times, [0.015, 0.025])
     ]
 )
 ```
@@ -810,7 +731,7 @@ flow_network.set_waterdepth_BC(
 
 ```python
 # Remove water depth BCs
-flow_network.set_waterdepth_BC(nodes=[0, 26], mode='remove')
+flow_network.set_waterdepth_BC(nodes=[0, 26], values=None, mode='remove')
 ```
 
 ---
