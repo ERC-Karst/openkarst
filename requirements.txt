@@ -1,7 +1,11 @@
+dash==4.2.0
+imageio-ffmpeg==0.6.0
 matplotlib==3.9.1
 networkx==3.3
 numpy==2.0.1
 openpnm==3.4.1
+pandas==2.2.3
+plotly==6.8.0
 pyvista==0.43.8
 scipy==1.14.0
 setuptools==65.5.0

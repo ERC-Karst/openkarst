@@ -27,6 +27,9 @@ dependencies = [
     "matplotlib",
     "networkx",
     "openpnm",
+    "pandas",
+    "dash",
+    "plotly",
     "imageio-ffmpeg",
     "pyvista",
     "termcolor"
