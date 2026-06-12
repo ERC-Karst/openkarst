@@ -1,4 +1,4 @@
-<img src="images/openkarst_header_color.png" alt="openKARST logo" width="320">
+<img src="images/openkarst_header_color.png" alt="openKARST logo" width="220">
 
 # Documentation
 
