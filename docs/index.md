@@ -1,4 +1,7 @@
 # Welcome to openKARST
+
+<img src="images/openkarst_header_color.png" alt="openKARST logo" width="520">
+
 [![DOI](https://img.shields.io/badge/DOI-10.1016%2Fj.cageo.2025.106066-blue)](https://doi.org/10.1016/j.cageo.2025.106066)
 ![version](https://img.shields.io/badge/version-0.3.0-blue)
 
