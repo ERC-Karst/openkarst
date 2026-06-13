@@ -11,6 +11,47 @@ import numpy as np
 
 VALID_BC_TYPES = {'volumetric', 'flux'}
 
+
+def normalize_target_ids(target_ids):
+    """
+    Convert one or more boundary-condition target ids to a list of integers.
+
+    Boundary-condition setters accept either a single node id, such as `3`,
+    or multiple ids, such as `[3, 4, 5]` or `np.array([3, 4, 5])`.
+    This helper normalizes those input forms to one internal representation.
+    """
+    if isinstance(target_ids, (int, np.integer)):
+        return [int(target_ids)]
+    return [int(target_id) for target_id in list(target_ids)]
+
+
+def broadcast_boundary_values(target_ids, values):
+    """
+    Match boundary-condition values to the normalized target ids.
+
+    If `values` is a scalar, a 0-D NumPy array, or a boundary-condition tuple
+    such as `("box", value, t_start, t_end)`, the same value definition is
+    applied to every target id.
+
+    If `values` is a list or 1-D NumPy array, it is treated as one value per
+    target id and must have the same length as `target_ids`.
+    """
+    if isinstance(values, tuple):
+        return [values] * len(target_ids)
+
+    if isinstance(values, np.ndarray) and values.ndim == 0:
+        return [values.item()] * len(target_ids)
+
+    if isinstance(values, (list, np.ndarray)):
+        if len(values) != len(target_ids):
+            raise ValueError(
+                f"Length mismatch: {len(target_ids)} target ids but {len(values)} values."
+            )
+        return list(values)
+
+    return [values] * len(target_ids)
+
+
 class BoundaryCondition:
     """Abstract base class for time-dependent boundary conditions.
 
@@ -260,6 +301,4 @@ class TimeSeriesBC(BoundaryCondition):
 #         self._j = new_j
 #         self._last_t = t
 #         return float(val)
-
-
 

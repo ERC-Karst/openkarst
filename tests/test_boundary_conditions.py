@@ -1,6 +1,39 @@
+import numpy as np
 import pytest
 
-from openkarst.models.boundary_conditions import BoxBC, ConstantBC, TimeSeriesBC
+from openkarst.models.boundary_conditions import (
+    BoxBC,
+    ConstantBC,
+    TimeSeriesBC,
+    broadcast_boundary_values,
+    normalize_target_ids,
+)
+
+
+def test_normalize_target_ids_accepts_scalar_and_sequences():
+    assert normalize_target_ids(2) == [2]
+    assert normalize_target_ids(np.int64(3)) == [3]
+    assert normalize_target_ids([1, 2]) == [1, 2]
+    assert normalize_target_ids(np.array([4, 5])) == [4, 5]
+
+
+def test_broadcast_boundary_values_broadcasts_scalar_tuple_and_zero_dimensional_array():
+    target_ids = [1, 2]
+
+    assert broadcast_boundary_values(target_ids, 0.5) == [0.5, 0.5]
+    assert broadcast_boundary_values(target_ids, ("box", 1.0, 0.0, 1.0)) == [
+        ("box", 1.0, 0.0, 1.0),
+        ("box", 1.0, 0.0, 1.0),
+    ]
+    assert broadcast_boundary_values(target_ids, np.array(0.2)) == [0.2, 0.2]
+
+
+def test_broadcast_boundary_values_validates_per_target_values():
+    assert broadcast_boundary_values([1, 2], [0.1, 0.2]) == [0.1, 0.2]
+    assert broadcast_boundary_values([1, 2], np.array([0.1, 0.2])) == [0.1, 0.2]
+
+    with pytest.raises(ValueError, match="Length mismatch"):
+        broadcast_boundary_values([1, 2], [0.1])
 
 
 def test_constant_boundary_condition_returns_same_value():

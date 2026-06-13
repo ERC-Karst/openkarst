@@ -27,7 +27,13 @@ from openkarst.io.observation_recorder import ObservationRecorder
 from openkarst.utils.helpers import time_this
 from openkarst.utils.logging_config import setup_logging
 
-from openkarst.models.boundary_conditions import ConstantBC, BoxBC, TimeSeriesBC
+from openkarst.models.boundary_conditions import (
+    BoxBC,
+    ConstantBC,
+    TimeSeriesBC,
+    broadcast_boundary_values,
+    normalize_target_ids,
+)
 from openkarst.models.hydraulics import (
     compute_churchill_friction_factor,
     compute_slot_width,
@@ -638,25 +644,8 @@ class FlowSimulation:
         if 'waterdepth' not in self.boundary_conditions:
             self.boundary_conditions['waterdepth'] = []
 
-        # Accept list or numpy array and convert to list
-        if isinstance(nodes, (int, np.integer)):
-            nodes = [int(nodes)]
-        else:
-            nodes = [int(n) for n in list(nodes)]
-
-        if isinstance(values, tuple):
-            values = [values] * len(nodes)
-
-        elif isinstance(values, np.ndarray) and values.ndim == 0:
-            # 0-D array to scalar
-            values = [values.item()] * len(nodes)
-
-        elif isinstance(values, (list, np.ndarray)):
-            if len(values) != len(nodes):
-                raise ValueError(f"Length mismatch: {len(nodes)} nodes but {len(values)} values.")
-            
-        else:
-            values = [values] * len(nodes)
+        nodes = normalize_target_ids(nodes)
+        values = broadcast_boundary_values(nodes, values)
 
         # Mode: remove BCs and exit early
         if mode == 'remove':
@@ -746,25 +735,8 @@ class FlowSimulation:
         if 'inflow' not in self.boundary_conditions:
             self.boundary_conditions['inflow'] = []
 
-        # Accept list or numpy array and convert to list
-        if isinstance(nodes, (int, np.integer)):
-            nodes = [int(nodes)]
-        else:
-            nodes = [int(n) for n in list(nodes)]
-
-        if isinstance(values, tuple):
-                values = [values] * len(nodes)
-
-        elif isinstance(values, np.ndarray) and values.ndim == 0:
-            # 0-D array to scalar
-            values = [values.item()] * len(nodes)
-
-        elif isinstance(values, (list, np.ndarray)):
-            if len(values) != len(nodes):
-                raise ValueError(f"Length mismatch: {len(nodes)} nodes but {len(values)} values.")
-            
-        else:
-            values = [values] * len(nodes)
+        nodes = normalize_target_ids(nodes)
+        values = broadcast_boundary_values(nodes, values)
 
                 # Mode: remove BCs and exit early
         if mode == 'remove':
@@ -2273,25 +2245,8 @@ class FlowSimulation:
         if 'inflow_concentration' not in self.boundary_conditions:
             self.boundary_conditions['inflow_concentration'] = []
 
-        # Accept list or numpy array and convert to list
-        if isinstance(nodes, (int, np.integer)):
-            nodes = [int(nodes)]
-        else:
-            nodes = [int(n) for n in list(nodes)]
-
-        if isinstance(values, tuple):
-            values = [values] * len(nodes)
-
-        elif isinstance(values, np.ndarray) and values.ndim == 0:
-            # 0-D array to scalar
-            values = [values.item()] * len(nodes)
-
-        elif isinstance(values, (list, np.ndarray)):
-            if len(values) != len(nodes):
-                raise ValueError(f"Length mismatch: {len(nodes)} nodes but {len(values)} values.")
-            
-        else:
-            values = [values] * len(nodes)
+        nodes = normalize_target_ids(nodes)
+        values = broadcast_boundary_values(nodes, values)
 
         # modes
         if mode == 'remove':
@@ -2384,25 +2339,8 @@ class FlowSimulation:
         if 'waterdepth_concentration' not in self.boundary_conditions:
             self.boundary_conditions['waterdepth_concentration'] = []
 
-        # Accept list or numpy array and convert to list
-        if isinstance(nodes, (int, np.integer)):
-            nodes = [int(nodes)]
-        else:
-            nodes = [int(n) for n in list(nodes)]
-
-        if isinstance(values, tuple):
-                values = [values] * len(nodes)
-
-        elif isinstance(values, np.ndarray) and values.ndim == 0:
-            # 0-D array to scalar
-            values = [values.item()] * len(nodes)
-
-        elif isinstance(values, (list, np.ndarray)):
-            if len(values) != len(nodes):
-                raise ValueError(f"Length mismatch: {len(nodes)} nodes but {len(values)} values.")
-            
-        else:
-            values = [values] * len(nodes)
+        nodes = normalize_target_ids(nodes)
+        values = broadcast_boundary_values(nodes, values)
 
         # modes
         if mode == 'remove':
@@ -2501,21 +2439,8 @@ class FlowSimulation:
         if 'mass_injection' not in self.boundary_conditions:
             self.boundary_conditions['mass_injection'] = []
 
-        # Accept list or numpy array and convert to list
-        if isinstance(nodes, (int, np.integer)):
-            nodes = [int(nodes)]
-        else:
-            nodes = [int(n) for n in list(nodes)]
-
-        if isinstance(values, tuple):
-            values = [values] * len(nodes)
-        elif isinstance(values, np.ndarray) and values.ndim == 0:
-            values = [values.item()] * len(nodes)
-        elif isinstance(values, (list, np.ndarray)):
-            if len(values) != len(nodes):
-                raise ValueError(f"Length mismatch: {len(nodes)} nodes but {len(values)} values.")
-        else:
-            values = [values] * len(nodes)
+        nodes = normalize_target_ids(nodes)
+        values = broadcast_boundary_values(nodes, values)
 
         # Modes
         if mode == 'remove':
