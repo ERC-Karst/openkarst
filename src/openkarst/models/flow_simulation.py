@@ -788,7 +788,7 @@ class FlowSimulation:
 
             # Create appropriate BC object
             if isinstance(val, Real):
-                bc = ConstantBC([node], value=float(val))
+                bc = ConstantBC([node], value=float(val), bc_type=inflow_type)
             elif isinstance(val, tuple) and val[0] == 'box':
                 _, v_during, t0, t1, *rest = val
                 v_before = rest[0] if len(rest) > 0 else 0.0
