@@ -1760,17 +1760,11 @@ class FlowSimulation:
 
                 # Turbulent: Churchill equation
                 if np.any(turbulent_flow_mask):
-                    C = ((7 / self.Re_conduit[turbulent_flow_mask]) ** 0.9 +
-                        0.27 * self.conduit_epsilon[turbulent_flow_mask] /
-                        D_eff[turbulent_flow_mask])
-                    
-                    A = (-2.457 * np.log(C)) ** 16
-                    B = (37530 / self.Re_conduit[turbulent_flow_mask]) ** 16
-                    
-                    f[turbulent_flow_mask] = 8 * (
-                        (8 / self.Re_conduit[turbulent_flow_mask]) ** 12 +
-                        1 / (A + B) ** 1.5
-                    ) ** (1 / 12)
+                    f[turbulent_flow_mask] = compute_churchill_friction_factor(
+                        self.Re_conduit[turbulent_flow_mask],
+                        self.conduit_epsilon[turbulent_flow_mask],
+                        D_eff[turbulent_flow_mask],
+                    )
               
                 # Compute friction dQ term for all conduits using Churchill
                 dQ_friction[:] = (f * np.abs(v_mid) / (8 * r_mid) * self.dt)
@@ -1792,14 +1786,11 @@ class FlowSimulation:
                 # Compute friction factor using the Churchill equation for turbulent flow
                 # under pressurized conditions
                 if np.any(turbulent_flow_mask):
-                    
-                    C = ((7 / self.Re_conduit[turbulent_flow_mask]) ** 0.9 +
-                        0.27 * self.conduit_epsilon[turbulent_flow_mask] /
-                        self.conduit_diameters[turbulent_flow_mask])
-                    A = (-2.457 * np.log(C)) ** 16
-                    B = (37530 / self.Re_conduit[turbulent_flow_mask]) ** 16
-                    f[turbulent_flow_mask] = 8 * ((8 / self.Re_conduit[turbulent_flow_mask]) ** 12 +
-                                                1 / (A + B) ** 1.5) ** (1 / 12)
+                    f[turbulent_flow_mask] = compute_churchill_friction_factor(
+                        self.Re_conduit[turbulent_flow_mask],
+                        self.conduit_epsilon[turbulent_flow_mask],
+                        self.conduit_diameters[turbulent_flow_mask],
+                    )
                     
                 # Compute friction dQ term for pressurized conduits using Churchill
                 dQ_friction[self.is_full_y_mid] = (
