@@ -28,7 +28,11 @@ from openkarst.utils.helpers import time_this
 from openkarst.utils.logging_config import setup_logging
 
 from openkarst.models.boundary_conditions import ConstantBC, BoxBC, TimeSeriesBC
-from openkarst.models.hydraulics import compute_slot_width, compute_upstream_weight_alpha
+from openkarst.models.hydraulics import (
+    compute_churchill_friction_factor,
+    compute_slot_width,
+    compute_upstream_weight_alpha,
+)
 
 
 class FlowSimulation:
@@ -354,7 +358,11 @@ class FlowSimulation:
             # This is the equivalent Manning coefficient used for pressurized conduits
             if self.friction_model == 'hybrid':
                 RE_INFTY = 1e7
-                f = self._compute_friction_churchill(RE_INFTY)
+                f = compute_churchill_friction_factor(
+                    RE_INFTY,
+                    self.conduit_epsilon,
+                    self.conduit_diameters,
+                )
                 self.conduit_manning = (
                 1 / (np.sqrt(8 * self.gravity)) 
                 * np.sqrt(f) 
@@ -370,29 +378,6 @@ class FlowSimulation:
         )
             
         self.logger.info('Conduit properties initialized')
-            
-    def _compute_friction_churchill(self, Reynolds):
-        """
-        Compute the friction factor using Churchill's equation.
-
-        This method calculates the friction factor for turbulent flow 
-        using Churchill's equation, which provides a smooth transition 
-        between laminar and turbulent flow regimes.
-
-        Args:
-            Reynolds (float): The Reynolds number for the flow in the conduit.
-
-        Returns:
-            float: The calculated friction factor.
-        """
-        
-        C = (7/Reynolds)**0.9 + 0.27*self.conduit_epsilon/(self.conduit_diameters)
-        A = (-2.457*np.log(C))**16
-        B = (37530/Reynolds)**16
-        f = 8*((8/Reynolds)**12 + 1/(A + B)**1.5)**(1/12)
-        
-        return f
-    
             
     def run_simulation(self, desired_outputs: Dict[str, bool]):
         """

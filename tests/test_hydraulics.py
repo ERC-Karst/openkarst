@@ -4,6 +4,7 @@ from openkarst.models.hydraulics import (
     circular_hydraulic_radius,
     circular_segment_area,
     circular_wetted_perimeter,
+    compute_churchill_friction_factor,
     compute_slot_width,
     compute_upstream_weight_alpha,
     critical_depth_residual,
@@ -18,6 +19,20 @@ def test_compute_slot_width_uses_sjoberg_equation_below_threshold():
     result = compute_slot_width(flow_depths, diameters)
 
     expected = diameters * 0.5423 * np.exp(-np.power(flow_depths / diameters, 2.4))
+    np.testing.assert_allclose(result, expected)
+
+
+def test_compute_churchill_friction_factor_matches_formula():
+    reynolds = np.logspace(0, 8, num=9)
+    roughness = np.full_like(reynolds, 0.03)
+    diameter = np.full_like(reynolds, 1.0)
+
+    result = compute_churchill_friction_factor(reynolds, roughness, diameter)
+
+    c = (7 / reynolds) ** 0.9 + 0.27 * roughness / diameter
+    a = (-2.457 * np.log(c)) ** 16
+    b = (37530 / reynolds) ** 16
+    expected = 8 * ((8 / reynolds) ** 12 + 1 / (a + b) ** 1.5) ** (1 / 12)
     np.testing.assert_allclose(result, expected)
 
 

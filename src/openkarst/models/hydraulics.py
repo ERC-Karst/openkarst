@@ -4,6 +4,14 @@ import numpy as np
 import scipy.optimize as optimize
 
 
+def compute_churchill_friction_factor(reynolds, roughness, diameter):
+    """Compute Darcy friction factor with Churchill's equation."""
+    c = (7 / reynolds) ** 0.9 + 0.27 * roughness / diameter
+    a = (-2.457 * np.log(c)) ** 16
+    b = (37530 / reynolds) ** 16
+    return 8 * ((8 / reynolds) ** 12 + 1 / (a + b) ** 1.5) ** (1 / 12)
+
+
 def compute_slot_width(flow_depths, diameters):
     """
     Compute Preissmann slot width for circular conduits.
