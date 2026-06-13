@@ -7,3 +7,9 @@ Created on Fri May 10 20:44:25 2024
 """
 
 from .flow_simulation import FlowSimulation
+from .cross_section_geometry import (
+    CircularAnalyticalGeometry,
+    CircularTabulatedGeometry,
+    CrossSectionGeometry,
+    create_cross_section_geometry,
+)

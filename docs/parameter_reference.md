@@ -49,6 +49,20 @@ This section provides a detailed overview of the input parameters required for s
 - **Condition:** Required if `geometry_channel` is `True`
 - **Default:** `0.03`
 
+## Geometry Settings
+
+### `backend`
+- **Type:** `str`
+- **Description:** Closed-conduit cross-section geometry backend used when `geometry_channel` is `False`.
+- **Allowed Values:** `"circular_analytical"` or `"circular_tabulated"`
+- **Default:** `"circular_analytical"`
+
+### `table_points`
+- **Type:** `int`
+- **Description:** Number of normalized depth points used by tabulated geometry backends.
+- **Allowed Range:** `>= 2`
+- **Default:** `1000`
+
 ## Solver Settings
 
 ### `relaxation_factor`

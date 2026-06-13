@@ -7,7 +7,8 @@ Created on Fri Jul 19 10:38:20 2024
 @contact: jannes.kordilla@idaea.csic.es
 """
 
-def validate_settings(physical_properties, solver_settings, simulation_settings, transport_settings, logger):
+def validate_settings(physical_properties, geometry_settings, solver_settings,
+                      simulation_settings, transport_settings, logger):
 
     # Physical properties   
     if not (isinstance(physical_properties.water_density, (int, float)) and 
@@ -37,6 +38,19 @@ def validate_settings(physical_properties, solver_settings, simulation_settings,
             raise ValueError("Error: 'channel_manning' must be type int/float and greater than or equal to 0.")
         
     if not physical_properties.geometry_channel:
+        if not (geometry_settings.backend in ['circular_analytical', 'circular_tabulated']):
+            raise ValueError(
+                "Error: geometry_settings 'backend' must be either 'circular_analytical' "
+                "or 'circular_tabulated'."
+            )
+
+        if not (isinstance(geometry_settings.table_points, int) and
+                geometry_settings.table_points >= 2):
+            raise ValueError(
+                "Error: geometry_settings 'table_points' must be an integer greater "
+                "than or equal to 2."
+            )
+
         if not (physical_properties.friction_model in ['hybrid', 'churchill']):
             raise ValueError("Error: 'friction_model' must be either 'hybrid' or 'churchill'.")
     else:
@@ -155,4 +169,3 @@ def validate_settings(physical_properties, solver_settings, simulation_settings,
     
     logger.info('Settings validated')
     
-

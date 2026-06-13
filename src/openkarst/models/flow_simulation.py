@@ -15,6 +15,7 @@ from termcolor import colored
 from typing import Optional, Dict, Any
 
 from openkarst.config.physical_properties import PhysicalProperties
+from openkarst.config.geometry_settings import GeometrySettings
 from openkarst.config.solver_settings import SolverSettings
 from openkarst.config.simulation_settings import SimulationSettings
 from openkarst.config.transport_settings import TransportSettings
@@ -39,6 +40,7 @@ from openkarst.models.hydraulics import (
     compute_slot_width,
     compute_upstream_weight_alpha,
 )
+from openkarst.models.cross_section_geometry import create_cross_section_geometry
 
 
 class FlowSimulation:
@@ -118,6 +120,7 @@ class FlowSimulation:
     
     def __init__(self, openpnm_network,
                  physical_properties: Optional[Dict[str, Any]] = None,
+                 geometry_settings: Optional[Dict[str, Any]] = None,
                  solver_settings: Optional[Dict[str, Any]] = None,
                  simulation_settings: Optional[Dict[str, Any]] = None,
                  transport_settings: Optional[Dict[str, Any]] = None,
@@ -128,6 +131,7 @@ class FlowSimulation:
         Args:
             openpnm_network: The OpenPNM network to be used in the simulation.
             physical_properties (Optional[Dict[str, Any]]): Physical properties settings.
+            geometry_settings (Optional[Dict[str, Any]]): Geometry backend settings.
             solver_settings (Optional[Dict[str, Any]]): Solver settings.
             simulation_settings (Optional[Dict[str, Any]]): Simulation settings.
             logging_settings (Optional[Dict[str, Any]]): Logging configuration settings.
@@ -146,10 +150,16 @@ class FlowSimulation:
         
         # Set up logger
         self.logger = setup_logging(logging_settings)
+
+        physical_properties = dict(physical_properties) if physical_properties else {}
+        geometry_settings = dict(geometry_settings) if geometry_settings else {}
         
         self.physical_properties = (PhysicalProperties(**physical_properties) 
                                     if physical_properties else PhysicalProperties()
                                     )
+        self.geometry_settings = (GeometrySettings(**geometry_settings)
+                                  if geometry_settings else GeometrySettings()
+                                  )
         self.solver_settings = (SolverSettings(**solver_settings)
                                 if solver_settings else SolverSettings()
                                 )
@@ -161,6 +171,7 @@ class FlowSimulation:
                                    )
 
         validate_settings(self.physical_properties,
+                          self.geometry_settings,
                           self.solver_settings,
                           self.simulation_settings,
                           self.transport_settings,
@@ -169,6 +180,7 @@ class FlowSimulation:
         
         apply_settings(self,
                        self.physical_properties,
+                       self.geometry_settings,
                        self.solver_settings,
                        self.simulation_settings,
                        self.transport_settings,
@@ -197,6 +209,8 @@ class FlowSimulation:
         
         self.logger.info('FlowSimulation initialized with physical properties: %s',
                          self.physical_properties)
+        self.logger.info('FlowSimulation initialized with geometry settings: %s',
+                         self.geometry_settings)
         self.logger.info('FlowSimulation initialized with solver settings: %s',
                          self.solver_settings)
         self.logger.info('FlowSimulation initialized with simulation settings: %s',
@@ -328,6 +342,7 @@ class FlowSimulation:
         
         """
         if self.geometry_channel == True:
+            self.cross_section_geometry = None
             
             # Get Manning coefficient from physical property settings
             self.conduit_manning = np.full(self.network.Nt, self.channel_manning, dtype=float)
@@ -345,18 +360,34 @@ class FlowSimulation:
             self.conduit_diameters = np.asarray(self.network['throat.diameters'], dtype=float)
             self.conduit_lengths = np.asarray(self.network['throat.lengths'], dtype=float)
             self.conduit_epsilon = np.asarray(self.network['throat.epsilon'], dtype=float)
+            self.cross_section_geometry = create_cross_section_geometry(
+                self.geometry_backend,
+                self.conduit_diameters,
+                table_points=self.geometry_table_points,
+            )
+            self.full_conduit_areas = self.cross_section_geometry.full_area()
+            self.full_conduit_perimeters = self.cross_section_geometry.full_perimeter()
+            self.full_hydraulic_diameters = (
+                self.cross_section_geometry.full_hydraulic_diameter()
+            )
              
             # Initialize array to store the maximum depth for each node
-            # At each node max_depth is the diameter of the largest connected conduit
+            # At each node max_depth is the crown depth of the largest connected conduit
             self.max_depths = np.zeros(self.network.Np, dtype=float)
             
             # Update max_depth based on the connected conduits
             # For nodes connected at n_indices1
             for i, node in enumerate(self.n_indices1):
-                self.max_depths[node] = max(self.max_depths[node], self.conduit_diameters[i])
+                self.max_depths[node] = max(
+                    self.max_depths[node],
+                    self.cross_section_geometry.full_depths[i],
+                )
             # For nodes connected at n_indices2
             for i, node in enumerate(self.n_indices2):
-                self.max_depths[node] = max(self.max_depths[node], self.conduit_diameters[i])
+                self.max_depths[node] = max(
+                    self.max_depths[node],
+                    self.cross_section_geometry.full_depths[i],
+                )
             
             self.Re_conduit = np.zeros(self.network.Nt, dtype=float)
             
@@ -1022,10 +1053,9 @@ class FlowSimulation:
             if self.geometry_channel:
                 v_mid = self.Q_prev_i / self.a_mid_new
             else:
-                full_pipe_area = np.pi * (0.5 * self.conduit_diameters)**2
                 v_mid = np.where(
                     self.is_full_y_mid,
-                    self.Q_prev_i / full_pipe_area,
+                    self.Q_prev_i / self.full_conduit_areas,
                     self.Q_prev_i / self.a_mid_new
                 )
 
@@ -1135,9 +1165,9 @@ class FlowSimulation:
             self.is_full_y_mid.fill(False)
         
         else:
-            self.is_full_y1 = (y1 >= self.conduit_diameters)
-            self.is_full_y2 = (y2 >= self.conduit_diameters)
-            self.is_full_y_mid = (y_mid >= self.conduit_diameters)
+            self.is_full_y1 = self.cross_section_geometry.is_full(y1)
+            self.is_full_y2 = self.cross_section_geometry.is_full(y2)
+            self.is_full_y_mid = self.cross_section_geometry.is_full(y_mid)
             
  
     def _compute_surface_area(self, y1, y2, y_mid):
@@ -1423,21 +1453,9 @@ class FlowSimulation:
                 a2 = 1.0 * y2
                 self.a_mid_new = 1.0 * y_mid
         else:
-            radii = self.conduit_diameters * 0.5
-            full_area = np.pi * radii**2
-
-            theta1 = 2 * np.arccos(np.clip((radii - y1) / radii, -1, 1))
-            theta2 = 2 * np.arccos(np.clip((radii - y2) / radii, -1, 1))
-            theta_mid = 2 * np.arccos(np.clip((radii - y_mid) / radii, -1, 1))
-
-            free_a1 = (radii**2 * (theta1 - np.sin(theta1))) / 2
-            free_a2 = (radii**2 * (theta2 - np.sin(theta2))) / 2
-            free_amid = (radii**2 * (theta_mid - np.sin(theta_mid))) / 2
-
-            # Pressurized: use full-conduit area only
-            a1 = np.where(self.is_full_y1, full_area, free_a1)
-            a2 = np.where(self.is_full_y2, full_area, free_a2)
-            self.a_mid_new = np.where(self.is_full_y_mid, full_area, free_amid)
+            a1 = self.cross_section_geometry.area(y1)
+            a2 = self.cross_section_geometry.area(y2)
+            self.a_mid_new = self.cross_section_geometry.area(y_mid)
 
         return a1, a2, self.a_mid_new
     
@@ -1531,14 +1549,9 @@ class FlowSimulation:
 
         # Slot is only taken into account for free-surface cases
         else:
-            radii = self.conduit_diameters * 0.5
-            theta = 2 * np.arccos(np.clip((radii - flow_depths) / radii, -1, 1))
-            wetted_perimeter = radii * theta
-
-            hydraulic_radii = np.where(
-                is_full,
-                self.conduit_diameters / 4.0,
-                flow_areas / wetted_perimeter
+            hydraulic_radii = self.cross_section_geometry.hydraulic_radius(
+                flow_depths,
+                areas=flow_areas,
             )
             
         return hydraulic_radii 
@@ -1673,8 +1686,7 @@ class FlowSimulation:
         if self.geometry_channel:
             a_pressure = a_mid_upwtd
         else:
-            full_pipe_area = np.pi * (0.5 * self.conduit_diameters)**2
-            a_pressure = np.where(self.is_full_y_mid, full_pipe_area, a_mid_upwtd)
+            a_pressure = np.where(self.is_full_y_mid, self.full_conduit_areas, a_mid_upwtd)
 
         dQ_pressure = (
             -self.gravity * a_pressure * (h2 - h1) / self.conduit_lengths * self.dt
@@ -1715,7 +1727,7 @@ class FlowSimulation:
             if self.friction_model == "churchill":
 
                 # Define effective diameter
-                D_eff[self.is_full_y_mid] = self.conduit_diameters[self.is_full_y_mid]
+                D_eff[self.is_full_y_mid] = self.full_hydraulic_diameters[self.is_full_y_mid]
                 D_eff[~self.is_full_y_mid] = 4 * r_mid[~self.is_full_y_mid]
 
                 # Reynolds number using D_eff
@@ -1744,7 +1756,7 @@ class FlowSimulation:
             # Hybrid friction (Churchill + Manning for free-surface flows)
             else:
 
-                D_eff[self.is_full_y_mid]  = self.conduit_diameters[self.is_full_y_mid]
+                D_eff[self.is_full_y_mid]  = self.full_hydraulic_diameters[self.is_full_y_mid]
                 D_eff[~self.is_full_y_mid] = 4.0 * r_mid[~self.is_full_y_mid]
                 self.Re_conduit[:] = (self.rho * np.abs(v_mid) * D_eff) / self.dyn_viscosity
 
@@ -1761,7 +1773,7 @@ class FlowSimulation:
                     f[turbulent_flow_mask] = compute_churchill_friction_factor(
                         self.Re_conduit[turbulent_flow_mask],
                         self.conduit_epsilon[turbulent_flow_mask],
-                        self.conduit_diameters[turbulent_flow_mask],
+                        D_eff[turbulent_flow_mask],
                     )
                     
                 # Compute friction dQ term for pressurized conduits using Churchill

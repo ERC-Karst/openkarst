@@ -7,7 +7,8 @@ Created on Fri Jul 19 10:54:37 2024
 @contact: jannes.kordilla@idaea.csic.es
 """
 
-def apply_settings(simulation, physical_properties, solver_settings, simulation_settings, transport_settings, logger):
+def apply_settings(simulation, physical_properties, geometry_settings,
+                   solver_settings, simulation_settings, transport_settings, logger):
     """
     Apply various settings to the simulation object.
 
@@ -20,6 +21,8 @@ def apply_settings(simulation, physical_properties, solver_settings, simulation_
         physical_properties: An object containing physical properties such as 
             water density, gravity, dynamic viscosity, geometry channel, channel 
             type, channel width, and channel Manning.
+        geometry_settings: An object containing the closed-conduit geometry
+            backend and tabulation settings.
         solver_settings: An object containing solver settings such as relaxation 
             factor, maximum iterations, Picard depth tolerance, relative L2 tolerance, 
             and relative MAD tolerance.
@@ -37,7 +40,9 @@ def apply_settings(simulation, physical_properties, solver_settings, simulation_
     simulation.rho = physical_properties.water_density
     simulation.gravity = physical_properties.gravity
     simulation.dyn_viscosity = physical_properties.dynamic_viscosity
-    simulation.geometry_channel =  physical_properties.geometry_channel 
+    simulation.geometry_channel =  physical_properties.geometry_channel
+    simulation.geometry_backend = geometry_settings.backend
+    simulation.geometry_table_points = geometry_settings.table_points
     simulation.channel_type = physical_properties.channel_type
     simulation.channel_width =  physical_properties.channel_width
     simulation.channel_manning =  physical_properties.channel_manning

@@ -8,6 +8,7 @@ Created on Fri Jul 19 09:10:29 2024
 """
 
 from .physical_properties import PhysicalProperties
+from .geometry_settings import GeometrySettings
 from .solver_settings import SolverSettings
 from .simulation_settings import SimulationSettings
 from .transport_settings import TransportSettings
