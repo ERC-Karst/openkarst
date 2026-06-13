@@ -38,9 +38,13 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "mkdocs",
-    "mkdocs-material"
+    "mkdocs-material",
+    "pytest"
 ]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
 
 [tool.setuptools.package-data]
 "openkarst.visualization" = ["assets/*.png"]
-
