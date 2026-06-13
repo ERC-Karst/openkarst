@@ -9,7 +9,6 @@ Created on Thu Jul 18 23:56:06 2024
 
 import numpy as np
 import math
-import scipy.optimize as optimize
 from numbers import Real
 
 from termcolor import colored
@@ -29,7 +28,7 @@ from openkarst.utils.helpers import time_this
 from openkarst.utils.logging_config import setup_logging
 
 from openkarst.models.boundary_conditions import ConstantBC, BoxBC, TimeSeriesBC
-from openkarst.models.hydraulics import compute_slot_width
+from openkarst.models.hydraulics import compute_slot_width, compute_upstream_weight_alpha
 
 
 class FlowSimulation:
@@ -79,8 +78,6 @@ class FlowSimulation:
             Computes the surface areas and widths of the conduits.
         _compute_discharge_areas(self, y1, y2, y_mid, slot_widths):
             Computes the discharge areas of the conduits.
-        _compute_alpha(self, froude_number):
-            Computes the alpha value for upstream weighting.
         _compute_new_dt(self, v_mid, froude):
             Computes the new timestep based on the Courant number and Froude number.
         _compute_hydraulic_radius(self, flow_depths, flow_areas, slot_width, is_full):
@@ -103,16 +100,6 @@ class FlowSimulation:
             Computes the L2 and MAD error norm 
         _check_steady_state_convergence(self):
             Checks the convergence to steady state using the L2 and MAD norm.
-        _flow_area_cdepth(self, depth, diameter):
-            Computes the flow area at critical depth.
-        _wetted_perimeter_cdepth(self, depth, diameter):
-            Computes the wetted perimeter at critical depth.
-        _hydraulic_radius_cdepth(self, depth, diameter):
-            Computes the hydraulic radius at critical depth.
-        _critical_depth(self, depth, Q, g, diameter):
-            Computes the critical depth for a given flow rate.
-        _find_critical_depth(self, Q, diameter, g=9.81):
-            Finds the critical depth for a given flow rate and diameter.
         __del__(self):
             Destructor for the FlowSimulation class, closes the logger.
     """
@@ -1093,7 +1080,7 @@ class FlowSimulation:
             self._froude_last = froude  
            
             # Compute alpha for upstream weighting
-            alpha = self._compute_alpha(froude)
+            alpha = compute_upstream_weight_alpha(froude, self.is_full_y_mid)
             
             #if self.adaptive_timesteps:
             #    # Compute new step size based on Froude and Courant number
@@ -1496,38 +1483,6 @@ class FlowSimulation:
             self.a_mid_new = np.where(self.is_full_y_mid, full_area, free_amid)
 
         return a1, a2, self.a_mid_new
-    
-    def _compute_alpha(self, froude_number):
-        """
-        Compute alpha for upstream weighting based on the Froude number.
-
-        This method calculates the weighting factor alpha used for upstream weighting 
-        in flow computations. The value of alpha depends on the Froude number and 
-        whether the conduits are pressurized.
-
-        Args:
-            froude_number (numpy.ndarray): Array of Froude numbers for the conduits.
-
-        Returns:
-            numpy.ndarray: Array of alpha values for the conduits.
-        """
-       
-        alpha = np.zeros(self.network.Nt, dtype=float)
-
-        # Define logical masks based on Froude number ranges
-        logical1 = froude_number <= 0.5
-        logical2 = np.logical_and(froude_number > 0.5, froude_number < 1.0)
-        logical3 = froude_number >= 1.0
-        
-        # Assign alpha values based on the Froude number ranges
-        alpha[logical1] = 1.0
-        alpha[logical2] = 2 * (1 - froude_number[logical2])
-        alpha[logical3] = 0
-        
-        # Set zero when conduits are pressurized (no upstream weighting)
-        alpha[self.is_full_y_mid] = 0
-        
-        return alpha
     
     def _compute_new_dt(self, v_mid, froude):
         """
@@ -2195,112 +2150,6 @@ class FlowSimulation:
         return is_y_converged and is_Q_converged
  
 
-    # Calculation of critical depths. This is computationally inefficient. Probably better to use
-    # a lookup table with precomputed values and then interpolate.
-    def _flow_area_cdepth(self, depth, diameter):
-        """
-        Calculate the flow area in a circular conduit at a given depth.
-
-        This method computes the segment area of flow in a circular conduit given 
-        the depth of flow and the diameter of the conduit.
-
-        Args:
-            depth (float): The depth of flow in the conduit.
-            diameter (float): The diameter of the conduit.
-
-        Returns:
-            float: The segment area of flow in the conduit.
-        """
-        
-        r = diameter / 2
-        theta = 2 * np.arccos((r - depth) / r)
-        segment_area = (r**2 / 2) * (theta - np.sin(theta))
-        return segment_area
-
-    def _wetted_perimeter_cdepth(self, depth, diameter):
-        """
-        Calculate the wetted perimeter in a circular conduit at a given depth.
-
-        This method computes the wetted perimeter of flow in a circular conduit 
-        given the depth of flow and the diameter of the conduit.
-
-        Args:
-            depth (float): The depth of flow in the conduit.
-            diameter (float): The diameter of the conduit.
-
-        Returns:
-            float: The wetted perimeter of flow in the conduit.
-        """
-        
-        r = diameter / 2
-        theta = 2 * np.arccos((r - depth) / r)
-        return r * theta
-
-    def _hydraulic_radius_cdepth(self, depth, diameter):
-        """
-        Calculate the hydraulic radius in a circular conduit at a given depth.
-
-        This method computes the hydraulic radius, which is the ratio of the flow area 
-        to the wetted perimeter, for a circular conduit given the depth of flow 
-        and the diameter of the conduit.
-
-        Args:
-            depth (float): The depth of flow in the conduit.
-            diameter (float): The diameter of the conduit.
-
-        Returns:
-            float: The hydraulic radius of the flow in the conduit.
-        """
-        
-        area = self._flow_area_cdepth(depth, diameter)
-        perimeter = self._wetted_perimeter_cdepth(depth, diameter)
-        return area / perimeter
-
-    def _critical_depth(self, depth, Q, g, diameter):
-        """
-        Calculate the critical depth in a circular conduit.
-
-        This method calculates the critical depth of flow in a circular conduit
-        using the given flow rate, gravitational constant, and diameter of the conduit.
-        The critical depth is the depth at which the flow is at a specific energy minimum.
-
-        Args:
-            depth (float): The depth of flow in the conduit.
-            Q (float): The flow rate in the conduit.
-            g (float): The gravitational constant.
-            diameter (float): The diameter of the conduit.
-
-        Returns:
-            float: The computed critical depth value.
-        """
-        
-        perimeter = self._wetted_perimeter_cdepth(depth, diameter)
-        area = self._flow_area_cdepth(depth, diameter)
-        return (Q**2 * perimeter) / (g * area**3) - 1
-
-    def _find_critical_depth(self, Q, diameter, g=9.81):
-        """
-        Find the critical depth in a circular conduit.
-
-        This method calculates the critical depth of flow in a circular conduit
-        using the given flow rate, gravitational constant, and diameter of the conduit.
-        It uses an initial guess for the critical depth and solves the equation using
-        a root-finding algorithm.
-
-        Args:
-            Q (float): The flow rate in the conduit.
-            diameter (float): The diameter of the conduit.
-            g (float, optional): The gravitational constant. Defaults to 9.81.
-
-        Returns:
-            float: The computed critical depth value.
-        """
-        
-        initial_guess = 1.01 * (Q**2/g)**0.25 / (diameter**0.26) # SWMM 5.1
-        critical_depth = optimize.fsolve(self._critical_depth, initial_guess, args=(Q, g, diameter))[0]
-        return critical_depth
-
-    
     # def _time_dependent_flowrate(self, current_time, start_time, end_time, initial_rate, peak_rate):
         
     #     """
