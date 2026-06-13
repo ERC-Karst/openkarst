@@ -29,6 +29,7 @@ from openkarst.utils.helpers import time_this
 from openkarst.utils.logging_config import setup_logging
 
 from openkarst.models.boundary_conditions import ConstantBC, BoxBC, TimeSeriesBC
+from openkarst.models.hydraulics import compute_slot_width
 
 
 class FlowSimulation:
@@ -1231,19 +1232,19 @@ class FlowSimulation:
     
         if np.any(self.is_full_y1):
             slot_w1[self.is_full_y1] = (
-                self._compute_slot_width(
+                compute_slot_width(
                     y1[self.is_full_y1], self.conduit_diameters[self.is_full_y1]
                 )
             )
         if np.any(self.is_full_y2):
             slot_w2[self.is_full_y2] = (
-                self._compute_slot_width(
+                compute_slot_width(
                     y2[self.is_full_y2], self.conduit_diameters[self.is_full_y2]
                 )
             )
         if np.any(self.is_full_y_mid): 
             slot_w_mid[self.is_full_y_mid] = (
-                self._compute_slot_width(
+                compute_slot_width(
                     y_mid[self.is_full_y_mid], self.conduit_diameters[self.is_full_y_mid]
                 )
             )
@@ -1464,33 +1465,6 @@ class FlowSimulation:
         np.add.at(n_surface_a, self.n_indices2, surface_a2)
         
         return n_surface_a, slot_w1, slot_w2, slot_w_mid, w_mid    
-    
-    def _compute_slot_width(self, flow_depths, diameters):
-        """
-        Compute the slot width for given flow depths and diameters.
-
-        This method calculates the slot width based on normalized flow depths. If the
-        normalized flow depth (y_norm) is greater than 1.78, the slot width is set to 1%
-        of the maximum width. Otherwise, it uses the Sjoberg equation from SWMM.
-        
-        Args:
-            flow_depths (numpy.ndarray): Array of flow depths.
-            diameters (numpy.ndarray): Array of conduit diameters.
-
-        Returns:
-            numpy.ndarray: Array of slot widths.
-        """
-        y_norm = flow_depths / diameters
-
-        width_max = diameters
-        slot_widths = np.where(
-            y_norm > 1.78,
-            0.01 * width_max,
-            width_max * 0.5423 * np.exp(-np.power(y_norm, 2.4))
-        )
-        
-        return slot_widths
-        
     
     # # Slot is only taken into account for free-surface cases
     def _compute_discharge_areas(self, y1, y2, y_mid, slot_widths):
@@ -2881,4 +2855,3 @@ class FlowSimulation:
 
         # Final concentration field
         self.C = self.M / np.maximum(Vn, 1e-20)
-
