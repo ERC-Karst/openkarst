@@ -52,6 +52,32 @@ DIAMETER_CANDIDATES = (
 )
 DIAMETER_COLOR_SCALE = "Cividis"
 HEADER_LOGO = "openkarst_header_color.png"
+VIEW_CAMERAS = {
+    "3d": dict(
+        eye=dict(x=1.4, y=1.4, z=1.4),
+        up=dict(x=0, y=0, z=1),
+        center=dict(x=0, y=0, z=0),
+        projection=dict(type="perspective"),
+    ),
+    "xy": dict(
+        eye=dict(x=0, y=0, z=2.5),
+        up=dict(x=0, y=1, z=0),
+        center=dict(x=0, y=0, z=0),
+        projection=dict(type="orthographic"),
+    ),
+    "xz": dict(
+        eye=dict(x=0, y=-2.5, z=0),
+        up=dict(x=0, y=0, z=1),
+        center=dict(x=0, y=0, z=0),
+        projection=dict(type="orthographic"),
+    ),
+    "yz": dict(
+        eye=dict(x=2.5, y=0, z=0),
+        up=dict(x=0, y=0, z=1),
+        center=dict(x=0, y=0, z=0),
+        projection=dict(type="orthographic"),
+    ),
+}
 
 
 def _in_google_colab():
@@ -412,6 +438,12 @@ def _normalize_camera(camera, default_camera):
     return _default_3d_camera(default_camera)
 
 
+def _camera_for_view(view_mode, default_camera):
+    if view_mode in VIEW_CAMERAS:
+        return deepcopy(VIEW_CAMERAS[view_mode])
+    return _default_3d_camera(default_camera)
+
+
 def _set_nested(target, path, value):
     cursor = target
     for part in path[:-1]:
@@ -422,10 +454,15 @@ def _set_nested(target, path, value):
 def _camera_from_relayout(existing_camera, relayout_data):
     if not relayout_data:
         return None
-    if isinstance(relayout_data.get("scene.camera"), dict):
-        return deepcopy(relayout_data["scene.camera"])
-
     camera = deepcopy(existing_camera) if isinstance(existing_camera, dict) else {}
+    if isinstance(relayout_data.get("scene.camera"), dict):
+        for key, value in relayout_data["scene.camera"].items():
+            if isinstance(value, dict) and isinstance(camera.get(key), dict):
+                camera[key].update(deepcopy(value))
+            else:
+                camera[key] = deepcopy(value)
+        return camera
+
     changed = False
     for key, value in relayout_data.items():
         if key.startswith("scene.camera."):
@@ -776,7 +813,7 @@ def create_openkarst_viewer_app(
         node_id: COLOR_CYCLE[i % len(COLOR_CYCLE)]
         for i, node_id in enumerate(obs_nodes)
     }
-    default_camera = dict(eye=dict(x=1.4, y=1.4, z=1.4))
+    default_camera = _camera_for_view("3d", dict(eye=dict(x=1.4, y=1.4, z=1.4)))
 
     assets_dir = _viewer_assets_dir()
     dash_kwargs = {"assets_folder": str(assets_dir)} if assets_dir is not None else {}
@@ -996,6 +1033,21 @@ def create_openkarst_viewer_app(
                     html.Button("Play", id="play-button", n_clicks=0, style=button_style),
                 ]),
 
+                section("View", [
+                    control("Camera view", dcc.Dropdown(
+                        id="view-mode-selector",
+                        options=[
+                            {"label": "3D network", "value": "3d"},
+                            {"label": "Map view (x-y)", "value": "xy"},
+                            {"label": "Longitudinal profile (x-z)", "value": "xz"},
+                            {"label": "Cross-section (y-z)", "value": "yz"},
+                        ],
+                        value="3d",
+                        clearable=False,
+                        style={"fontSize": "13px"},
+                    )),
+                ]),
+
                 section("Water Bars", [
                     control("Color by", dcc.Dropdown(
                         id="color-field-selector",
@@ -1138,7 +1190,9 @@ def create_openkarst_viewer_app(
     @app.callback(
         Output("3d-profile", "figure"),
         Output("stored-camera", "data"),
+        Output("3d-profile", "relayoutData"),
         Input("time-slider", "value"),
+        Input("view-mode-selector", "value"),
         Input("node-selector", "value"),
         Input("node-step-input", "value"),
         Input("depth-scale-input", "value"),
@@ -1152,6 +1206,7 @@ def create_openkarst_viewer_app(
     )
     def update_3d_plot(
         time_idx,
+        view_mode,
         node_ids,
         node_step,
         current_depth_scale,
@@ -1166,10 +1221,19 @@ def create_openkarst_viewer_app(
         show_vertical_bars = "bars" in (vertical_bars_toggle or [])
         diameter_aware = "diameter" in (diameter_toggle or [])
         color_edges_by_diameter = "diameter-color" in (edge_color_toggle or [])
-        current_camera = _normalize_camera(camera, default_camera)
-        relayout_camera = _camera_from_relayout(current_camera, relayout_data)
-        if relayout_camera is not None:
-            current_camera = relayout_camera
+        triggered = dash.callback_context.triggered
+        trigger_id = triggered[0]["prop_id"].split(".")[0] if triggered else None
+
+        if trigger_id == "view-mode-selector":
+            current_camera = _camera_for_view(view_mode, default_camera)
+            next_relayout_data = None
+        else:
+            current_camera = _normalize_camera(camera, default_camera)
+            relayout_camera = _camera_from_relayout(current_camera, relayout_data)
+            if relayout_camera is not None:
+                current_camera = relayout_camera
+            next_relayout_data = dash.no_update
+
         figure = _build_profile_figure(
             results,
             profile_context,
@@ -1185,7 +1249,7 @@ def create_openkarst_viewer_app(
             current_camera,
             obs_node_colors,
         )
-        return figure, current_camera
+        return figure, current_camera, next_relayout_data
 
     @app.callback(
         Output("obs-plot", "figure"),
