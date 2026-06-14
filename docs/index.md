@@ -11,6 +11,6 @@ This site introduces you to openKARST and provides guidance on how to use it. Th
 
 - [Installation](installation.md)
 - [Examples](examples.md)
-- [Parameter Reference](parameter_reference.md)
+- [Simulation Parameters](simulation_parameters.md)
 - [Contributing](contributing.md)
 - [API Reference](reference/openkarst.md)

@@ -4,7 +4,7 @@ nav:
   - Home: index.md
   - Installation: installation.md
   - Examples: examples.md
-  - Parameter Reference: parameter_reference.md
+  - Simulation Parameters: simulation_parameters.md
   - Contributing: contributing.md
   - API Reference:
       - openkarst: reference/openkarst.md
