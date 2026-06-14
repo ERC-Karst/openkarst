@@ -18,4 +18,4 @@ class PhysicalProperties:
     channel_type: str = 'finite'  
     channel_width: float = 1.0
     channel_manning: float = 0.03
-    friction_model: str = 'hybrid'
+    friction_model: str = 'churchill'

@@ -21,7 +21,7 @@ Passed to `FlowSimulation` as `physical_properties={...}`.
 | `channel_type` | `str` | Width treatment for open-channel geometry. Only used when `geometry_channel=True`. | `"finite"` or `"infinite"` | `"finite"` |
 | `channel_width` | `int` or `float` | Channel width. Required when `geometry_channel=True` and `channel_type="finite"`. | `> 0` | `1.0` |
 | `channel_manning` | `int` or `float` | Manning roughness coefficient for open-channel geometry. Only used when `geometry_channel=True`. | `>= 0` | `0.03` |
-| `friction_model` | `str` | Closed-conduit friction model. Used when `geometry_channel=False`; ignored when `geometry_channel=True`. | `"hybrid"` or `"churchill"` | `"hybrid"` |
+| `friction_model` | `str` | Closed-conduit friction model. Used when `geometry_channel=False`; ignored when `geometry_channel=True`. | `"hybrid"` or `"churchill"` | `"churchill"` |
 
 ## Solver Settings
 
