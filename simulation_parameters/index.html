@@ -8,13 +8,13 @@
       
       
       
-        <link rel="canonical" href="https://erc-karst.github.io/openkarst/contributing/">
+        <link rel="canonical" href="https://erc-karst.github.io/openkarst/simulation_parameters/">
       
       
-        <link rel="prev" href="../simulation_parameters/">
+        <link rel="prev" href="../examples/">
       
       
-        <link rel="next" href="../reference/openkarst/">
+        <link rel="next" href="../contributing/">
       
       
       <link rel="icon" href="../assets/images/favicon.png">
@@ -22,7 +22,7 @@
     
     
       
-        <title>Contributing - openKARST Documentation</title>
+        <title>Simulation Parameters - openKARST Documentation</title>
       
     
     
@@ -66,7 +66,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#contributing" class="md-skip">
+        <a href="#simulation-parameters" class="md-skip">
           Skip to content
         </a>
       
@@ -106,7 +106,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Contributing
+              Simulation Parameters
             
           </span>
         </div>
@@ -256,26 +256,6 @@
       
   
   
-  
-  
-    <li class="md-nav__item">
-      <a href="../simulation_parameters/" class="md-nav__link">
-        
-  
-  <span class="md-ellipsis">
-    Simulation Parameters
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-    
-      
-      
-  
-  
     
   
   
@@ -292,7 +272,7 @@
           
   
   <span class="md-ellipsis">
-    Contributing
+    Simulation Parameters
   </span>
   
 
@@ -303,7 +283,7 @@
         
   
   <span class="md-ellipsis">
-    Contributing
+    Simulation Parameters
   </span>
   
 
@@ -325,9 +305,45 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#how-to-contribute" class="md-nav__link">
+  <a href="#physical-properties" class="md-nav__link">
     <span class="md-ellipsis">
-      How to Contribute
+      Physical Properties
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#solver-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Solver Settings
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#simulation-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Simulation Settings
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#output-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Output Settings
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#logging-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Logging Settings
     </span>
   </a>
   
@@ -337,6 +353,26 @@
   
 </nav>
       
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../contributing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Contributing
+  </span>
+  
+
+      </a>
     </li>
   
 
@@ -431,9 +467,45 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#how-to-contribute" class="md-nav__link">
+  <a href="#physical-properties" class="md-nav__link">
     <span class="md-ellipsis">
-      How to Contribute
+      Physical Properties
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#solver-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Solver Settings
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#simulation-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Simulation Settings
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#output-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Output Settings
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#logging-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Logging Settings
     </span>
   </a>
   
@@ -454,15 +526,335 @@
                   
 
 
-<h1 id="contributing">Contributing</h1>
-<h2 id="how-to-contribute">How to Contribute</h2>
-<p>I welcome all contributions! Here are some ways you can help:</p>
-<ul>
-<li>Report bugs</li>
-<li>Improve documentation</li>
-<li>Suggest new features</li>
-<li>Submit pull requests</li>
-</ul>
+<h1 id="simulation-parameters">Simulation Parameters</h1>
+<p>This page summarizes the hydraulic simulation parameters used by <code>FlowSimulation</code>
+and <code>run_simulation</code>. It reflects the current code defaults and validation rules.</p>
+<p>Omitted dictionary entries use their dataclass defaults, but some defaults are
+placeholders that must be replaced for a valid run. In particular, transient
+simulations require <code>t_max &gt; 0</code>, and all simulations require a numeric
+<code>dt_init</code> and <code>dt_max</code>.</p>
+<h2 id="physical-properties">Physical Properties</h2>
+<p>Passed to <code>FlowSimulation</code> as <code>physical_properties={...}</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+<th>Valid values</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>water_density</code></td>
+<td><code>int</code> or <code>float</code></td>
+<td>Density of water.</td>
+<td><code>&gt; 0</code></td>
+<td><code>1000.0</code></td>
+</tr>
+<tr>
+<td><code>gravity</code></td>
+<td><code>int</code> or <code>float</code></td>
+<td>Gravitational acceleration.</td>
+<td><code>&gt; 0</code></td>
+<td><code>9.81</code></td>
+</tr>
+<tr>
+<td><code>dynamic_viscosity</code></td>
+<td><code>int</code> or <code>float</code></td>
+<td>Dynamic viscosity of water.</td>
+<td><code>&gt; 0</code></td>
+<td><code>0.001</code></td>
+</tr>
+<tr>
+<td><code>geometry_channel</code></td>
+<td><code>bool</code></td>
+<td>Whether to use open-channel geometry, mainly for analytical channel examples.</td>
+<td><code>True</code> or <code>False</code></td>
+<td><code>False</code></td>
+</tr>
+<tr>
+<td><code>channel_type</code></td>
+<td><code>str</code></td>
+<td>Width treatment for open-channel geometry. Only used when <code>geometry_channel=True</code>.</td>
+<td><code>"finite"</code> or <code>"infinite"</code></td>
+<td><code>"finite"</code></td>
+</tr>
+<tr>
+<td><code>channel_width</code></td>
+<td><code>int</code> or <code>float</code></td>
+<td>Channel width. Required when <code>geometry_channel=True</code> and <code>channel_type="finite"</code>.</td>
+<td><code>&gt; 0</code></td>
+<td><code>1.0</code></td>
+</tr>
+<tr>
+<td><code>channel_manning</code></td>
+<td><code>int</code> or <code>float</code></td>
+<td>Manning roughness coefficient for open-channel geometry. Only used when <code>geometry_channel=True</code>.</td>
+<td><code>&gt;= 0</code></td>
+<td><code>0.03</code></td>
+</tr>
+<tr>
+<td><code>friction_model</code></td>
+<td><code>str</code></td>
+<td>Closed-conduit friction model. Used when <code>geometry_channel=False</code>; ignored when <code>geometry_channel=True</code>.</td>
+<td><code>"hybrid"</code> or <code>"churchill"</code></td>
+<td><code>"hybrid"</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="solver-settings">Solver Settings</h2>
+<p>Passed to <code>FlowSimulation</code> as <code>solver_settings={...}</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+<th>Valid values</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>relaxation_factor</code></td>
+<td><code>int</code> or <code>float</code></td>
+<td>Relaxation factor for Picard iterations.</td>
+<td><code>0 &lt; value &lt;= 1</code></td>
+<td><code>0.6</code></td>
+</tr>
+<tr>
+<td><code>max_iterations</code></td>
+<td><code>int</code></td>
+<td>Maximum number of Picard iterations.</td>
+<td><code>10 &lt; value &lt;= 1000</code></td>
+<td><code>500</code></td>
+</tr>
+<tr>
+<td><code>picard_depth_tol</code></td>
+<td><code>int</code> or <code>float</code></td>
+<td>Picard depth convergence tolerance.</td>
+<td><code>1e-11 &lt; value &lt;= 1e-2</code></td>
+<td><code>1e-9</code></td>
+</tr>
+<tr>
+<td><code>ss_rel_l2tol</code></td>
+<td><code>int</code> or <code>float</code></td>
+<td>Relative L2 tolerance for steady-state convergence.</td>
+<td><code>1e-10 &lt; value &lt;= 1e-2</code></td>
+<td><code>1e-3</code></td>
+</tr>
+<tr>
+<td><code>ss_rel_madtol</code></td>
+<td><code>int</code> or <code>float</code></td>
+<td>Relative mean absolute difference tolerance for steady-state convergence.</td>
+<td><code>1e-10 &lt; value &lt;= 1e-2</code></td>
+<td><code>1e-7</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="simulation-settings">Simulation Settings</h2>
+<p>Passed to <code>FlowSimulation</code> as <code>simulation_settings={...}</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+<th>Valid values</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>min_waterdepth</code></td>
+<td><code>int</code> or <code>float</code></td>
+<td>Minimum water depth used for numerical stability.</td>
+<td><code>1e-14 &lt;= value &lt; 1e-5</code></td>
+<td><code>1e-10</code></td>
+</tr>
+<tr>
+<td><code>min_flowrate</code></td>
+<td><code>int</code> or <code>float</code></td>
+<td>Minimum flow rate used for numerical stability.</td>
+<td><code>0 &lt;= value &lt; 1e-5</code></td>
+<td><code>1e-10</code></td>
+</tr>
+<tr>
+<td><code>courant</code></td>
+<td><code>int</code> or <code>float</code></td>
+<td>Courant number. Lower values can help convergence.</td>
+<td><code>0 &lt; value &lt;= 2</code></td>
+<td><code>0.5</code></td>
+</tr>
+<tr>
+<td><code>adaptive_timesteps</code></td>
+<td><code>bool</code></td>
+<td>Whether to adapt the time step during the simulation.</td>
+<td><code>True</code> or <code>False</code></td>
+<td><code>False</code></td>
+</tr>
+<tr>
+<td><code>dt_init</code></td>
+<td><code>int</code> or <code>float</code></td>
+<td>Constant time-step size when <code>adaptive_timesteps=False</code>; initial time-step size when <code>adaptive_timesteps=True</code>.</td>
+<td>Required; <code>&gt; 0</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>dt_max</code></td>
+<td><code>int</code> or <code>float</code></td>
+<td>Maximum time-step size used by adaptive time stepping. A numeric value is currently required by validation.</td>
+<td>Numeric value</td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>steady_state</code></td>
+<td><code>bool</code></td>
+<td>Whether to run until steady-state convergence instead of a fixed end time.</td>
+<td><code>True</code> or <code>False</code></td>
+<td><code>False</code></td>
+</tr>
+<tr>
+<td><code>t_max</code></td>
+<td><code>int</code> or <code>float</code></td>
+<td>Maximum simulation time for transient simulations.</td>
+<td>Required and <code>&gt; 0</code> when <code>steady_state=False</code></td>
+<td><code>0.0</code></td>
+</tr>
+<tr>
+<td><code>print_info_interval</code></td>
+<td><code>int</code></td>
+<td>Number of time steps between printed progress messages.</td>
+<td><code>&gt;= 1</code></td>
+<td><code>1</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="output-settings">Output Settings</h2>
+<p>Passed to <code>run_simulation</code> as <code>desired_outputs={...}</code>. Boolean output keys are
+stored only when explicitly set to <code>True</code>; omitted keys and keys set to <code>False</code>
+are not stored. Unknown keys raise a <code>ValueError</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+<th>Valid values</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>output_interval</code></td>
+<td><code>int</code> or <code>float</code></td>
+<td>Simulation-time interval between stored result snapshots.</td>
+<td>Positive value expected</td>
+<td><code>1.0</code></td>
+</tr>
+<tr>
+<td><code>time</code></td>
+<td><code>bool</code></td>
+<td>Store simulation time.</td>
+<td><code>True</code> or <code>False</code></td>
+<td>Not stored</td>
+</tr>
+<tr>
+<td><code>time_step_size</code></td>
+<td><code>bool</code></td>
+<td>Store time-step size.</td>
+<td><code>True</code> or <code>False</code></td>
+<td>Not stored</td>
+</tr>
+<tr>
+<td><code>flowrates</code></td>
+<td><code>bool</code></td>
+<td>Store conduit flow rates.</td>
+<td><code>True</code> or <code>False</code></td>
+<td>Not stored</td>
+</tr>
+<tr>
+<td><code>velocities</code></td>
+<td><code>bool</code></td>
+<td>Store conduit velocities.</td>
+<td><code>True</code> or <code>False</code></td>
+<td>Not stored</td>
+</tr>
+<tr>
+<td><code>water_depths</code></td>
+<td><code>bool</code></td>
+<td>Store nodal water depths.</td>
+<td><code>True</code> or <code>False</code></td>
+<td>Not stored</td>
+</tr>
+<tr>
+<td><code>l2_norms</code></td>
+<td><code>bool</code></td>
+<td>Store relative L2 error norms.</td>
+<td><code>True</code> or <code>False</code></td>
+<td>Not stored</td>
+</tr>
+<tr>
+<td><code>mad_norms</code></td>
+<td><code>bool</code></td>
+<td>Store relative mean absolute difference error norms.</td>
+<td><code>True</code> or <code>False</code></td>
+<td>Not stored</td>
+</tr>
+<tr>
+<td><code>convergence_fails</code></td>
+<td><code>bool</code></td>
+<td>Store the convergence failure count.</td>
+<td><code>True</code> or <code>False</code></td>
+<td>Not stored</td>
+</tr>
+<tr>
+<td><code>reynolds_numbers</code></td>
+<td><code>bool</code></td>
+<td>Store conduit Reynolds numbers.</td>
+<td><code>True</code> or <code>False</code></td>
+<td>Not stored</td>
+</tr>
+<tr>
+<td><code>picard_iterations</code></td>
+<td><code>bool</code></td>
+<td>Store the Picard iteration count from each stored time step.</td>
+<td><code>True</code> or <code>False</code></td>
+<td>Not stored</td>
+</tr>
+</tbody>
+</table>
+<h2 id="logging-settings">Logging Settings</h2>
+<p>Passed to <code>FlowSimulation</code> as <code>logging_settings={...}</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+<th>Valid values</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>base_dir</code></td>
+<td><code>str</code></td>
+<td>Base directory where the <code>logs</code> folder is created.</td>
+<td>Non-empty string</td>
+<td>Current working directory</td>
+</tr>
+<tr>
+<td><code>log_file</code></td>
+<td><code>str</code></td>
+<td>Log filename inside the <code>logs</code> folder.</td>
+<td>Non-empty string</td>
+<td><code>"simulation.log"</code></td>
+</tr>
+</tbody>
+</table>
 
 
 

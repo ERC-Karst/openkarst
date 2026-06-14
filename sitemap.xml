@@ -2,32 +2,32 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://erc-karst.github.io/openkarst/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-14</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://erc-karst.github.io/openkarst/contributing/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-14</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://erc-karst.github.io/openkarst/examples/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-14</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://erc-karst.github.io/openkarst/installation/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-14</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://erc-karst.github.io/openkarst/parameter_reference/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <loc>https://erc-karst.github.io/openkarst/simulation_parameters/</loc>
+         <lastmod>2026-06-14</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://erc-karst.github.io/openkarst/reference/openkarst/</loc>
-         <lastmod>2026-06-12</lastmod>
+         <lastmod>2026-06-14</lastmod>
          <changefreq>daily</changefreq>
     </url>
 </urlset>
