@@ -54,14 +54,26 @@ This section provides a detailed overview of the input parameters required for s
 ### `backend`
 - **Type:** `str`
 - **Description:** Closed-conduit cross-section geometry backend used when `geometry_channel` is `False`.
-- **Allowed Values:** `"circular_analytical"` or `"circular_tabulated"`
+- **Allowed Values:** `"circular_analytical"`, `"circular_tabulated"`, or `"tabulated"`
 - **Default:** `"circular_analytical"`
 
 ### `table_points`
 - **Type:** `int`
-- **Description:** Number of normalized depth points used by tabulated geometry backends.
+- **Description:** Number of normalized depth points used by the `"circular_tabulated"` backend. User CSV tables use the points provided in the file.
 - **Allowed Range:** `>= 2`
 - **Default:** `1000`
+
+### `table_file`
+- **Type:** `str`
+- **Description:** CSV file used by the `"tabulated"` backend. Normalized tables require columns `eta`, `area_norm`, `perimeter_norm`, and `top_width_norm`. Physical tables require columns `depth`, `area`, `wetted_perimeter`, and `top_width`.
+- **Condition:** Required if `backend` is `"tabulated"`
+- **Default:** `None`
+
+### `scale_by_diameter`
+- **Type:** `bool`
+- **Description:** If `True`, interpret the tabulated geometry as normalized and scale it by each conduit's diameter. If `False`, use the table as one absolute geometry for all conduits.
+- **Allowed Values:** `True` or `False`
+- **Default:** `True`
 
 ## Solver Settings
 

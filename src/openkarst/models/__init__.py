@@ -11,5 +11,6 @@ from .cross_section_geometry import (
     CircularAnalyticalGeometry,
     CircularTabulatedGeometry,
     CrossSectionGeometry,
+    TabulatedGeometry,
     create_cross_section_geometry,
 )

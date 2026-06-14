@@ -364,6 +364,8 @@ class FlowSimulation:
                 self.geometry_backend,
                 self.conduit_diameters,
                 table_points=self.geometry_table_points,
+                table_file=self.geometry_table_file,
+                scale_by_diameter=self.geometry_scale_by_diameter,
             )
             self.full_conduit_areas = self.cross_section_geometry.full_area()
             self.full_conduit_perimeters = self.cross_section_geometry.full_perimeter()
@@ -1207,21 +1209,29 @@ class FlowSimulation:
         if np.any(self.is_full_y1):
             slot_w1[self.is_full_y1] = (
                 compute_slot_width(
-                    y1[self.is_full_y1], self.conduit_diameters[self.is_full_y1]
+                    y1[self.is_full_y1],
+                    self.cross_section_geometry.full_depths[self.is_full_y1],
                 )
             )
         if np.any(self.is_full_y2):
             slot_w2[self.is_full_y2] = (
                 compute_slot_width(
-                    y2[self.is_full_y2], self.conduit_diameters[self.is_full_y2]
+                    y2[self.is_full_y2],
+                    self.cross_section_geometry.full_depths[self.is_full_y2],
                 )
             )
         if np.any(self.is_full_y_mid): 
             slot_w_mid[self.is_full_y_mid] = (
                 compute_slot_width(
-                    y_mid[self.is_full_y_mid], self.conduit_diameters[self.is_full_y_mid]
+                    y_mid[self.is_full_y_mid],
+                    self.cross_section_geometry.full_depths[self.is_full_y_mid],
                 )
             )
+
+        if not self.geometry_channel:
+            conduit_w1 = self.cross_section_geometry.top_width(y1)
+            conduit_w2 = self.cross_section_geometry.top_width(y2)
+            conduit_w_mid = self.cross_section_geometry.top_width(y_mid)
     
         # Mask for both nodes being wet
         mask1 = (y1 > self.min_waterdepth) & (y2 > self.min_waterdepth)
@@ -1253,25 +1263,19 @@ class FlowSimulation:
                 w1[mask1] = np.where(
                     self.is_full_y1[mask1],
                     slot_w1[mask1],
-                    2 * np.sqrt(
-                        self.conduit_diameters[mask1] * y1[mask1] - y1[mask1]**2
-                    )
+                    conduit_w1[mask1],
                 )
                 
                 w2[mask1] = np.where(
                     self.is_full_y2[mask1],
                     slot_w2[mask1],
-                    2 * np.sqrt(
-                        self.conduit_diameters[mask1] * y2[mask1] - y2[mask1]**2
-                        )
+                    conduit_w2[mask1],
                 )
                 
                 w_mid[mask1] = np.where(
                     self.is_full_y_mid[mask1],
                     slot_w_mid[mask1],
-                    2 * np.sqrt(
-                        self.conduit_diameters[mask1] * y_mid[mask1] - y_mid[mask1]**2
-                        )
+                    conduit_w_mid[mask1],
                 )
             
                 # Calculate surface areas
@@ -1308,17 +1312,9 @@ class FlowSimulation:
                 )
                 
             else:
-                w1[mask2] = 2 * np.sqrt(
-                    self.conduit_diameters[mask2] * y1[mask2] - y1[mask2]**2
-                    )
-                
-                w2[mask2] = 2 * np.sqrt(
-                    self.conduit_diameters[mask2] * y2[mask2] - y2[mask2]**2
-                    )
-                
-                w_mid[mask2] = 2 * np.sqrt(
-                    self.conduit_diameters[mask2] * y_mid[mask2] - y_mid[mask2]**2
-                    )
+                w1[mask2] = conduit_w1[mask2]
+                w2[mask2] = conduit_w2[mask2]
+                w_mid[mask2] = conduit_w_mid[mask2]
                 
                 surface_a1[mask2] = (
                     0.5 * (w1[mask2] + w_mid[mask2]) * (self.conduit_lengths[mask2]/2)
@@ -1354,23 +1350,17 @@ class FlowSimulation:
                 )
                 
             else:
-                w1[mask3] = 2 * np.sqrt(
-                    self.conduit_diameters[mask3] * y1[mask3] - y1[mask3]**2
-                    )
+                w1[mask3] = conduit_w1[mask3]
                 w2[mask3] = np.where(
                     self.is_full_y2[mask3],
                     slot_w2[mask3],
-                    2 * np.sqrt(
-                        self.conduit_diameters[mask3] * y2[mask3] - y2[mask3]**2
-                        )
+                    conduit_w2[mask3],
                 )
                 
                 w_mid[mask3] = np.where(
                     self.is_full_y_mid[mask3],
                     slot_w_mid[mask3],
-                    2 * np.sqrt(
-                        self.conduit_diameters[mask3] * y_mid[mask3] - y_mid[mask3]**2
-                        )
+                    conduit_w_mid[mask3],
                 )
                 
                 surface_a1[mask3] = (
@@ -1410,20 +1400,15 @@ class FlowSimulation:
                 w1[mask4] = np.where(
                     self.is_full_y1[mask4],
                     slot_w1[mask4],
-                    2 * np.sqrt(self.conduit_diameters[mask4] * y1[mask4] - y1[mask4]**2
-                                )
+                    conduit_w1[mask4],
                 )
                 
-                w2[mask4] = 2 * np.sqrt(
-                    self.conduit_diameters[mask4] * y2[mask4] - y2[mask4]**2
-                    )
+                w2[mask4] = conduit_w2[mask4]
                 
                 w_mid[mask4] = np.where(
                     self.is_full_y_mid[mask4],
                     slot_w_mid[mask4],
-                    2 * np.sqrt(
-                        self.conduit_diameters[mask4] * y_mid[mask4] - y_mid[mask4]**2
-                        )
+                    conduit_w_mid[mask4],
                 )
                 
                 surface_a1[mask4] = (

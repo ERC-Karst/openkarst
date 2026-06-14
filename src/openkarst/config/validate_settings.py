@@ -38,10 +38,10 @@ def validate_settings(physical_properties, geometry_settings, solver_settings,
             raise ValueError("Error: 'channel_manning' must be type int/float and greater than or equal to 0.")
         
     if not physical_properties.geometry_channel:
-        if not (geometry_settings.backend in ['circular_analytical', 'circular_tabulated']):
+        if not (geometry_settings.backend in ['circular_analytical', 'circular_tabulated', 'tabulated']):
             raise ValueError(
-                "Error: geometry_settings 'backend' must be either 'circular_analytical' "
-                "or 'circular_tabulated'."
+                "Error: geometry_settings 'backend' must be 'circular_analytical', "
+                "'circular_tabulated', or 'tabulated'."
             )
 
         if not (isinstance(geometry_settings.table_points, int) and
@@ -50,6 +50,18 @@ def validate_settings(physical_properties, geometry_settings, solver_settings,
                 "Error: geometry_settings 'table_points' must be an integer greater "
                 "than or equal to 2."
             )
+
+        if not isinstance(geometry_settings.scale_by_diameter, bool):
+            raise ValueError(
+                "Error: geometry_settings 'scale_by_diameter' must be True or False."
+            )
+
+        if geometry_settings.backend == 'tabulated':
+            if not isinstance(geometry_settings.table_file, str) or not geometry_settings.table_file:
+                raise ValueError(
+                    "Error: geometry_settings 'table_file' must be provided for "
+                    "the 'tabulated' backend."
+                )
 
         if not (physical_properties.friction_model in ['hybrid', 'churchill']):
             raise ValueError("Error: 'friction_model' must be either 'hybrid' or 'churchill'.")

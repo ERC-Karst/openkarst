@@ -70,6 +70,36 @@ def test_validate_settings_rejects_invalid_geometry_table_points():
         )
 
 
+def test_validate_settings_rejects_tabulated_backend_without_table_file():
+    physical_properties, geometry_settings, solver_settings, simulation_settings, transport_settings, logger = _valid_settings()
+    geometry_settings.backend = "tabulated"
+
+    with pytest.raises(ValueError, match="table_file"):
+        validate_settings(
+            physical_properties,
+            geometry_settings,
+            solver_settings,
+            simulation_settings,
+            transport_settings,
+            logger,
+        )
+
+
+def test_validate_settings_rejects_nonboolean_geometry_scaling_flag():
+    physical_properties, geometry_settings, solver_settings, simulation_settings, transport_settings, logger = _valid_settings()
+    geometry_settings.scale_by_diameter = "yes"
+
+    with pytest.raises(ValueError, match="scale_by_diameter"):
+        validate_settings(
+            physical_properties,
+            geometry_settings,
+            solver_settings,
+            simulation_settings,
+            transport_settings,
+            logger,
+        )
+
+
 def test_validate_settings_rejects_missing_constant_timestep():
     physical_properties, geometry_settings, solver_settings, simulation_settings, transport_settings, logger = _valid_settings()
     simulation_settings.dt_init = None

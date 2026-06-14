@@ -13,14 +13,43 @@ def _small_network():
     return geometry
 
 
+def _write_normalized_circular_table(path, n_points=2001):
+    eta = np.linspace(0.0, 1.0, n_points)
+    theta = 2.0 * np.arccos(np.clip(1.0 - 2.0 * eta, -1.0, 1.0))
+    area_norm = 0.125 * (theta - np.sin(theta))
+    perimeter_norm = 0.5 * theta
+    top_width_norm = 2.0 * np.sqrt(np.maximum(eta - eta**2, 0.0))
+
+    area_norm[0] = 0.0
+    area_norm[-1] = np.pi / 4.0
+    perimeter_norm[0] = 0.0
+    perimeter_norm[-1] = np.pi
+    top_width_norm[0] = 0.0
+    top_width_norm[-1] = 0.0
+
+    table = np.column_stack((eta, area_norm, perimeter_norm, top_width_norm))
+    np.savetxt(
+        path,
+        table,
+        delimiter=",",
+        header="eta,area_norm,perimeter_norm,top_width_norm",
+        comments="",
+    )
+
+
 def _small_flow_simulation(
     tmp_path,
     geometry_backend="circular_analytical",
     table_points=None,
+    table_file=None,
+    scale_by_diameter=True,
 ):
     geometry_settings = {"backend": geometry_backend}
     if table_points is not None:
         geometry_settings["table_points"] = table_points
+    if table_file is not None:
+        geometry_settings["table_file"] = str(table_file)
+        geometry_settings["scale_by_diameter"] = scale_by_diameter
 
     return FlowSimulation(
         _small_network(),
@@ -130,6 +159,50 @@ def test_flow_simulation_tabulated_circular_matches_analytical(tmp_path):
 
     analytical = run_backend("circular_analytical")
     tabulated = run_backend("circular_tabulated")
+
+    np.testing.assert_allclose(tabulated["time"], analytical["time"])
+    np.testing.assert_allclose(
+        tabulated["flowrates"],
+        analytical["flowrates"],
+        rtol=2e-3,
+        atol=1e-9,
+    )
+    np.testing.assert_allclose(
+        tabulated["water_depths"],
+        analytical["water_depths"],
+        rtol=2e-3,
+        atol=1e-9,
+    )
+
+
+def test_flow_simulation_user_tabulated_csv_matches_analytical(tmp_path):
+    table_file = tmp_path / "normalized_circle.csv"
+    _write_normalized_circular_table(table_file)
+
+    def run_backend(backend, table_file=None):
+        flow = _small_flow_simulation(
+            tmp_path,
+            geometry_backend=backend,
+            table_file=table_file,
+        )
+        geometry = flow.network
+        flow.set_initial_conditions(
+            initial_Q=np.zeros(geometry.Nt, dtype=float),
+            initial_y=np.full(geometry.Np, 0.01, dtype=float),
+        )
+        flow.set_inflow_BC(nodes=0, values=0.001)
+        flow.set_waterdepth_BC(nodes=4, values=0.01)
+        return flow.run_simulation(
+            desired_outputs={
+                "output_interval": 0.1,
+                "time": True,
+                "flowrates": True,
+                "water_depths": True,
+            }
+        )
+
+    analytical = run_backend("circular_analytical")
+    tabulated = run_backend("tabulated", table_file=table_file)
 
     np.testing.assert_allclose(tabulated["time"], analytical["time"])
     np.testing.assert_allclose(
