@@ -130,6 +130,52 @@ def _finite_range(values, symmetric=False):
     return [vmin, vmax]
 
 
+def _positive_range(values):
+    positive = np.asarray(values, dtype=float)
+    positive = positive[np.isfinite(positive) & (positive > 0.0)]
+    if positive.size == 0:
+        return None
+
+    vmin = float(np.min(positive))
+    vmax = float(np.max(positive))
+    if np.isclose(vmin, vmax):
+        return None
+    return [vmin, vmax]
+
+
+def _log_color_range(field_id, values):
+    if field_id in FIELD_SYMMETRIC_RANGE:
+        return None
+    return _positive_range(values)
+
+
+def _log10_color_values(values, positive_min):
+    arr = np.asarray(values, dtype=float)
+    clipped = np.where(np.isfinite(arr), np.maximum(arr, positive_min), np.nan)
+    return np.log10(clipped)
+
+
+def _log_colorbar_ticks(positive_range):
+    vmin, vmax = positive_range
+    log_min = float(np.log10(vmin))
+    log_max = float(np.log10(vmax))
+    first_power = int(np.ceil(log_min))
+    last_power = int(np.floor(log_max))
+    powers = list(range(first_power, last_power + 1))
+
+    if 2 <= len(powers) <= 6:
+        tickvals = powers
+        ticktext = [f"{10 ** power:g}" for power in powers]
+    else:
+        tickvals = np.linspace(log_min, log_max, 5)
+        ticktext = [f"{10 ** value:g}" for value in tickvals]
+
+    return {
+        "tickvals": tickvals,
+        "ticktext": ticktext,
+    }
+
+
 def _number_value(value, default=1.0, minimum=None):
     try:
         result = float(value)
@@ -209,6 +255,7 @@ def _field_specs(results, geometry):
             "label": FIELD_LABELS["depth"],
             "array": water_depths,
             "range": _finite_range(water_depths),
+            "log_range": _log_color_range("depth", water_depths),
             "colorscale": FIELD_COLOR_SCALES["depth"],
         }
     }
@@ -227,6 +274,7 @@ def _field_specs(results, geometry):
                     field_values,
                     symmetric=field_id in FIELD_SYMMETRIC_RANGE,
                 ),
+                "log_range": _log_color_range(field_id, field_values),
                 "colorscale": FIELD_COLOR_SCALES[field_id],
                 "source": key,
             }
@@ -479,6 +527,7 @@ def _build_profile_figure(
     node_step,
     depth_scale,
     color_field,
+    use_log_color_scale,
     show_vertical_bars,
     diameter_aware,
     color_edges_by_diameter,
@@ -498,6 +547,8 @@ def _build_profile_figure(
     field_specs = profile_context["fields"]
     field_spec = field_specs.get(color_field, field_specs["depth"])
     field_values = field_spec["array"][time_idx, :]
+    log_range = field_spec.get("log_range")
+    use_log_color_scale = bool(use_log_color_scale and log_range)
     wd = water_depths[time_idx, :]
     visual_water_surface_z = z + wd * depth_scale
 
@@ -512,11 +563,21 @@ def _build_profile_figure(
     show_diameter_segments = has_diameter_data and diameter_aware
     show_diameter_colorbar = bool(color_edges_by_diameter and profile_context["diameter_range"])
     show_two_colorbars = bool(show_vertical_bars and show_diameter_colorbar)
+    bar_label = field_spec["label"]
+    bar_cmin, bar_cmax = field_spec["range"]
+    if use_log_color_scale:
+        bar_label = f"{field_spec['label']} (log10)"
+        bar_cmin = float(np.log10(log_range[0]))
+        bar_cmax = float(np.log10(log_range[1]))
+
     bar_colorbar = _compact_colorbar(
-        field_spec["label"],
+        bar_label,
         0.32 if show_two_colorbars else 0.5,
         0.36 if show_two_colorbars else 0.58,
     )
+    if use_log_color_scale:
+        bar_colorbar.update(_log_colorbar_ticks(log_range))
+
     diameter_colorbar = _compact_colorbar(
         "Diameter [m]",
         0.72 if show_two_colorbars else 0.5,
@@ -609,6 +670,11 @@ def _build_profile_figure(
     color_vals[::3] = field_i
     color_vals[1::3] = field_i
     color_vals[2::3] = np.nan
+    bar_color_vals = (
+        _log10_color_values(color_vals, log_range[0])
+        if use_log_color_scale
+        else color_vals
+    )
 
     if show_vertical_bars:
         fig.add_trace(
@@ -618,10 +684,10 @@ def _build_profile_figure(
                 z=line_z,
                 mode="lines",
                 line=dict(
-                    color=color_vals,
+                    color=bar_color_vals,
                     colorscale=field_spec["colorscale"],
-                    cmin=field_spec["range"][0],
-                    cmax=field_spec["range"][1],
+                    cmin=bar_cmin,
+                    cmax=bar_cmax,
                     width=4,
                     colorbar=bar_colorbar,
                 ),
@@ -690,7 +756,7 @@ def _build_profile_figure(
                 "<br>"
                 f"t = {t[time_idx]:.1f} s | depth scale {depth_scale:g}x"
                 "<br>"
-                f"{'bars: ' + field_spec['label'] if show_vertical_bars else 'vertical bars hidden'}"
+                f"{'bars: ' + bar_label if show_vertical_bars else 'vertical bars hidden'}"
             ),
             x=0.01,
             xanchor="left",
@@ -858,69 +924,69 @@ def create_openkarst_viewer_app(
     }
     shell_style = {
         "display": "grid",
-        "gridTemplateColumns": "clamp(260px, 24vw, 320px) minmax(0, 1fr)",
+        "gridTemplateColumns": "clamp(230px, 22vw, 285px) minmax(0, 1fr)",
         "height": "100vh",
     }
     sidebar_style = {
         "background": "#ffffff",
         "borderRight": "1px solid #dbe1ea",
-        "padding": "16px 14px 14px",
+        "padding": "8px",
         "overflowY": "auto",
     }
     title_style = {
         "fontSize": "19px",
         "fontWeight": "650",
         "letterSpacing": "0",
-        "margin": "0 0 16px",
+        "margin": "0 0 5px",
     }
     header_logo_style = {
         "display": "block",
         "width": "100%",
-        "maxWidth": "240px",
+        "maxWidth": "160px",
         "height": "auto",
-        "margin": "0 0 16px",
+        "margin": "0 0 5px",
     }
     section_style = {
         "border": "1px solid #dbe1ea",
-        "borderRadius": "8px",
-        "padding": "10px",
-        "margin": "0 0 12px",
+        "borderRadius": "6px",
+        "padding": "5px 6px",
+        "margin": "0 0 5px",
         "background": "#fbfcfe",
     }
     legend_style = {
-        "fontSize": "12px",
+        "fontSize": "10px",
         "fontWeight": "700",
-        "padding": "0 6px",
+        "padding": "0 4px",
         "color": "#374151",
     }
     label_style = {
         "display": "block",
-        "fontSize": "12px",
+        "fontSize": "10px",
         "fontWeight": "650",
         "color": "#4b5563",
-        "marginBottom": "6px",
+        "marginBottom": "3px",
     }
     control_style = {
-        "marginBottom": "12px",
+        "marginBottom": "5px",
     }
     input_style = {
         "width": "100%",
-        "height": "34px",
+        "height": "28px",
         "boxSizing": "border-box",
         "border": "1px solid #cfd6e1",
         "borderRadius": "6px",
         "padding": "4px 8px",
-        "fontSize": "13px",
+        "fontSize": "12px",
         "background": "#ffffff",
     }
     stepper_style = {
         "display": "grid",
-        "gridTemplateColumns": "32px minmax(0, 1fr) 32px",
-        "gap": "6px",
+        "gridTemplateColumns": "26px minmax(0, 1fr) 26px",
+        "gap": "4px",
         "alignItems": "center",
     }
     stepper_button_style = {
-        "height": "34px",
+        "height": "28px",
         "border": "1px solid #cfd6e1",
         "borderRadius": "6px",
         "background": "#eef2f7",
@@ -936,7 +1002,7 @@ def create_openkarst_viewer_app(
     }
     button_style = {
         "width": "100%",
-        "height": "36px",
+        "height": "30px",
         "border": "1px solid #1f6feb",
         "borderRadius": "6px",
         "background": "#1f6feb",
@@ -945,8 +1011,8 @@ def create_openkarst_viewer_app(
         "cursor": "pointer",
     }
     checklist_style = {
-        "fontSize": "13px",
-        "lineHeight": "1.7",
+        "fontSize": "12px",
+        "lineHeight": "1.2",
     }
     main_style = {
         "display": "grid",
@@ -1013,6 +1079,12 @@ def create_openkarst_viewer_app(
             *children,
         ], style=section_style)
 
+    def log_scale_container_style(field_id):
+        field_spec = profile_context["fields"].get(field_id)
+        if field_spec and field_spec.get("log_range"):
+            return {"display": "block", "margin": "-3px 0 3px"}
+        return {"display": "none"}
+
     header_component = (
         html.Img(
             src=app.get_asset_url(HEADER_LOGO),
@@ -1044,7 +1116,7 @@ def create_openkarst_viewer_app(
                         ],
                         value="3d",
                         clearable=False,
-                        style={"fontSize": "13px"},
+                        style={"fontSize": "12px"},
                     )),
                 ]),
 
@@ -1054,8 +1126,18 @@ def create_openkarst_viewer_app(
                         options=field_options,
                         value=field_options[0]["value"],
                         clearable=False,
-                        style={"fontSize": "13px"},
+                        style={"fontSize": "12px"},
                     )),
+                    html.Div(
+                        dcc.Checklist(
+                            id="bar-log-scale-toggle",
+                            options=[{"label": "Log color scale", "value": "log"}],
+                            value=[],
+                            style=checklist_style,
+                        ),
+                        id="bar-log-scale-container",
+                        style=log_scale_container_style(field_options[0]["value"]),
+                    ),
                     dcc.Checklist(
                         id="vertical-bars-toggle",
                         options=[{
@@ -1088,9 +1170,9 @@ def create_openkarst_viewer_app(
                             "disabled": not has_diameters,
                         }],
                         value=[],
-                        style={**checklist_style, "marginTop": "6px"},
+                        style={**checklist_style, "marginTop": "4px"},
                     ),
-                    html.Div(style={"height": "8px"}),
+                    html.Div(style={"height": "2px"}),
                     control("Diameter scale", stepper("diameter-scale-input", 1)),
                 ]),
 
@@ -1102,7 +1184,7 @@ def create_openkarst_viewer_app(
                         multi=True,
                         disabled=not bool(obs_nodes),
                         placeholder="None",
-                        style={"fontSize": "13px"},
+                        style={"fontSize": "12px"},
                     )),
                 ]),
             ], style=sidebar_style),
@@ -1188,6 +1270,18 @@ def create_openkarst_viewer_app(
         return 0 if (current_idx + stride) >= len(t) else current_idx + stride
 
     @app.callback(
+        Output("bar-log-scale-container", "style"),
+        Output("bar-log-scale-toggle", "value"),
+        Input("color-field-selector", "value"),
+        State("bar-log-scale-toggle", "value"),
+    )
+    def update_log_scale_visibility(color_field, current_value):
+        field_spec = profile_context["fields"].get(color_field)
+        if field_spec and field_spec.get("log_range"):
+            return log_scale_container_style(color_field), current_value or []
+        return log_scale_container_style(color_field), []
+
+    @app.callback(
         Output("3d-profile", "figure"),
         Output("stored-camera", "data"),
         Output("3d-profile", "relayoutData"),
@@ -1197,6 +1291,7 @@ def create_openkarst_viewer_app(
         Input("node-step-input", "value"),
         Input("depth-scale-input", "value"),
         Input("color-field-selector", "value"),
+        Input("bar-log-scale-toggle", "value"),
         Input("vertical-bars-toggle", "value"),
         Input("diameter-aware-toggle", "value"),
         Input("edge-color-toggle", "value"),
@@ -1211,6 +1306,7 @@ def create_openkarst_viewer_app(
         node_step,
         current_depth_scale,
         color_field,
+        bar_log_scale_toggle,
         vertical_bars_toggle,
         diameter_toggle,
         edge_color_toggle,
@@ -1218,6 +1314,7 @@ def create_openkarst_viewer_app(
         relayout_data,
         camera,
     ):
+        use_log_color_scale = "log" in (bar_log_scale_toggle or [])
         show_vertical_bars = "bars" in (vertical_bars_toggle or [])
         diameter_aware = "diameter" in (diameter_toggle or [])
         color_edges_by_diameter = "diameter-color" in (edge_color_toggle or [])
@@ -1242,6 +1339,7 @@ def create_openkarst_viewer_app(
             node_step,
             current_depth_scale,
             color_field,
+            use_log_color_scale,
             show_vertical_bars,
             diameter_aware,
             color_edges_by_diameter,

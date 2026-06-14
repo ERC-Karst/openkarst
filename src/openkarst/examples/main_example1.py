@@ -55,6 +55,7 @@ def main():
         'time': True,
         'time_step_size': True,
         'flowrates': True,
+        'velocities': True,
         'water_depths': True,
         'l2_norms': True,
         'convergence_fails': True,
