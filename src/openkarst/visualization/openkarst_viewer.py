@@ -384,6 +384,88 @@ def _empty_observation_figure(message="No observation points"):
     return fig
 
 
+def _convergence_series(results, key, n_times):
+    if key not in results:
+        return None
+
+    values = np.asarray(results[key], dtype=float).reshape(-1)
+    if values.size == 0:
+        return None
+
+    return values[: min(values.size, n_times)]
+
+
+def _time_axis_range(t):
+    start = float(t[0])
+    end = float(t[-1])
+    if not np.isclose(start, end):
+        return [start, end]
+
+    pad = max(abs(start) * 0.05, 1.0)
+    return [start - pad, end + pad]
+
+
+def _build_convergence_figure(results, time_idx):
+    t = np.asarray(results["time"], dtype=float).reshape(-1)
+    if t.size == 0:
+        return _empty_observation_figure("No convergence data")
+
+    current_idx = int(np.clip(time_idx, 0, t.size - 1))
+    current_time = float(t[current_idx])
+    fig = go.Figure()
+    traces_added = 0
+
+    for key, label, color in (
+        ("y_l2_norms", "Water depth L2", "#1f77b4"),
+        ("Q_l2_norms", "Discharge L2", "#d62728"),
+    ):
+        values = _convergence_series(results, key, t.size)
+        if values is None:
+            continue
+
+        series_time = t[: values.size]
+        end_idx = int(np.searchsorted(series_time, current_time, side="right"))
+        visible_values = np.where(values[:end_idx] > 0.0, values[:end_idx], np.nan)
+        if not np.isfinite(np.where(values > 0.0, values, np.nan)).any():
+            continue
+
+        fig.add_trace(
+            go.Scattergl(
+                x=series_time[:end_idx],
+                y=visible_values,
+                mode="lines",
+                name=label,
+                line=dict(color=color, width=2),
+                hovertemplate=(
+                    "Time: %{x:g} s<br>"
+                    f"{label}: %{{y:.3e}}"
+                    "<extra></extra>"
+                ),
+            )
+        )
+        traces_added += 1
+
+    if traces_added == 0:
+        return _empty_observation_figure("No positive convergence norms")
+
+    fig.add_vline(x=current_time, line_width=1, line_dash="dot", line_color="#374151")
+    fig.update_layout(
+        title=dict(text="Convergence", x=0.01, xanchor="left", font=dict(size=13)),
+        margin=dict(l=50, r=30, t=42, b=42),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+        xaxis=dict(title="Time [s]", range=_time_axis_range(t), fixedrange=True),
+        yaxis=dict(
+            title="Relative L2 norm",
+            type="log",
+            tickformat=".0e",
+            exponentformat="e",
+            showexponent="all",
+            fixedrange=True,
+        ),
+    )
+    return fig
+
+
 def _thin_frame(df, max_points=DEFAULT_OBS_RENDER_POINTS):
     if len(df) <= max_points:
         return df
@@ -924,7 +1006,7 @@ def create_openkarst_viewer_app(
     }
     shell_style = {
         "display": "grid",
-        "gridTemplateColumns": "clamp(230px, 22vw, 285px) minmax(0, 1fr)",
+        "gridTemplateColumns": "clamp(165px, 15.5vw, 200px) minmax(0, 1fr)",
         "height": "100vh",
     }
     sidebar_style = {
@@ -942,7 +1024,7 @@ def create_openkarst_viewer_app(
     header_logo_style = {
         "display": "block",
         "width": "100%",
-        "maxWidth": "160px",
+        "maxWidth": "130px",
         "height": "auto",
         "margin": "0 0 5px",
     }
@@ -1028,8 +1110,8 @@ def create_openkarst_viewer_app(
     }
     plot_area_style = {
         "display": "grid",
-        "gridTemplateColumns": "repeat(auto-fit, minmax(min(100%, 430px), 1fr))",
-        "gridAutoRows": "minmax(260px, 1fr)",
+        "gridTemplateColumns": "minmax(0, 1.7fr) minmax(320px, 0.9fr)",
+        "gridTemplateRows": "minmax(0, 1fr) minmax(220px, 0.72fr)",
         "gap": "10px",
         "minHeight": "0",
         "padding": "10px",
@@ -1214,8 +1296,30 @@ def create_openkarst_viewer_app(
                 ], style=timebar_style),
 
                 html.Div([
-                    dcc.Graph(id="3d-profile", style=graph_style),
-                    dcc.Graph(id="obs-plot", style=graph_style),
+                    dcc.Graph(
+                        id="3d-profile",
+                        style={
+                            **graph_style,
+                            "gridColumn": "1",
+                            "gridRow": "1 / span 2",
+                        },
+                    ),
+                    dcc.Graph(
+                        id="obs-plot",
+                        style={
+                            **graph_style,
+                            "gridColumn": "2",
+                            "gridRow": "1",
+                        },
+                    ),
+                    dcc.Graph(
+                        id="convergence-plot",
+                        style={
+                            **graph_style,
+                            "gridColumn": "2",
+                            "gridRow": "2",
+                        },
+                    ),
                 ], style=plot_area_style),
             ], style=main_style),
         ], style=shell_style),
@@ -1363,6 +1467,13 @@ def create_openkarst_viewer_app(
             node_ids,
             obs_node_colors,
         )
+
+    @app.callback(
+        Output("convergence-plot", "figure"),
+        Input("time-slider", "value"),
+    )
+    def update_convergence_plot_callback(time_idx):
+        return _build_convergence_figure(results, time_idx)
 
     return app
 
