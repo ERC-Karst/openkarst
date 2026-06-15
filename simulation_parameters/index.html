@@ -645,13 +645,6 @@ simulations require <code>t_max &gt; 0</code>, and all simulations require a num
 <td><code>1e-10 &lt; value &lt;= 1e-2</code></td>
 <td><code>1e-3</code></td>
 </tr>
-<tr>
-<td><code>ss_rel_madtol</code></td>
-<td><code>int</code> or <code>float</code></td>
-<td>Relative mean absolute difference tolerance for steady-state convergence.</td>
-<td><code>1e-10 &lt; value &lt;= 1e-2</code></td>
-<td><code>1e-7</code></td>
-</tr>
 </tbody>
 </table>
 <h2 id="simulation-settings">Simulation Settings</h2>
@@ -792,14 +785,21 @@ are not stored. Unknown keys raise a <code>ValueError</code>.</p>
 <tr>
 <td><code>l2_norms</code></td>
 <td><code>bool</code></td>
-<td>Store relative L2 error norms.</td>
+<td>Store relative water-depth L2 error norms. Legacy alias for <code>y_l2_norms</code>.</td>
 <td><code>True</code> or <code>False</code></td>
 <td>Not stored</td>
 </tr>
 <tr>
-<td><code>mad_norms</code></td>
+<td><code>y_l2_norms</code></td>
 <td><code>bool</code></td>
-<td>Store relative mean absolute difference error norms.</td>
+<td>Store relative water-depth L2 error norms.</td>
+<td><code>True</code> or <code>False</code></td>
+<td>Not stored</td>
+</tr>
+<tr>
+<td><code>Q_l2_norms</code></td>
+<td><code>bool</code></td>
+<td>Store relative discharge L2 error norms.</td>
 <td><code>True</code> or <code>False</code></td>
 <td>Not stored</td>
 </tr>
