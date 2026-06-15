@@ -55,7 +55,8 @@ def main():
         'time_step_size': True,
         'flowrates': True,
         'water_depths': True,
-        'l2_norms': True,
+        'y_l2_norms': True,
+        'Q_l2_norms': True,
         'convergence_fails': True,
         'reynolds_numbers': True,
     }

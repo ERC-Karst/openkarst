@@ -64,7 +64,9 @@ are not stored. Unknown keys raise a `ValueError`.
 | `flowrates` | `bool` | Store conduit flow rates. | `True` or `False` | Not stored |
 | `velocities` | `bool` | Store conduit velocities. | `True` or `False` | Not stored |
 | `water_depths` | `bool` | Store nodal water depths. | `True` or `False` | Not stored |
-| `l2_norms` | `bool` | Store relative L2 error norms. | `True` or `False` | Not stored |
+| `l2_norms` | `bool` | Store relative water-depth L2 error norms. Legacy alias for `y_l2_norms`. | `True` or `False` | Not stored |
+| `y_l2_norms` | `bool` | Store relative water-depth L2 error norms. | `True` or `False` | Not stored |
+| `Q_l2_norms` | `bool` | Store relative discharge L2 error norms. | `True` or `False` | Not stored |
 | `convergence_fails` | `bool` | Store the convergence failure count. | `True` or `False` | Not stored |
 | `reynolds_numbers` | `bool` | Store conduit Reynolds numbers. | `True` or `False` | Not stored |
 | `picard_iterations` | `bool` | Store the Picard iteration count from each stored time step. | `True` or `False` | Not stored |
