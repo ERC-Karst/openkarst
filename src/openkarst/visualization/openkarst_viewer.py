@@ -450,9 +450,18 @@ def _build_convergence_figure(results, time_idx):
 
     fig.add_vline(x=current_time, line_width=1, line_dash="dot", line_color="#374151")
     fig.update_layout(
-        title=dict(text="Convergence", x=0.01, xanchor="left", font=dict(size=13)),
         margin=dict(l=50, r=30, t=42, b=42),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+        legend=dict(
+            orientation="h",
+            yanchor="top",
+            y=0.98,
+            xanchor="right",
+            x=0.98,
+            bgcolor="rgba(255,255,255,0.78)",
+            bordercolor="#dbe1ea",
+            borderwidth=1,
+            font=dict(size=10),
+        ),
         xaxis=dict(title="Time [s]", range=_time_axis_range(t), fixedrange=True),
         yaxis=dict(
             title="Relative L2 norm",
@@ -903,7 +912,17 @@ def _build_observation_figure(results, obs_df, obs_context, time_idx, node_ids, 
 
     fig.update_layout(
         margin=dict(l=40, r=40, t=40, b=40),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+        legend=dict(
+            orientation="h",
+            yanchor="top",
+            y=0.98,
+            xanchor="left",
+            x=0.01,
+            bgcolor="rgba(255,255,255,0.78)",
+            bordercolor="#dbe1ea",
+            borderwidth=1,
+            font=dict(size=9),
+        ),
         xaxis=dict(title="Time [s]", range=[x_min, x_max], fixedrange=True),
     )
     fig.add_vline(x=current_time, line_width=1, line_dash="dot", line_color="#374151")

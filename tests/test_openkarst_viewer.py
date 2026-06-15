@@ -34,6 +34,8 @@ def test_build_convergence_figure_plots_norm_histories():
     assert fig.layout.yaxis.tickformat == ".0e"
     assert fig.layout.yaxis.exponentformat == "e"
     assert fig.layout.yaxis.showexponent == "all"
+    assert fig.layout.legend.y == 0.98
+    assert fig.layout.legend.xanchor == "right"
     assert fig.layout.shapes[0].x0 == 10.0
     np.testing.assert_array_equal(fig.data[0].x, np.array([0.0, 10.0]))
     np.testing.assert_array_equal(fig.data[0].y, np.array([1e-1, 1e-3]))
