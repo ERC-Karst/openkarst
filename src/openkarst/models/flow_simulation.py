@@ -109,9 +109,9 @@ class FlowSimulation:
         _check_picard_convergence(self):
             Checks the convergence of the Picard iterations.
         _compute_error_norms(self):
-            Computes the L2 and MAD error norm 
+            Computes the L2 error norms.
         _check_steady_state_convergence(self):
-            Checks the convergence to steady state using the L2 and MAD norm.
+            Checks the convergence to steady state using the L2 norms.
         __del__(self):
             Destructor for the FlowSimulation class, closes the logger.
     """
@@ -451,7 +451,6 @@ class FlowSimulation:
             self.current_timestep = 0
             self.relative_y_l2_norm = 0.0
             self.relative_Q_l2_norm = 0.0
-            self.relative_mad_norm = 0.0
             self.picard_iterations_last = 0
             
             while True:
@@ -476,7 +475,7 @@ class FlowSimulation:
                 # Update the network state with the new values
                 self._update_network_state()
 
-                # Compute L2 and MAD error norms for each timestep
+                # Compute L2 error norms for each timestep
                 self._compute_error_norms()
 
                 # Compute AD Transport with updated flow field
@@ -1999,9 +1998,8 @@ class FlowSimulation:
         """
         Compute relative error norms between the new and old states.
 
-        This method computes relative L2 norms for both `y` and `Q`, as well as
-        a relative median absolute deviation (MAD) norm for `y`, comparing the
-        new state (`self.y_new`, `self.Q_new`) with the previous state
+        This method computes relative L2 norms for both `y` and `Q`, comparing
+        the new state (`self.y_new`, `self.Q_new`) with the previous state
         (`self.y_old_t`, `self.Q_old_t`).
 
         The relative norms are computed by dividing the absolute norm of the
@@ -2012,7 +2010,6 @@ class FlowSimulation:
         Sets:
             self.relative_y_l2_norm (float): Relative L2 norm of `y`.
             self.relative_Q_l2_norm (float): Relative L2 norm of `Q`.
-            self.relative_mad_norm (float): Relative MAD norm of `y`.
         """
         
         y_l2_norm = np.linalg.norm(self.y_new - self.y_old_t)
@@ -2026,12 +2023,6 @@ class FlowSimulation:
             self.relative_Q_l2_norm = Q_l2_norm / np.linalg.norm(self.Q_new)
         else:
             self.relative_Q_l2_norm = 0.0
-        
-        mad = np.median(np.abs(self.y_new - self.y_old_t))
-        if np.median(np.abs(self.y_new)) != 0:
-            self.relative_mad_norm = mad / np.median(np.abs(self.y_new))
-        else:
-            self.relative_mad_norm = 0.0
         
     def _check_steady_state_convergence(self):
         """
@@ -2049,40 +2040,6 @@ class FlowSimulation:
             bool: True if both `y` and `Q` satisfy the steady-state convergence
             criterion, False otherwise.
         """
-
-        # # is_l2_converged = (
-        # #     (self.relative_mad_norm < self.ss_rel_madtol) and
-        # #     (self.relative_l2_norm < self.ss_rel_l2tol)
-        # # )
-        # is_l2_converged = (
-        #     self.relative_l2_norm < self.ss_rel_l2tol
-        # )
-        
-        
-        # return is_l2_converged
-        # --- 1) Water depth convergence
-        # --- 1) Depth convergence (already computed)
-        # is_y_converged = (
-        #     self.relative_l2_norm < self.ss_rel_l2tol
-        # )
-        # #rel_l2_tol
-
-        # # --- 2) Relative flow change
-        # ss_rel_Qtol = 1e-6
-        # l2_norm = np.linalg.norm(self.Q_new - self.Q_old_t)
-
-        # l2_Q = np.linalg.norm(self.Q_new)
-
-        # if l2_Q != 0.0:
-        #     relative_flow_l2 = l2_norm / l2_Q
-        # else:
-        #     relative_flow_l2 = l2_norm
-
-        # #print(relative_flow_l2)    
-
-        # is_Q_converged = (relative_flow_l2 < ss_rel_Qtol)
-
-        # return is_y_converged and is_Q_converged
 
         is_y_converged = (
             self.relative_y_l2_norm < self.ss_rel_l2tol

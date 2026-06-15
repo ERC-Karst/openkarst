@@ -39,7 +39,6 @@ def initialize_results_container(desired_outputs: Dict[str, bool], logger):
         'time',
         'time_step_size',
         'l2_norms',
-        'mad_norms',
         'reynolds_numbers',
         'picard_iterations',
         'concentrations',
@@ -87,8 +86,6 @@ def store_results(simulation_instance, results_container):
         results_container['time_step_size'].append(simulation_instance.dt)
     if 'l2_norms' in results_container:
         results_container['l2_norms'].append(simulation_instance.relative_y_l2_norm)
-    if 'mad_norms' in results_container:           
-        results_container['mad_norms'].append(simulation_instance.relative_mad_norm)
     if 'reynolds_numbers' in results_container:
         results_container['reynolds_numbers'].append(np.copy(simulation_instance.Re_conduit))
     if 'picard_iterations' in results_container:

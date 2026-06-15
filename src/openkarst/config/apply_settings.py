@@ -24,8 +24,8 @@ def apply_settings(simulation, physical_properties, geometry_settings,
         geometry_settings: An object containing the closed-conduit geometry
             backend and tabulation settings.
         solver_settings: An object containing solver settings such as relaxation 
-            factor, maximum iterations, Picard depth tolerance, relative L2 tolerance, 
-            and relative MAD tolerance.
+            factor, maximum iterations, Picard depth tolerance, and relative L2
+            tolerance.
         simulation_settings: An object containing simulation settings such as 
             minimum water depth, minimum flow rate, Courant number, adaptive 
             timesteps, initial timestep, maximum timestep, maximum simulation 
@@ -53,7 +53,6 @@ def apply_settings(simulation, physical_properties, geometry_settings,
     simulation.max_iterations = solver_settings.max_iterations
     simulation.picard_depth_tol = solver_settings.picard_depth_tol
     simulation.ss_rel_l2tol = solver_settings.ss_rel_l2tol
-    simulation.ss_rel_madtol = solver_settings.ss_rel_madtol
     simulation.min_waterdepth = simulation_settings.min_waterdepth
     simulation.min_flowrate = simulation_settings.min_flowrate
     simulation.courant = simulation_settings.courant

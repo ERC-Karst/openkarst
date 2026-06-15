@@ -33,7 +33,6 @@ Passed to `FlowSimulation` as `solver_settings={...}`.
 | `max_iterations` | `int` | Maximum number of Picard iterations. | `10 < value <= 1000` | `500` |
 | `picard_depth_tol` | `int` or `float` | Picard depth convergence tolerance. | `1e-11 < value <= 1e-2` | `1e-9` |
 | `ss_rel_l2tol` | `int` or `float` | Relative L2 tolerance for steady-state convergence. | `1e-10 < value <= 1e-2` | `1e-3` |
-| `ss_rel_madtol` | `int` or `float` | Relative mean absolute difference tolerance for steady-state convergence. | `1e-10 < value <= 1e-2` | `1e-7` |
 
 ## Simulation Settings
 
@@ -66,7 +65,6 @@ are not stored. Unknown keys raise a `ValueError`.
 | `velocities` | `bool` | Store conduit velocities. | `True` or `False` | Not stored |
 | `water_depths` | `bool` | Store nodal water depths. | `True` or `False` | Not stored |
 | `l2_norms` | `bool` | Store relative L2 error norms. | `True` or `False` | Not stored |
-| `mad_norms` | `bool` | Store relative mean absolute difference error norms. | `True` or `False` | Not stored |
 | `convergence_fails` | `bool` | Store the convergence failure count. | `True` or `False` | Not stored |
 | `reynolds_numbers` | `bool` | Store conduit Reynolds numbers. | `True` or `False` | Not stored |
 | `picard_iterations` | `bool` | Store the Picard iteration count from each stored time step. | `True` or `False` | Not stored |
