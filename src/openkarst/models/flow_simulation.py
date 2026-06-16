@@ -104,7 +104,7 @@ class FlowSimulation:
             Computes the water depths at each node.
         _adjust_flowrates_dry_nodes(self):
             Adjusts the flow rates for dry nodes.
-        _print_timestep_info(self, iteration, froude):
+        _print_timestep_info(self, n_iterations, converged, froude):
             Prints information about the current timestep.
         _check_picard_convergence(self):
             Checks the convergence of the Picard iterations.
@@ -477,6 +477,8 @@ class FlowSimulation:
 
                 # Compute L2 error norms for each timestep
                 self._compute_error_norms()
+
+                self._print_timestep_info(n_iterations, converged, self._froude_last)
 
                 # Compute AD Transport with updated flow field
                 # Only if enable_transport is True
@@ -1092,9 +1094,7 @@ class FlowSimulation:
             self._compute_water_depths(n_surface_a)
 
             self._adjust_flowrates_dry_nodes()
-            
-            self._print_timestep_info(iteration, froude)
-            
+
             if self._check_picard_convergence():
                 return True, iteration + 1
             
@@ -1862,26 +1862,32 @@ class FlowSimulation:
         self.Q_new[(self.Q_new < -self.min_flowrate) &
                    (self.y_new[self.n_indices2] <= self.min_waterdepth)] = -self.min_flowrate
     
-    def _print_timestep_info(self, iteration, froude):
+    def _print_timestep_info(self, n_iterations, converged, froude):
         """
         Print information about the current timestep at specified intervals.
 
         This method prints details about the simulation at specified intervals
-        including the new time step size, maximum Froude number, current timestep, 
-        current simulation time, iteration count, maximum Reynolds number, and 
-        average Reynolds number.
+        including the time step size, maximum Froude number, current timestep,
+        current simulation time, Picard iteration count, convergence status,
+        cumulative convergence failures, relative L2 changes, maximum Reynolds
+        number, and average Reynolds number.
 
         Args:
-            iteration (int): The current iteration count within the timestep.
+            n_iterations (int): Number of Picard iterations used in the timestep.
+            converged (bool): Whether the Picard solve converged.
             froude (ndarray): Array of Froude numbers for the conduits.
 
         """
     
         # Print information at specified intervals
         if math.fmod(self.current_timestep, self.print_info_interval) == 0:
-            print(f'New dt = {self.dt:.2e} Max Froude = {np.max(froude):.2f}')
             print(f'Timestep = {self.current_timestep}, '
-                  f'Time = {self.current_time:.1f}, i = {iteration}')
+                  f'Time = {self.current_time:.1f}, dt = {self.dt:.2e}')
+            print(f'Converged = {converged}, Picard iterations = {n_iterations}, '
+                  f'convergence fails = {self.convergence_fails}')
+            print(f'relL2(y) = {self.relative_y_l2_norm:.2e}, '
+                  f'relL2(Q) = {self.relative_Q_l2_norm:.2e}')
+            print(f'Max Froude = {np.max(froude):.2f}')
             print(f'Max Re = {np.max(self.Re_conduit):.2f} '
                   f'Avg Re = {np.mean(self.Re_conduit):.2f}\n')
 
