@@ -11,7 +11,7 @@ import os
 
 import numpy as np
 
-from openkarst.io.cave_data_loader import CaveDataLoader
+from openkarst.io import load_cave_data
 from openkarst.models import FlowSimulation
 from openkarst.visualization.openkarst_viewer import launch_openkarst_viewer
 
@@ -74,9 +74,8 @@ def main():
     edges_file_path = os.path.join(current_dir, '../cave_data/reve_eveille/edges.csv')
     diameters_file_path = os.path.join(current_dir, '../cave_data/reve_eveille/diameters.csv')
 
-    # Initialize CaveDataLoader and load data
-    loader = CaveDataLoader(nodes_file_path, edges_file_path, diameters_file_path)
-    cn_geometry = loader.load_cave_data()
+    # Load cave data
+    cn_geometry = load_cave_data(nodes_file_path, edges_file_path, diameters_file_path)
   
     # Assign conduit properties
     cn_geometry['throat.epsilon'] = 0.03

@@ -8,5 +8,5 @@ Created on Fri Jul 19 11:41:26 2024
 """
 
 from .results_handling import initialize_results_container, store_results
-from .cave_data_loader import CaveDataLoader
+from .cave_data_loader import load_cave_data
 from .vtk_data_exporter import VtkDataExporter

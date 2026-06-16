@@ -170,7 +170,7 @@ In this example we import a karst cave network using the new project cave format
 import os
 import numpy as np
 
-from openkarst.io.cave_data_loader import CaveDataLoader
+from openkarst.io import load_cave_data
 from openkarst.models import FlowSimulation
 from openkarst.visualization.openkarst_viewer import launch_openkarst_viewer
 
@@ -224,7 +224,7 @@ def main():
     }
 ```
 
-We now use the CaveDataLoader class to create a loader object. We pass the file paths of nodes, edges and diameters to the loader object method load_cave_data(). This will create a networkX graph, generate an openPNM geometry object, assign the diameters to the conduits, and return the openPNM geometry object. We then also assign a constant roughness value to all conduits. Notice the relative import of cave data from the parent folder openkarst/cave_data.
+We now pass the file paths of nodes, edges and diameters to load_cave_data(). This will create a networkX graph, generate an openPNM geometry object, assign the diameters to the conduits, and return the openPNM geometry object. We then also assign a constant roughness value to all conduits. Notice the relative import of cave data from the parent folder openkarst/cave_data.
 
 ```python
 
@@ -236,9 +236,8 @@ We now use the CaveDataLoader class to create a loader object. We pass the file 
     edges_file_path = os.path.join(current_dir, '../cave_data/reve_eveille/edges.csv')
     diameters_file_path = os.path.join(current_dir, '../cave_data/reve_eveille/diameters.csv')
 
-    # Initialize CaveDataLoader and load data
-    loader = CaveDataLoader(nodes_file_path, edges_file_path, diameters_file_path)
-    cn_geometry = loader.load_cave_data()
+    # Load cave data
+    cn_geometry = load_cave_data(nodes_file_path, edges_file_path, diameters_file_path)
   
     # Assign conduit properties
     cn_geometry['throat.epsilon'] = 0.03
