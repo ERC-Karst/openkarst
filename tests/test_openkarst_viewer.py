@@ -104,7 +104,60 @@ def test_build_observation_figure_plots_selected_property():
         observation_property="water_depth",
     )
 
-    assert [trace.name for trace in fig.data] == ["Water depth [m] - node 1"]
+    assert [trace.name for trace in fig.data] == ["n 1"]
     assert fig.layout.yaxis.title.text == "Water depth [m]"
     np.testing.assert_array_equal(fig.data[0].x, np.array([0.0, 10.0]))
     np.testing.assert_array_equal(fig.data[0].y, np.array([0.1, 0.2]))
+
+
+def test_build_observation_figure_moves_moderate_legends_above_plot():
+    import pandas as pd
+
+    precompute_context, build_figure = _observation_helpers()
+    node_ids = list(range(6))
+    obs_df = pd.DataFrame({
+        "time": [0.0 for _ in node_ids],
+        "node": node_ids,
+        "water_depth": [0.1 + node * 0.01 for node in node_ids],
+    })
+    context = precompute_context(obs_df)
+
+    fig = build_figure(
+        {"time": np.array([0.0])},
+        obs_df,
+        context,
+        time_idx=0,
+        node_ids=node_ids,
+        obs_node_colors={node: "#1f77b4" for node in node_ids},
+        observation_property="water_depth",
+    )
+
+    assert fig.layout.showlegend is True
+    assert fig.layout.legend.y > 1.0
+    assert fig.layout.margin.t == 54
+
+
+def test_build_observation_figure_hides_large_legends():
+    import pandas as pd
+
+    precompute_context, build_figure = _observation_helpers()
+    node_ids = list(range(13))
+    obs_df = pd.DataFrame({
+        "time": [0.0 for _ in node_ids],
+        "node": node_ids,
+        "water_depth": [0.1 + node * 0.01 for node in node_ids],
+    })
+    context = precompute_context(obs_df)
+
+    fig = build_figure(
+        {"time": np.array([0.0])},
+        obs_df,
+        context,
+        time_idx=0,
+        node_ids=node_ids,
+        obs_node_colors={node: "#1f77b4" for node in node_ids},
+        observation_property="water_depth",
+    )
+
+    assert len(fig.data) == 13
+    assert fig.layout.showlegend is False

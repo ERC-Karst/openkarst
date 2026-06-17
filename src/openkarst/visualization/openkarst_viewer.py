@@ -24,6 +24,8 @@ COLOR_CYCLE = pc.qualitative.Plotly
 DEFAULT_DEPTH_SCALE = 1.0
 DEFAULT_PLAY_STRIDE = 1
 DEFAULT_OBS_RENDER_POINTS = 1200
+DEFAULT_OBS_INLINE_LEGEND_MAX_TRACES = 5
+DEFAULT_OBS_COMPACT_LEGEND_MAX_TRACES = 10
 FLOW_COLUMN_CANDIDATES = (
     "connected_net_flowrate",
     "connected_abs_flowrate",
@@ -984,7 +986,7 @@ def _build_observation_figure(
             x=df_visible["time"],
             y=np.asarray(df_visible[observation_property], dtype=float),
             mode=trace_mode,
-            name=f"{property_spec['label']} - node {node_id}",
+            name=f"n {node_id}",
             line=dict(color=obs_node_colors.get(node_id, "blue"), width=2),
             marker=dict(size=5),
             legendgroup=f"node-{node_id}",
@@ -1003,20 +1005,40 @@ def _build_observation_figure(
     x_min, x_max = obs_context["x_range"]
     y_min, y_max = property_spec["range"]
     y_pad = max(1e-12, 0.08 * (y_max - y_min))
+    show_legend = traces_added <= DEFAULT_OBS_COMPACT_LEGEND_MAX_TRACES
 
-    fig.update_layout(
-        margin=dict(l=40, r=40, t=40, b=40),
-        legend=dict(
+    if traces_added <= DEFAULT_OBS_INLINE_LEGEND_MAX_TRACES:
+        legend = dict(
             orientation="h",
             yanchor="top",
-            y=0.98,
+            y=0.99,
             xanchor="right",
-            x=0.98,
-            bgcolor="rgba(255,255,255,0.78)",
-            bordercolor="#dbe1ea",
+            x=0.99,
+            bgcolor="rgba(255,255,255,0.62)",
+            bordercolor="rgba(219,225,234,0.55)",
             borderwidth=1,
-            font=dict(size=9),
-        ),
+            font=dict(size=8),
+            itemsizing="constant",
+        )
+        margin = dict(l=40, r=35, t=34, b=40)
+    else:
+        legend = dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1.0,
+            bgcolor="rgba(255,255,255,0)",
+            borderwidth=0,
+            font=dict(size=8),
+            itemsizing="constant",
+        )
+        margin = dict(l=40, r=35, t=54 if show_legend else 34, b=40)
+
+    fig.update_layout(
+        margin=margin,
+        showlegend=show_legend,
+        legend=legend,
         xaxis=dict(title="Time [s]", range=[x_min, x_max], fixedrange=True),
         yaxis=dict(
             title=property_spec["axis_label"],
@@ -1195,6 +1217,22 @@ def create_openkarst_viewer_app(
         "color": "#ffffff",
         "fontWeight": "650",
         "cursor": "pointer",
+    }
+    secondary_button_style = {
+        "height": "26px",
+        "border": "1px solid #cbd5e1",
+        "borderRadius": "6px",
+        "background": "#ffffff",
+        "color": "#334155",
+        "fontSize": "12px",
+        "fontWeight": "650",
+        "cursor": "pointer",
+    }
+    button_row_style = {
+        "display": "grid",
+        "gridTemplateColumns": "1fr 1fr",
+        "gap": "6px",
+        "marginTop": "-4px",
     }
     checklist_style = {
         "fontSize": "12px",
@@ -1381,6 +1419,22 @@ def create_openkarst_viewer_app(
                         placeholder="None",
                         style={"fontSize": "12px"},
                     )),
+                    html.Div([
+                        html.Button(
+                            "All",
+                            id="select-all-observation-nodes",
+                            n_clicks=0,
+                            disabled=not bool(obs_nodes),
+                            style=secondary_button_style,
+                        ),
+                        html.Button(
+                            "None",
+                            id="clear-observation-nodes",
+                            n_clicks=0,
+                            disabled=not bool(obs_nodes),
+                            style=secondary_button_style,
+                        ),
+                    ], style=button_row_style),
                 ]),
             ], style=sidebar_style),
 
@@ -1497,6 +1551,22 @@ def create_openkarst_viewer_app(
         if field_spec and field_spec.get("log_range"):
             return log_scale_container_style(color_field), current_value or []
         return log_scale_container_style(color_field), []
+
+    @app.callback(
+        Output("node-selector", "value"),
+        Input("select-all-observation-nodes", "n_clicks"),
+        Input("clear-observation-nodes", "n_clicks"),
+        prevent_initial_call=True,
+    )
+    def update_selected_observation_nodes(_select_all_clicks, _clear_clicks):
+        triggered = dash.callback_context.triggered
+        trigger_id = triggered[0]["prop_id"].split(".")[0] if triggered else None
+
+        if trigger_id == "select-all-observation-nodes":
+            return obs_nodes
+        if trigger_id == "clear-observation-nodes":
+            return []
+        return dash.no_update
 
     @app.callback(
         Output("3d-profile", "figure"),
