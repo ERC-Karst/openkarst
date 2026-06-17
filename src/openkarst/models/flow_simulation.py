@@ -830,6 +830,8 @@ class FlowSimulation:
             - ``'water_depth'``: water depth at each observed node.
             - ``'connected_abs_flowrate'``: sum of absolute flowrates through
               all conduits connected to each observed node.
+            - ``'connected_net_flowrate'``: signed net flowrate into each
+              observed node from all connected conduits.
             - ``'concentrations'``: concentration at each observed node when
               transport is enabled.
             - ``'mass'``: mass at each observed node when transport is enabled.

@@ -11,9 +11,11 @@ import pandas as pd
 
 
 CONNECTED_ABS_FLOWRATE = "connected_abs_flowrate"
+CONNECTED_NET_FLOWRATE = "connected_net_flowrate"
 SUPPORTED_OBSERVATION_VARIABLES = {
     "water_depth",
     CONNECTED_ABS_FLOWRATE,
+    CONNECTED_NET_FLOWRATE,
     "concentrations",
     "mass",
 }
@@ -43,6 +45,12 @@ def _connected_abs_flowrate(flow_sim, node):
     return float(np.sum(np.abs(flow_sim.Q_new[connected])))
 
 
+def _connected_net_flowrate(flow_sim, node):
+    inflow = np.sum(flow_sim.Q_new[flow_sim.n_indices2 == node])
+    outflow = np.sum(flow_sim.Q_new[flow_sim.n_indices1 == node])
+    return float(inflow - outflow)
+
+
 class ObservationRecorder:
     """Records simulation outputs at specified nodes and time intervals.
 
@@ -57,6 +65,8 @@ class ObservationRecorder:
             - 'water_depth': records water depth at the node.
             - 'connected_abs_flowrate': records the sum of absolute flowrates
               through conduits connected to the node.
+            - 'connected_net_flowrate': records the signed net connected
+              conduit flowrate into the node.
             - 'concentrations': records concentrations at the node (AD-Transport)
             - 'mass': records mass at the node (AD-Transport)
         interval (float): Time interval between recordings, in seconds.
@@ -71,7 +81,7 @@ class ObservationRecorder:
             nodes (list of int): Node indices to track.
             variables (list of str): List of variables to observe. 
                 Supported values are 'water_depth', 'connected_abs_flowrate',
-                'concentrations', and 'mass'.
+                'connected_net_flowrate', 'concentrations', and 'mass'.
             interval (float, optional): Recording interval in seconds. Defaults to 1.0.
         """
         self.nodes = nodes
@@ -102,6 +112,8 @@ class ObservationRecorder:
                 row['water_depth'] = flow_sim.y_new[node]
             if CONNECTED_ABS_FLOWRATE in self.variables:
                 row[CONNECTED_ABS_FLOWRATE] = _connected_abs_flowrate(flow_sim, node)
+            if CONNECTED_NET_FLOWRATE in self.variables:
+                row[CONNECTED_NET_FLOWRATE] = _connected_net_flowrate(flow_sim, node)
             if 'concentrations' in self.variables:
                 row['concentrations'] = flow_sim.C[node]
             if 'mass' in self.variables:
@@ -114,7 +126,8 @@ class ObservationRecorder:
         Returns:
             pd.DataFrame: A DataFrame with one row per observation and columns including
                 'time', 'node', and the selected variables (e.g.,
-                'water_depth', 'connected_abs_flowrate').
+                'water_depth', 'connected_abs_flowrate',
+                'connected_net_flowrate').
         """
         return pd.DataFrame(self.records)
 

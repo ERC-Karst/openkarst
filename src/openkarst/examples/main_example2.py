@@ -119,7 +119,7 @@ def main():
     # Record inlet and outlet time series for the viewer observation panel
     flow_network.set_observation_points(
         nodes=inflow_nodes + outflow_nodes,
-        variables=['water_depth', 'connected_abs_flowrate'],
+        variables=['water_depth', 'connected_abs_flowrate', 'connected_net_flowrate'],
         interval=output_settings['output_interval']
     )
 

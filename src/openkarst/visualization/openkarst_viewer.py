@@ -25,6 +25,7 @@ DEFAULT_DEPTH_SCALE = 1.0
 DEFAULT_PLAY_STRIDE = 1
 DEFAULT_OBS_RENDER_POINTS = 1200
 FLOW_COLUMN_CANDIDATES = (
+    "connected_net_flowrate",
     "connected_abs_flowrate",
     "Q",
     "flowrate",
@@ -34,6 +35,7 @@ OBSERVATION_BASE_COLUMNS = {"time", "node"}
 OBSERVATION_LABELS = {
     "water_depth": "Water depth [m]",
     "connected_abs_flowrate": "Connected |Q| [m3/s]",
+    "connected_net_flowrate": "Connected net Q [m3/s]",
     "Q": "Flow rate [m3/s]",
     "q": "Flow rate [m3/s]",
     "flowrate": "Flow rate [m3/s]",
@@ -47,6 +49,7 @@ OBSERVATION_LABELS = {
 OBSERVATION_AXIS_LABELS = {
     "water_depth": "Water depth [m]",
     "connected_abs_flowrate": "Connected |Q| [m<sup>3</sup>/s]",
+    "connected_net_flowrate": "Connected net Q [m<sup>3</sup>/s]",
     "Q": "Flow rate [m<sup>3</sup>/s]",
     "q": "Flow rate [m<sup>3</sup>/s]",
     "flowrate": "Flow rate [m<sup>3</sup>/s]",

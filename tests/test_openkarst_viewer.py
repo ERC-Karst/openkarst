@@ -66,14 +66,19 @@ def test_observation_context_uses_numeric_non_l2_columns_and_prefers_flow():
         "node": [1, 1],
         "water_depth": [0.2, 0.3],
         "connected_abs_flowrate": [1.0, 1.2],
+        "connected_net_flowrate": [0.8, 0.9],
         "y_l2_norms": [1e-1, 1e-2],
         "label": ["a", "b"],
     })
 
     context = precompute_context(obs_df)
 
-    assert list(context["property_specs"]) == ["water_depth", "connected_abs_flowrate"]
-    assert context["default_property"] == "connected_abs_flowrate"
+    assert list(context["property_specs"]) == [
+        "water_depth",
+        "connected_abs_flowrate",
+        "connected_net_flowrate",
+    ]
+    assert context["default_property"] == "connected_net_flowrate"
 
 
 def test_build_observation_figure_plots_selected_property():

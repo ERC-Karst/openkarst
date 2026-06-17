@@ -141,7 +141,7 @@ Finally we set observation points for the viewer, call the run_simulation method
     # Record boundary-node time series for the viewer observation panel
     flow_network.set_observation_points(
         nodes=left_nodes + right_nodes,
-        variables=['water_depth', 'connected_abs_flowrate'],
+        variables=['water_depth', 'connected_abs_flowrate', 'connected_net_flowrate'],
         interval=output_settings['output_interval']
     )
 
@@ -290,7 +290,7 @@ We then set observation points at the inlet and outlet nodes, run the simulation
     # Record inlet and outlet time series for the viewer observation panel
     flow_network.set_observation_points(
         nodes=inflow_nodes + outflow_nodes,
-        variables=['water_depth', 'connected_abs_flowrate'],
+        variables=['water_depth', 'connected_abs_flowrate', 'connected_net_flowrate'],
         interval=output_settings['output_interval']
     )
 
@@ -760,7 +760,10 @@ flow_network.set_observation_points(nodes, variables, interval=1.0)
 - `variables`: List of variables to observe. Supported values:
   - `'water_depth'`: records water depth at each node.
   - `'connected_abs_flowrate'`: records the sum of absolute flowrates through
-    conduits connected to each node.
+    conduits connected to each node. This is useful as a flow-activity measure.
+  - `'connected_net_flowrate'`: records the signed net flowrate into each node
+    from its connected conduits. Positive values mean net flow into the node;
+    negative values mean net flow out of the node.
   - `'concentrations'`: records concentration at each node when transport is enabled.
   - `'mass'`: records mass at each node when transport is enabled.
 - `interval`: Time interval (in seconds) between two recordings. Default is `1.0`.
@@ -768,10 +771,10 @@ flow_network.set_observation_points(nodes, variables, interval=1.0)
 ### Example:
 
 ```python
-# Record water depth and connected conduit flowrate at nodes 0 and 10 every 2 seconds
+# Record water depth and connected conduit flowrates at nodes 0 and 10 every 2 seconds
 flow_network.set_observation_points(
     nodes=[0, 10],
-    variables=['water_depth', 'connected_abs_flowrate'],
+    variables=['water_depth', 'connected_abs_flowrate', 'connected_net_flowrate'],
     interval=2.0
 )
 ```
@@ -785,7 +788,8 @@ df = flow_network.observation_recorder.to_dataframe()
 This will contain columns:
 - `time`
 - `node`
-- Any variables being recorded (`water_depth`, `connected_abs_flowrate`, etc.)
+- Any variables being recorded (`water_depth`, `connected_abs_flowrate`,
+  `connected_net_flowrate`, etc.)
 
 You can then plot or export this data for analysis.
 
@@ -831,16 +835,16 @@ After setting up and running a simulation, you can launch the 3D viewer as follo
 ```python
 from openkarst.visualization.openkarst_viewer import launch_openkarst_viewer
 
-# Set observation point to track connected conduit flowrate at node 21 (outlet)
+# Set observation point to track connected conduit flowrates at node 21 (outlet)
 flow_network.set_observation_points(
     nodes=[21],
-    variables=['connected_abs_flowrate'],
+    variables=['connected_abs_flowrate', 'connected_net_flowrate'],
     interval=1.0  # record every simulated second
 )
 # Run the simulation
 results = flow_network.run_simulation(desired_outputs=output_settings)
 
-# Get observations aat node 21 as a DataFrame
+# Get observations at node 21 as a DataFrame
 obs_df = flow_network.get_observation_dataframe()
 
 # Launch the interactive viewer. This should open a browser window.
