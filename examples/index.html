@@ -893,7 +893,7 @@
 <div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>    <span class="c1"># Record boundary-node time series for the viewer observation panel</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>    <span class="n">flow_network</span><span class="o">.</span><span class="n">set_observation_points</span><span class="p">(</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>        <span class="n">nodes</span><span class="o">=</span><span class="n">left_nodes</span> <span class="o">+</span> <span class="n">right_nodes</span><span class="p">,</span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>        <span class="n">variables</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;water_depth&#39;</span><span class="p">,</span> <span class="s1">&#39;inflow&#39;</span><span class="p">],</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>        <span class="n">variables</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;water_depth&#39;</span><span class="p">,</span> <span class="s1">&#39;connected_abs_flowrate&#39;</span><span class="p">,</span> <span class="s1">&#39;connected_net_flowrate&#39;</span><span class="p">],</span>
 </span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>        <span class="n">interval</span><span class="o">=</span><span class="n">output_settings</span><span class="p">[</span><span class="s1">&#39;output_interval&#39;</span><span class="p">]</span>
 </span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>    <span class="p">)</span>
 </span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>
@@ -916,7 +916,7 @@
 <div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">import</span> <span class="nn">os</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="kn">from</span> <span class="nn">openkarst.io.cave_data_loader</span> <span class="kn">import</span> <span class="n">CaveDataLoader</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="kn">from</span> <span class="nn">openkarst.io</span> <span class="kn">import</span> <span class="n">load_cave_data</span>
 </span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="kn">from</span> <span class="nn">openkarst.models</span> <span class="kn">import</span> <span class="n">FlowSimulation</span>
 </span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="kn">from</span> <span class="nn">openkarst.visualization.openkarst_viewer</span> <span class="kn">import</span> <span class="n">launch_openkarst_viewer</span>
 </span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>
@@ -969,7 +969,7 @@
 </span><span id="__span-7-54"><a id="__codelineno-7-54" name="__codelineno-7-54" href="#__codelineno-7-54"></a>        <span class="s1">&#39;log_file&#39;</span><span class="p">:</span> <span class="s1">&#39;simulation.log&#39;</span>
 </span><span id="__span-7-55"><a id="__codelineno-7-55" name="__codelineno-7-55" href="#__codelineno-7-55"></a>    <span class="p">}</span>
 </span></code></pre></div>
-<p>We now use the CaveDataLoader class to create a loader object. We pass the file paths of nodes, edges and diameters to the loader object method load_cave_data(). This will create a networkX graph, generate an openPNM geometry object, assign the diameters to the conduits, and return the openPNM geometry object. We then also assign a constant roughness value to all conduits. Notice the relative import of cave data from the parent folder openkarst/cave_data.</p>
+<p>We now pass the file paths of nodes, edges and diameters to load_cave_data(). This will create a networkX graph, generate an openPNM geometry object, assign the diameters to the conduits, and return the openPNM geometry object. We then also assign a constant roughness value to all conduits. Notice the relative import of cave data from the parent folder openkarst/cave_data.</p>
 <p><div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>    <span class="c1"># Get the directory of the current script</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>    <span class="n">current_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="vm">__file__</span><span class="p">))</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
@@ -978,12 +978,11 @@
 </span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>    <span class="n">edges_file_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">current_dir</span><span class="p">,</span> <span class="s1">&#39;../cave_data/reve_eveille/edges.csv&#39;</span><span class="p">)</span>
 </span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>    <span class="n">diameters_file_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">current_dir</span><span class="p">,</span> <span class="s1">&#39;../cave_data/reve_eveille/diameters.csv&#39;</span><span class="p">)</span>
 </span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>
-</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>    <span class="c1"># Initialize CaveDataLoader and load data</span>
-</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>    <span class="n">loader</span> <span class="o">=</span> <span class="n">CaveDataLoader</span><span class="p">(</span><span class="n">nodes_file_path</span><span class="p">,</span> <span class="n">edges_file_path</span><span class="p">,</span> <span class="n">diameters_file_path</span><span class="p">)</span>
-</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>    <span class="n">cn_geometry</span> <span class="o">=</span> <span class="n">loader</span><span class="o">.</span><span class="n">load_cave_data</span><span class="p">()</span>
-</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>
-</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>    <span class="c1"># Assign conduit properties</span>
-</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a>    <span class="n">cn_geometry</span><span class="p">[</span><span class="s1">&#39;throat.epsilon&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.03</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>    <span class="c1"># Load cave data</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>    <span class="n">cn_geometry</span> <span class="o">=</span> <span class="n">load_cave_data</span><span class="p">(</span><span class="n">nodes_file_path</span><span class="p">,</span> <span class="n">edges_file_path</span><span class="p">,</span> <span class="n">diameters_file_path</span><span class="p">)</span>
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>
+</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>    <span class="c1"># Assign conduit properties</span>
+</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>    <span class="n">cn_geometry</span><span class="p">[</span><span class="s1">&#39;throat.epsilon&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.03</span>
 </span></code></pre></div>
 As in <a href="#example-1-basic-setup">Example 1</a> we use the FlowSimulation class to create a flow_network object and pass the geometry object, physical properties, solver settings and simulations settings to it. We also set initial conditions for flow rates and water depths.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Create flow network object</span>
@@ -1023,7 +1022,7 @@ As in <a href="#example-1-basic-setup">Example 1</a> we use the FlowSimulation c
 <div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>    <span class="c1"># Record inlet and outlet time series for the viewer observation panel</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>    <span class="n">flow_network</span><span class="o">.</span><span class="n">set_observation_points</span><span class="p">(</span>
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>        <span class="n">nodes</span><span class="o">=</span><span class="n">inflow_nodes</span> <span class="o">+</span> <span class="n">outflow_nodes</span><span class="p">,</span>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>        <span class="n">variables</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;water_depth&#39;</span><span class="p">,</span> <span class="s1">&#39;inflow&#39;</span><span class="p">],</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>        <span class="n">variables</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;water_depth&#39;</span><span class="p">,</span> <span class="s1">&#39;connected_abs_flowrate&#39;</span><span class="p">,</span> <span class="s1">&#39;connected_net_flowrate&#39;</span><span class="p">],</span>
 </span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>        <span class="n">interval</span><span class="o">=</span><span class="n">output_settings</span><span class="p">[</span><span class="s1">&#39;output_interval&#39;</span><span class="p">]</span>
 </span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>    <span class="p">)</span>
 </span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>
@@ -1428,14 +1427,20 @@ As in <a href="#example-1-basic-setup">Example 1</a> we use the FlowSimulation c
 <li><code>nodes</code>: A single node or list of node indices to monitor.</li>
 <li><code>variables</code>: List of variables to observe. Supported values:</li>
 <li><code>'water_depth'</code>: records water depth at each node.</li>
-<li><code>'inflow'</code>: records the inflow (i.e., net change in flow <code>dQ</code>) into the node.</li>
+<li><code>'connected_abs_flowrate'</code>: records the sum of absolute flowrates through
+    conduits connected to each node. This is useful as a flow-activity measure.</li>
+<li><code>'connected_net_flowrate'</code>: records the signed net flowrate into each node
+    from its connected conduits. Positive values mean net flow into the node;
+    negative values mean net flow out of the node.</li>
+<li><code>'concentrations'</code>: records concentration at each node when transport is enabled.</li>
+<li><code>'mass'</code>: records mass at each node when transport is enabled.</li>
 <li><code>interval</code>: Time interval (in seconds) between two recordings. Default is <code>1.0</code>.</li>
 </ul>
 <h3 id="example">Example:</h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="c1"># Record water depth and inflow at nodes 0 and 10 every 2 seconds</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="c1"># Record water depth and connected conduit flowrates at nodes 0 and 10 every 2 seconds</span>
 </span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="n">flow_network</span><span class="o">.</span><span class="n">set_observation_points</span><span class="p">(</span>
 </span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a>    <span class="n">nodes</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">10</span><span class="p">],</span>
-</span><span id="__span-26-4"><a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a>    <span class="n">variables</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;water_depth&#39;</span><span class="p">,</span> <span class="s1">&#39;inflow&#39;</span><span class="p">],</span>
+</span><span id="__span-26-4"><a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a>    <span class="n">variables</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;water_depth&#39;</span><span class="p">,</span> <span class="s1">&#39;connected_abs_flowrate&#39;</span><span class="p">,</span> <span class="s1">&#39;connected_net_flowrate&#39;</span><span class="p">],</span>
 </span><span id="__span-26-5"><a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a>    <span class="n">interval</span><span class="o">=</span><span class="mf">2.0</span>
 </span><span id="__span-26-6"><a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a><span class="p">)</span>
 </span></code></pre></div>
@@ -1445,7 +1450,8 @@ As in <a href="#example-1-basic-setup">Example 1</a> we use the FlowSimulation c
 <p>This will contain columns:
 - <code>time</code>
 - <code>node</code>
-- Any variables being recorded (<code>water_depth</code>, <code>inflow</code>, etc.)</p>
+- Any variables being recorded (<code>water_depth</code>, <code>connected_abs_flowrate</code>,
+  <code>connected_net_flowrate</code>, etc.)</p>
 <p>You can then plot or export this data for analysis.</p>
 <h3 id="notes_1">Notes:</h3>
 <ul>
@@ -1478,16 +1484,16 @@ As in <a href="#example-1-basic-setup">Example 1</a> we use the FlowSimulation c
 <p>After setting up and running a simulation, you can launch the 3D viewer as follows:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="kn">from</span> <span class="nn">openkarst.visualization.openkarst_viewer</span> <span class="kn">import</span> <span class="n">launch_openkarst_viewer</span>
 </span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a>
-</span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="c1"># Set observation point to track inflow into node 21 (outlet)</span>
+</span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="c1"># Set observation point to track connected conduit flowrates at node 21 (outlet)</span>
 </span><span id="__span-29-4"><a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="n">flow_network</span><span class="o">.</span><span class="n">set_observation_points</span><span class="p">(</span>
 </span><span id="__span-29-5"><a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a>    <span class="n">nodes</span><span class="o">=</span><span class="p">[</span><span class="mi">21</span><span class="p">],</span>
-</span><span id="__span-29-6"><a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a>    <span class="n">variables</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;inflow&#39;</span><span class="p">],</span>
+</span><span id="__span-29-6"><a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a>    <span class="n">variables</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;connected_abs_flowrate&#39;</span><span class="p">,</span> <span class="s1">&#39;connected_net_flowrate&#39;</span><span class="p">],</span>
 </span><span id="__span-29-7"><a id="__codelineno-29-7" name="__codelineno-29-7" href="#__codelineno-29-7"></a>    <span class="n">interval</span><span class="o">=</span><span class="mf">1.0</span>  <span class="c1"># record every simulated second</span>
 </span><span id="__span-29-8"><a id="__codelineno-29-8" name="__codelineno-29-8" href="#__codelineno-29-8"></a><span class="p">)</span>
 </span><span id="__span-29-9"><a id="__codelineno-29-9" name="__codelineno-29-9" href="#__codelineno-29-9"></a><span class="c1"># Run the simulation</span>
 </span><span id="__span-29-10"><a id="__codelineno-29-10" name="__codelineno-29-10" href="#__codelineno-29-10"></a><span class="n">results</span> <span class="o">=</span> <span class="n">flow_network</span><span class="o">.</span><span class="n">run_simulation</span><span class="p">(</span><span class="n">desired_outputs</span><span class="o">=</span><span class="n">output_settings</span><span class="p">)</span>
 </span><span id="__span-29-11"><a id="__codelineno-29-11" name="__codelineno-29-11" href="#__codelineno-29-11"></a>
-</span><span id="__span-29-12"><a id="__codelineno-29-12" name="__codelineno-29-12" href="#__codelineno-29-12"></a><span class="c1"># Get observations aat node 21 as a DataFrame</span>
+</span><span id="__span-29-12"><a id="__codelineno-29-12" name="__codelineno-29-12" href="#__codelineno-29-12"></a><span class="c1"># Get observations at node 21 as a DataFrame</span>
 </span><span id="__span-29-13"><a id="__codelineno-29-13" name="__codelineno-29-13" href="#__codelineno-29-13"></a><span class="n">obs_df</span> <span class="o">=</span> <span class="n">flow_network</span><span class="o">.</span><span class="n">get_observation_dataframe</span><span class="p">()</span>
 </span><span id="__span-29-14"><a id="__codelineno-29-14" name="__codelineno-29-14" href="#__codelineno-29-14"></a>
 </span><span id="__span-29-15"><a id="__codelineno-29-15" name="__codelineno-29-15" href="#__codelineno-29-15"></a><span class="c1"># Launch the interactive viewer. This should open a browser window.</span>
