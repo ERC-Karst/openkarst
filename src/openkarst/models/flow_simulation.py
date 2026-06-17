@@ -824,6 +824,16 @@ class FlowSimulation:
     #     self.observation_recorder = ObservationRecorder(nodes, variables, interval)
 
     def set_observation_points(self, nodes, variables, interval=1.0):
+        """Record selected node-based time series during transient simulations.
+
+        Supported variables are:
+            - ``'water_depth'``: water depth at each observed node.
+            - ``'connected_abs_flowrate'``: sum of absolute flowrates through
+              all conduits connected to each observed node.
+            - ``'concentrations'``: concentration at each observed node when
+              transport is enabled.
+            - ``'mass'``: mass at each observed node when transport is enabled.
+        """
 
         # Check if user wants C and M saved in observation and stop is transport is not enabled
         wants_trans_output = any(v in ("concentrations", "mass") for v in variables)

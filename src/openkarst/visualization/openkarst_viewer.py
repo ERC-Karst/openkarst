@@ -18,14 +18,45 @@ from dash import Input, Output, State, dcc, html
 import numpy as np
 import plotly.colors as pc
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
 
 COLOR_CYCLE = pc.qualitative.Plotly
 DEFAULT_DEPTH_SCALE = 1.0
 DEFAULT_PLAY_STRIDE = 1
 DEFAULT_OBS_RENDER_POINTS = 1200
-FLOW_COLUMN_CANDIDATES = ("inflow", "Q", "flowrate", "flowrates")
+FLOW_COLUMN_CANDIDATES = (
+    "connected_abs_flowrate",
+    "Q",
+    "flowrate",
+    "flowrates",
+)
+OBSERVATION_BASE_COLUMNS = {"time", "node"}
+OBSERVATION_LABELS = {
+    "water_depth": "Water depth [m]",
+    "connected_abs_flowrate": "Connected |Q| [m3/s]",
+    "Q": "Flow rate [m3/s]",
+    "q": "Flow rate [m3/s]",
+    "flowrate": "Flow rate [m3/s]",
+    "flowrates": "Flow rate [m3/s]",
+    "concentrations": "Concentration [kg/m3]",
+    "concentration": "Concentration [kg/m3]",
+    "C": "Concentration [kg/m3]",
+    "c": "Concentration [kg/m3]",
+    "mass": "Mass [kg]",
+}
+OBSERVATION_AXIS_LABELS = {
+    "water_depth": "Water depth [m]",
+    "connected_abs_flowrate": "Connected |Q| [m<sup>3</sup>/s]",
+    "Q": "Flow rate [m<sup>3</sup>/s]",
+    "q": "Flow rate [m<sup>3</sup>/s]",
+    "flowrate": "Flow rate [m<sup>3</sup>/s]",
+    "flowrates": "Flow rate [m<sup>3</sup>/s]",
+    "concentrations": "Concentration [kg/m<sup>3</sup>]",
+    "concentration": "Concentration [kg/m<sup>3</sup>]",
+    "C": "Concentration [kg/m<sup>3</sup>]",
+    "c": "Concentration [kg/m<sup>3</sup>]",
+    "mass": "Mass [kg]",
+}
 FIELD_RESULT_CANDIDATES = {
     "flowrate": ("flowrates", "flowrate", "Q", "q", "flow", "flows", "discharge", "discharges"),
     "velocity": ("velocities", "velocity", "v"),
@@ -110,6 +141,55 @@ def _flow_column(obs_df):
         if column in obs_df.columns:
             return column
     return None
+
+
+def _is_l2_norm_column(column):
+    return "l2" in str(column).lower()
+
+
+def _is_observation_base_column(column):
+    return str(column).lower() in OBSERVATION_BASE_COLUMNS
+
+
+def _observation_label(column):
+    return OBSERVATION_LABELS.get(column, str(column).replace("_", " ").title())
+
+
+def _observation_axis_label(column):
+    return OBSERVATION_AXIS_LABELS.get(column, _observation_label(column))
+
+
+def _observation_property_specs(obs_df):
+    if obs_df is None or obs_df.empty:
+        return {}
+
+    specs = {}
+    for column in obs_df.columns:
+        if _is_observation_base_column(column) or _is_l2_norm_column(column):
+            continue
+        try:
+            values = np.asarray(obs_df[column], dtype=float)
+        except (TypeError, ValueError):
+            continue
+        if not np.isfinite(values).any():
+            continue
+        specs[column] = {
+            "label": _observation_label(column),
+            "axis_label": _observation_axis_label(column),
+            "range": _finite_range(values),
+        }
+    return specs
+
+
+def _default_observation_property(property_specs, obs_df):
+    if not property_specs:
+        return None
+
+    flow_column = _flow_column(obs_df)
+    if flow_column in property_specs:
+        return flow_column
+
+    return next(iter(property_specs))
 
 
 def _finite_range(values, symmetric=False):
@@ -524,8 +604,16 @@ def _precompute_profile_context(geometry, results):
 
 
 def _precompute_observation_context(obs_df):
-    flow_column = _flow_column(obs_df)
-    if obs_df is None or obs_df.empty or flow_column is None:
+    if (
+        obs_df is None
+        or obs_df.empty
+        or "node" not in obs_df.columns
+        or "time" not in obs_df.columns
+    ):
+        return None
+
+    property_specs = _observation_property_specs(obs_df)
+    if not property_specs:
         return None
 
     sorted_df = obs_df.sort_values(["node", "time"])
@@ -533,19 +621,12 @@ def _precompute_observation_context(obs_df):
         int(node): node_df.reset_index(drop=True)
         for node, node_df in sorted_df.groupby("node", sort=True)
     }
-    has_concentration = "concentrations" in sorted_df.columns
     context = {
         "by_node": by_node,
-        "flow_column": flow_column,
-        "has_concentration": has_concentration,
-        "x_range": [float(sorted_df["time"].min()), float(sorted_df["time"].max())],
-        "flow_range": [float(sorted_df[flow_column].min()), float(sorted_df[flow_column].max())],
+        "property_specs": property_specs,
+        "default_property": _default_observation_property(property_specs, obs_df),
+        "x_range": _time_axis_range(np.asarray(sorted_df["time"], dtype=float)),
     }
-    if has_concentration:
-        context["concentration_range"] = [
-            float(sorted_df["concentrations"].min()),
-            float(sorted_df["concentrations"].max()),
-        ]
     return context
 
 
@@ -858,57 +939,67 @@ def _build_profile_figure(
     return fig
 
 
-def _build_observation_figure(results, obs_df, obs_context, time_idx, node_ids, obs_node_colors):
+def _build_observation_figure(
+    results,
+    obs_df,
+    obs_context,
+    time_idx,
+    node_ids,
+    obs_node_colors,
+    observation_property,
+):
     if obs_df is None or obs_df.empty or not node_ids:
         return _empty_observation_figure()
     if obs_context is None:
-        return _empty_observation_figure("No flow observations")
+        return _empty_observation_figure("No plottable observations")
+
+    property_specs = obs_context["property_specs"]
+    if observation_property not in property_specs:
+        observation_property = obs_context["default_property"]
+    if observation_property is None:
+        return _empty_observation_figure("No plottable observations")
 
     current_time = float(results["time"][int(np.clip(time_idx, 0, len(results["time"]) - 1))])
-    flow_column = obs_context["flow_column"]
-    has_concentration = bool(obs_context["has_concentration"])
-    fig = make_subplots(specs=[[{"secondary_y": True}]]) if has_concentration else go.Figure()
+    property_spec = property_specs[observation_property]
+    fig = go.Figure()
+    traces_added = 0
 
     for node_id in node_ids:
         node_id = int(node_id)
         df_full = obs_context["by_node"].get(node_id)
-        if df_full is None or df_full.empty:
+        if df_full is None or df_full.empty or observation_property not in df_full.columns:
             continue
 
         end_idx = int(np.searchsorted(df_full["time"].to_numpy(), current_time, side="right"))
         df_visible = _thin_frame(df_full.iloc[:end_idx])
+        if df_visible.empty:
+            continue
+
         trace_mode = "lines" if len(df_visible) > 500 else "lines+markers"
 
-        flow_trace = go.Scattergl(
+        fig.add_trace(go.Scattergl(
             x=df_visible["time"],
-            y=df_visible[flow_column],
+            y=np.asarray(df_visible[observation_property], dtype=float),
             mode=trace_mode,
-            name=f"Q - node {node_id}",
+            name=f"{property_spec['label']} - node {node_id}",
             line=dict(color=obs_node_colors.get(node_id, "blue"), width=2),
             marker=dict(size=5),
             legendgroup=f"node-{node_id}",
-        )
-        if has_concentration:
-            fig.add_trace(flow_trace, secondary_y=False)
-        else:
-            fig.add_trace(flow_trace)
+            hovertemplate=(
+                "Time: %{x:g} s<br>"
+                f"Node {node_id}<br>"
+                f"{property_spec['label']}: %{{y:.3g}}"
+                "<extra></extra>"
+            ),
+        ))
+        traces_added += 1
 
-        if has_concentration:
-            fig.add_trace(
-                go.Scattergl(
-                    x=df_visible["time"],
-                    y=df_visible["concentrations"],
-                    mode="lines",
-                    name=f"C - node {node_id}",
-                    line=dict(color=obs_node_colors.get(node_id, "blue"), dash="dash", width=2),
-                    legendgroup=f"node-{node_id}",
-                ),
-                secondary_y=True,
-            )
+    if traces_added == 0:
+        return _empty_observation_figure("No selected observations")
 
     x_min, x_max = obs_context["x_range"]
-    y1_min, y1_max = obs_context["flow_range"]
-    y1_pad = max(1e-12, 0.08 * (y1_max - y1_min))
+    y_min, y_max = property_spec["range"]
+    y_pad = max(1e-12, 0.08 * (y_max - y_min))
 
     fig.update_layout(
         margin=dict(l=40, r=40, t=40, b=40),
@@ -924,30 +1015,13 @@ def _build_observation_figure(results, obs_df, obs_context, time_idx, node_ids, 
             font=dict(size=9),
         ),
         xaxis=dict(title="Time [s]", range=[x_min, x_max], fixedrange=True),
+        yaxis=dict(
+            title=property_spec["axis_label"],
+            range=[y_min - y_pad, y_max + y_pad],
+            fixedrange=True,
+        ),
     )
     fig.add_vline(x=current_time, line_width=1, line_dash="dot", line_color="#374151")
-
-    if has_concentration:
-        y2_min, y2_max = obs_context["concentration_range"]
-        y2_pad = max(1e-12, 0.08 * (y2_max - y2_min))
-        fig.update_yaxes(
-            title_text="Flow [m<sup>3</sup>/s]",
-            range=[y1_min - y1_pad, y1_max + y1_pad],
-            fixedrange=True,
-            secondary_y=False,
-        )
-        fig.update_yaxes(
-            title_text="Concentration [kg/m<sup>3</sup>]",
-            range=[y2_min - y2_pad, y2_max + y2_pad],
-            fixedrange=True,
-            secondary_y=True,
-        )
-    else:
-        fig.update_yaxes(
-            title_text="Flow [m<sup>3</sup>/s]",
-            range=[y1_min - y1_pad, y1_max + y1_pad],
-            fixedrange=True,
-        )
 
     return fig
 
@@ -970,6 +1044,14 @@ def create_openkarst_viewer_app(
     obs_context = _precompute_observation_context(obs_df)
     obs_nodes = _observation_nodes(obs_df)
     selected_nodes = obs_nodes[: min(10, len(obs_nodes))]
+    observation_property_specs = obs_context["property_specs"] if obs_context else {}
+    observation_property_options = [
+        {"label": spec["label"], "value": column}
+        for column, spec in observation_property_specs.items()
+    ]
+    default_observation_property = (
+        obs_context["default_property"] if obs_context else None
+    )
     field_options = [
         {"label": spec["label"], "value": field_id}
         for field_id, spec in profile_context["fields"].items()
@@ -1278,6 +1360,15 @@ def create_openkarst_viewer_app(
                 ]),
 
                 section("Observations", [
+                    control("Property", dcc.Dropdown(
+                        id="observation-property-selector",
+                        options=observation_property_options,
+                        value=default_observation_property,
+                        clearable=False,
+                        disabled=not bool(observation_property_options),
+                        placeholder="None",
+                        style={"fontSize": "12px"},
+                    )),
                     control("Observation nodes", dcc.Dropdown(
                         id="node-selector",
                         options=[{"label": str(n), "value": n} for n in obs_nodes],
@@ -1476,8 +1567,9 @@ def create_openkarst_viewer_app(
         Output("obs-plot", "figure"),
         Input("time-slider", "value"),
         Input("node-selector", "value"),
+        Input("observation-property-selector", "value"),
     )
-    def update_obs_plot_callback(time_idx, node_ids):
+    def update_obs_plot_callback(time_idx, node_ids, observation_property):
         return _build_observation_figure(
             results,
             obs_df,
@@ -1485,6 +1577,7 @@ def create_openkarst_viewer_app(
             time_idx,
             node_ids,
             obs_node_colors,
+            observation_property,
         )
 
     @app.callback(
