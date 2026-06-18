@@ -366,6 +366,7 @@ class FlowSimulation:
                 table_points=self.geometry_table_points,
                 table_file=self.geometry_table_file,
                 scale_by_diameter=self.geometry_scale_by_diameter,
+                interpolation_method=self.geometry_interpolation_method,
             )
             self.full_conduit_areas = self.cross_section_geometry.full_area()
             self.full_hydraulic_diameters = (
@@ -451,6 +452,7 @@ class FlowSimulation:
             self.relative_y_l2_norm = 0.0
             self.relative_Q_l2_norm = 0.0
             self.picard_iterations_last = 0
+            self.picard_iterations_total = 0
             
             while True:
                 self._initialize_state_variables()
@@ -463,6 +465,7 @@ class FlowSimulation:
                 # Perform the dynamic wave computation for the current time step
                 converged, n_iterations = self._dynamic_wave()
                 self.picard_iterations_last = n_iterations
+                self.picard_iterations_total += n_iterations
                 
                 if not converged:
                     print(colored(

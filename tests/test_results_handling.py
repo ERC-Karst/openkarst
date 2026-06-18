@@ -15,6 +15,7 @@ def test_initialize_results_container_uses_enabled_valid_outputs_only():
             "flowrates": True,
             "y_l2_norms": True,
             "Q_l2_norms": True,
+            "picard_iterations_total": True,
             "water_depths": False,
         },
         logging.getLogger("test"),
@@ -25,6 +26,7 @@ def test_initialize_results_container_uses_enabled_valid_outputs_only():
         "flowrates": [],
         "y_l2_norms": [],
         "Q_l2_norms": [],
+        "picard_iterations_total": [],
     }
 
 
@@ -45,6 +47,7 @@ def test_store_results_appends_copies_of_mutable_arrays():
         relative_Q_l2_norm=3e-4,
         Re_conduit=np.array([100.0, 200.0]),
         picard_iterations_last=3,
+        picard_iterations_total=8,
         C=np.array([0.0, 0.1, 0.2]),
         M=np.array([0.0, 1.0, 2.0]),
     )
@@ -60,6 +63,7 @@ def test_store_results_appends_copies_of_mutable_arrays():
         "Q_l2_norms": [],
         "reynolds_numbers": [],
         "picard_iterations": [],
+        "picard_iterations_total": [],
         "concentrations": [],
         "mass": [],
     }
@@ -74,5 +78,7 @@ def test_store_results_appends_copies_of_mutable_arrays():
     assert stored["l2_norms"] == [1e-4]
     assert stored["y_l2_norms"] == [1e-4]
     assert stored["Q_l2_norms"] == [3e-4]
+    assert stored["picard_iterations"] == [3]
+    assert stored["picard_iterations_total"] == [8]
     np.testing.assert_array_equal(stored["flowrates"][0], np.array([1.0, 2.0]))
     np.testing.assert_array_equal(stored["water_depths"][0], np.array([0.1, 0.2, 0.3]))

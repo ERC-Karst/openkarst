@@ -9,24 +9,17 @@ from openkarst.models.cross_section_geometry import (
 
 def _write_normalized_circular_table(path, n_points=2001):
     eta = np.linspace(0.0, 1.0, n_points)
-    theta = 2.0 * np.arccos(np.clip(1.0 - 2.0 * eta, -1.0, 1.0))
-    area_norm = 0.125 * (theta - np.sin(theta))
-    perimeter_norm = 0.5 * theta
-    top_width_norm = 2.0 * np.sqrt(np.maximum(eta - eta**2, 0.0))
+    width_norm = 2.0 * np.sqrt(np.maximum(eta - eta**2, 0.0))
 
-    area_norm[0] = 0.0
-    area_norm[-1] = np.pi / 4.0
-    perimeter_norm[0] = 0.0
-    perimeter_norm[-1] = np.pi
-    top_width_norm[0] = 0.0
-    top_width_norm[-1] = 0.0
+    width_norm[0] = 0.0
+    width_norm[-1] = 0.0
 
-    table = np.column_stack((eta, area_norm, perimeter_norm, top_width_norm))
+    table = np.column_stack((eta, width_norm))
     np.savetxt(
         path,
         table,
         delimiter=",",
-        header="eta,area_norm,perimeter_norm,top_width_norm",
+        header="eta,width_norm",
         comments="",
     )
 
@@ -34,24 +27,17 @@ def _write_normalized_circular_table(path, n_points=2001):
 def _write_absolute_circular_table(path, diameter=1.0, n_points=2001):
     eta = np.linspace(0.0, 1.0, n_points)
     depth = eta * diameter
-    theta = 2.0 * np.arccos(np.clip(1.0 - 2.0 * eta, -1.0, 1.0))
-    area = 0.125 * diameter**2 * (theta - np.sin(theta))
-    perimeter = 0.5 * diameter * theta
-    top_width = 2.0 * diameter * np.sqrt(np.maximum(eta - eta**2, 0.0))
+    width = 2.0 * diameter * np.sqrt(np.maximum(eta - eta**2, 0.0))
 
-    area[0] = 0.0
-    area[-1] = np.pi * diameter**2 / 4.0
-    perimeter[0] = 0.0
-    perimeter[-1] = np.pi * diameter
-    top_width[0] = 0.0
-    top_width[-1] = 0.0
+    width[0] = 0.0
+    width[-1] = 0.0
 
-    table = np.column_stack((depth, area, perimeter, top_width))
+    table = np.column_stack((depth, width))
     np.savetxt(
         path,
         table,
         delimiter=",",
-        header="depth,area,wetted_perimeter,top_width",
+        header="depth,width",
         comments="",
     )
 
@@ -178,9 +164,30 @@ def test_geometry_factory_passes_table_points_to_tabulated_backend():
     assert geometry.n_points == 1234
 
 
-def test_user_tabulated_geometry_from_normalized_csv_matches_analytical_circle(tmp_path):
+def test_geometry_factory_passes_interpolation_method_to_tabulated_backends(tmp_path):
     table_file = tmp_path / "normalized_circle.csv"
     _write_normalized_circular_table(table_file)
+
+    circular = create_cross_section_geometry(
+        "circular_tabulated",
+        diameters=np.array([1.0, 2.0]),
+        interpolation_method="linear",
+    )
+    tabulated = create_cross_section_geometry(
+        "tabulated",
+        diameters=np.array([1.0, 2.0]),
+        table_file=str(table_file),
+        interpolation_method="linear",
+    )
+
+    assert circular.interpolation_method == "linear"
+    assert tabulated.interpolation_method == "linear"
+    assert np.isfinite(tabulated.area(np.array([0.5, 1.0]))).all()
+
+
+def test_user_tabulated_geometry_from_normalized_csv_matches_analytical_circle(tmp_path):
+    table_file = tmp_path / "normalized_circle.csv"
+    _write_normalized_circular_table(table_file, n_points=50001)
 
     diameters = np.array([0.5, 2.0])
     depth_factors = np.array([0.0, 0.01, 0.1, 0.5, 0.9, 0.99, 1.0, 1.1])
@@ -196,19 +203,19 @@ def test_user_tabulated_geometry_from_normalized_csv_matches_analytical_circle(t
     np.testing.assert_allclose(
         tabulated.area(depths),
         analytical.area(depths),
-        rtol=3e-6,
+        rtol=5e-5,
         atol=1e-12,
     )
     np.testing.assert_allclose(
         tabulated.wetted_perimeter(depths),
         analytical.wetted_perimeter(depths),
-        rtol=2e-4,
+        rtol=5e-4,
         atol=1e-12,
     )
     np.testing.assert_allclose(
         tabulated.hydraulic_radius(depths),
         analytical.hydraulic_radius(depths),
-        rtol=2e-4,
+        rtol=5e-4,
         atol=1e-12,
     )
     np.testing.assert_allclose(
@@ -232,5 +239,9 @@ def test_user_tabulated_geometry_can_use_one_absolute_table_for_all_conduits(tmp
 
     depths = np.array([0.5, 0.5])
     np.testing.assert_allclose(geometry.full_depths, np.array([1.0, 1.0]))
-    np.testing.assert_allclose(geometry.area(depths), np.array([np.pi / 8.0] * 2))
+    np.testing.assert_allclose(
+        geometry.area(depths),
+        np.array([np.pi / 8.0] * 2),
+        rtol=2e-5,
+    )
     np.testing.assert_allclose(geometry.top_width(depths), np.array([1.0, 1.0]))

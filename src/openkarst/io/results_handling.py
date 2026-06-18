@@ -43,6 +43,7 @@ def initialize_results_container(desired_outputs: Dict[str, bool], logger):
         'Q_l2_norms',
         'reynolds_numbers',
         'picard_iterations',
+        'picard_iterations_total',
         'concentrations',
         'mass'
     }
@@ -96,6 +97,10 @@ def store_results(simulation_instance, results_container):
         results_container['reynolds_numbers'].append(np.copy(simulation_instance.Re_conduit))
     if 'picard_iterations' in results_container:
         results_container['picard_iterations'].append(simulation_instance.picard_iterations_last)
+    if 'picard_iterations_total' in results_container:
+        results_container['picard_iterations_total'].append(
+            simulation_instance.picard_iterations_total
+        )
     if 'concentrations' in results_container:
         results_container['concentrations'].append(np.copy(simulation_instance.C))
     if 'mass' in results_container:

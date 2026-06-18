@@ -56,6 +56,12 @@ def validate_settings(physical_properties, geometry_settings, solver_settings,
                 "Error: geometry_settings 'scale_by_diameter' must be True or False."
             )
 
+        if not (geometry_settings.interpolation_method in ['pchip', 'linear']):
+            raise ValueError(
+                "Error: geometry_settings 'interpolation_method' must be "
+                "'pchip' or 'linear'."
+            )
+
         if geometry_settings.backend == 'tabulated':
             if not isinstance(geometry_settings.table_file, str) or not geometry_settings.table_file:
                 raise ValueError(

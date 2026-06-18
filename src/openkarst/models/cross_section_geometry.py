@@ -10,6 +10,7 @@ from scipy.interpolate import PchipInterpolator
 
 
 GEOMETRY_BACKENDS = ("circular_analytical", "circular_tabulated", "tabulated")
+INTERPOLATION_METHODS = ("pchip", "linear")
 
 
 class CrossSectionGeometry:
@@ -161,12 +162,15 @@ class CircularTabulatedGeometry(CrossSectionGeometry):
 
     name = "circular_tabulated"
 
-    def __init__(self, diameters, n_points=1000):
+    def __init__(self, diameters, n_points=1000, interpolation_method="pchip"):
         super().__init__(diameters)
         if not isinstance(n_points, int) or n_points < 2:
             raise ValueError("n_points must be an integer greater than or equal to 2.")
 
         self.n_points = n_points
+        self.interpolation_method = _validate_interpolation_method(
+            interpolation_method
+        )
         self._full_area = (np.pi / 4.0) * self.diameters**2
         self._full_perimeter = np.pi * self.diameters
         self._full_hydraulic_radius = self.diameters / 4.0
@@ -184,17 +188,25 @@ class CircularTabulatedGeometry(CrossSectionGeometry):
         self.perimeter_norm = perimeter_norm
         self.radius_norm = radius_norm
         self.top_width_norm = top_width_norm
-        self._area_interp = PchipInterpolator(eta, area_norm, extrapolate=False)
-        self._perimeter_interp = PchipInterpolator(
+        self._area_interp = _make_interpolator(
+            eta,
+            area_norm,
+            self.interpolation_method,
+        )
+        self._perimeter_interp = _make_interpolator(
             eta,
             perimeter_norm,
-            extrapolate=False,
+            self.interpolation_method,
         )
-        self._radius_interp = PchipInterpolator(eta, radius_norm, extrapolate=False)
-        self._top_width_interp = PchipInterpolator(
+        self._radius_interp = _make_interpolator(
+            eta,
+            radius_norm,
+            self.interpolation_method,
+        )
+        self._top_width_interp = _make_interpolator(
             eta,
             top_width_norm,
-            extrapolate=False,
+            self.interpolation_method,
         )
 
     def area(self, depths):
@@ -237,47 +249,68 @@ class CircularTabulatedGeometry(CrossSectionGeometry):
 
 
 class TabulatedGeometry(CrossSectionGeometry):
-    """User-defined table for one closed-conduit geometry.
+    """User-defined symmetric width-depth table for one closed-conduit geometry.
 
     If scale_by_diameter is True, the CSV is interpreted as normalized data:
-    eta, area_norm, perimeter_norm, top_width_norm. Each conduit scales the
-    same shape by its own diameter.
+    eta, width_norm. Each conduit scales the same shape by its own diameter.
 
     If scale_by_diameter is False, the CSV is interpreted as physical data:
-    depth, area, wetted_perimeter, top_width. The same absolute geometry is
-    used for every conduit.
+    depth, width. The same absolute geometry is used for every conduit.
+
+    Area and wetted perimeter are precomputed from the width-depth table once
+    during initialization. During the simulation only interpolation is used.
     """
 
     name = "tabulated"
 
-    def __init__(self, diameters, table_file, scale_by_diameter=True):
+    def __init__(
+        self,
+        diameters,
+        table_file,
+        scale_by_diameter=True,
+        interpolation_method="pchip",
+    ):
         super().__init__(diameters)
         if not isinstance(scale_by_diameter, bool):
             raise ValueError("scale_by_diameter must be True or False.")
 
         self.table_file = table_file
         self.scale_by_diameter = scale_by_diameter
+        self.interpolation_method = _validate_interpolation_method(
+            interpolation_method
+        )
 
         table = _load_tabulated_geometry_csv(table_file, self.scale_by_diameter)
         self.depth_table = table["depth"]
-        self.area_table = table["area"]
-        self.perimeter_table = table["perimeter"]
         self.top_width_table = table["top_width"]
-
-        self._area_interp = PchipInterpolator(
-            self.depth_table,
-            self.area_table,
-            extrapolate=False,
-        )
-        self._perimeter_interp = PchipInterpolator(
-            self.depth_table,
-            self.perimeter_table,
-            extrapolate=False,
-        )
-        self._top_width_interp = PchipInterpolator(
+        self.area_table, self.perimeter_table = _precompute_from_width_table(
             self.depth_table,
             self.top_width_table,
-            extrapolate=False,
+        )
+        self.radius_table = _hydraulic_radius_from_area_perimeter(
+            self.area_table,
+            self.perimeter_table,
+        )
+
+        self._area_interp = _make_interpolator(
+            self.depth_table,
+            self.area_table,
+            self.interpolation_method,
+        )
+        self._perimeter_interp = _make_interpolator(
+            self.depth_table,
+            self.perimeter_table,
+            self.interpolation_method,
+        )
+        self._radius_interp = _make_interpolator(
+            self.depth_table,
+            self.radius_table,
+            self.interpolation_method,
+        )
+        self._top_width_interp = _make_interpolator(
+            self.depth_table,
+            self.top_width_table,
+            self.interpolation_method,
         )
 
         if self.scale_by_diameter:
@@ -308,6 +341,14 @@ class TabulatedGeometry(CrossSectionGeometry):
             depths,
             self._perimeter_interp,
             full_value=self._full_perimeter,
+            scale_power=1,
+        )
+
+    def hydraulic_radius(self, depths, areas=None):
+        return self._interpolate(
+            depths,
+            self._radius_interp,
+            full_value=self._full_hydraulic_radius,
             scale_power=1,
         )
 
@@ -359,6 +400,7 @@ def create_cross_section_geometry(
     table_points=1000,
     table_file=None,
     scale_by_diameter=True,
+    interpolation_method="pchip",
 ):
     """Create the geometry object requested by geometry_settings.backend.
 
@@ -369,12 +411,17 @@ def create_cross_section_geometry(
     if backend == CircularAnalyticalGeometry.name:
         return CircularAnalyticalGeometry(diameters)
     if backend == CircularTabulatedGeometry.name:
-        return CircularTabulatedGeometry(diameters, n_points=table_points)
+        return CircularTabulatedGeometry(
+            diameters,
+            n_points=table_points,
+            interpolation_method=interpolation_method,
+        )
     if backend == TabulatedGeometry.name:
         return TabulatedGeometry(
             diameters,
             table_file=table_file,
             scale_by_diameter=scale_by_diameter,
+            interpolation_method=interpolation_method,
         )
     raise ValueError(
         f"Unknown geometry_settings backend '{backend}'. "
@@ -421,41 +468,63 @@ def _load_tabulated_geometry_csv(table_file, scale_by_diameter):
     columns = {name.lower(): table[name] for name in table.dtype.names}
     if scale_by_diameter:
         depth = _table_column(columns, "eta", "depth_norm", "normalized_depth")
-        area = _table_column(columns, "area_norm", "area")
-        perimeter = _table_column(
-            columns,
-            "perimeter_norm",
-            "wetted_perimeter_norm",
-            "wetted_perimeter",
-            "perimeter",
-        )
         top_width = _table_column(
             columns,
+            "width_norm",
             "top_width_norm",
             "surface_width_norm",
-            "width_norm",
+            "width",
             "top_width",
             "surface_width",
-            "width",
         )
     else:
         depth = _table_column(columns, "depth", "y", "depth_m")
-        area = _table_column(columns, "area", "area_m2")
-        perimeter = _table_column(columns, "wetted_perimeter", "perimeter", "p")
-        top_width = _table_column(columns, "top_width", "surface_width", "width")
+        top_width = _table_column(
+            columns,
+            "width",
+            "top_width",
+            "surface_width",
+            "width_m",
+        )
 
     depth = np.atleast_1d(np.asarray(depth, dtype=float))
-    area = np.atleast_1d(np.asarray(area, dtype=float))
-    perimeter = np.atleast_1d(np.asarray(perimeter, dtype=float))
     top_width = np.atleast_1d(np.asarray(top_width, dtype=float))
 
-    _validate_tabulated_geometry(depth, area, perimeter, top_width, scale_by_diameter)
+    _validate_tabulated_geometry(depth, top_width, scale_by_diameter)
     return {
         "depth": depth,
-        "area": area,
-        "perimeter": perimeter,
         "top_width": top_width,
     }
+
+
+def _validate_interpolation_method(interpolation_method):
+    method = str(interpolation_method).lower()
+    if method not in INTERPOLATION_METHODS:
+        raise ValueError(
+            "interpolation_method must be one of: "
+            + ", ".join(INTERPOLATION_METHODS)
+        )
+    return method
+
+
+def _make_interpolator(x, values, interpolation_method):
+    method = _validate_interpolation_method(interpolation_method)
+    if method == "pchip":
+        return PchipInterpolator(x, values, extrapolate=False)
+    if method == "linear":
+        return LinearInterpolator(x, values)
+    raise ValueError(f"Unknown interpolation method '{interpolation_method}'.")
+
+
+class LinearInterpolator:
+    """Tiny callable wrapper around numpy's one-dimensional linear interpolation."""
+
+    def __init__(self, x, values):
+        self.x = np.asarray(x, dtype=float)
+        self.values = np.asarray(values, dtype=float)
+
+    def __call__(self, x_new):
+        return np.interp(x_new, self.x, self.values)
 
 
 def _table_column(columns, *names):
@@ -468,16 +537,14 @@ def _table_column(columns, *names):
     )
 
 
-def _validate_tabulated_geometry(depth, area, perimeter, top_width, scale_by_diameter):
-    lengths = {len(depth), len(area), len(perimeter), len(top_width)}
+def _validate_tabulated_geometry(depth, top_width, scale_by_diameter):
+    lengths = {len(depth), len(top_width)}
     if len(lengths) != 1 or len(depth) < 2:
         raise ValueError("Geometry table columns must have the same length >= 2.")
 
     for name, values in (
         ("depth", depth),
-        ("area", area),
-        ("wetted_perimeter", perimeter),
-        ("top_width", top_width),
+        ("width", top_width),
     ):
         if not np.all(np.isfinite(values)):
             raise ValueError(f"Geometry table column '{name}' must be finite.")
@@ -489,18 +556,38 @@ def _validate_tabulated_geometry(depth, area, perimeter, top_width, scale_by_dia
     if scale_by_diameter and not np.isclose(depth[-1], 1.0):
         raise ValueError("Normalized geometry table depth must end at eta = 1.")
 
-    if np.any(area < 0.0) or np.any(np.diff(area) < -1e-12):
-        raise ValueError("Geometry table area must be nonnegative and monotonic.")
-    if np.any(perimeter < 0.0):
-        raise ValueError("Geometry table wetted perimeter must be nonnegative.")
     if np.any(top_width < 0.0):
-        raise ValueError("Geometry table top width must be nonnegative.")
+        raise ValueError("Geometry table width must be nonnegative.")
 
-    if not np.isclose(area[0], 0.0):
-        raise ValueError("Geometry table area must be zero at depth 0.")
-    if not np.isclose(perimeter[0], 0.0):
-        raise ValueError("Geometry table wetted perimeter must be zero at depth 0.")
     if not np.isclose(top_width[0], 0.0):
-        raise ValueError("Geometry table top width must be zero at depth 0.")
+        raise ValueError("Closed-conduit width must be zero at depth 0.")
     if not np.isclose(top_width[-1], 0.0):
-        raise ValueError("Closed-conduit top width must be zero at full depth.")
+        raise ValueError("Closed-conduit width must be zero at full depth.")
+
+
+def _precompute_from_width_table(depth, top_width):
+    """Precompute A(y) and P(y) from a symmetric width-depth table.
+
+    The table describes a symmetric cross section with x = +/- width(y) / 2.
+    Area is the integral of width over depth. Wetted perimeter is the length of
+    the two side-wall polylines implied by the table.
+    """
+    area = np.zeros_like(depth, dtype=float)
+    depth_steps = np.diff(depth)
+    width_avg = 0.5 * (top_width[:-1] + top_width[1:])
+    area[1:] = np.cumsum(width_avg * depth_steps)
+    area = np.maximum.accumulate(area)
+
+    half_width_steps = 0.5 * np.diff(top_width)
+    side_lengths = np.sqrt(depth_steps**2 + half_width_steps**2)
+    perimeter = np.zeros_like(depth, dtype=float)
+    perimeter[1:] = 2.0 * np.cumsum(side_lengths)
+
+    return area, perimeter
+
+
+def _hydraulic_radius_from_area_perimeter(area, perimeter):
+    radius = np.zeros_like(area, dtype=float)
+    wet = perimeter > 0.0
+    radius[wet] = area[wet] / perimeter[wet]
+    return radius

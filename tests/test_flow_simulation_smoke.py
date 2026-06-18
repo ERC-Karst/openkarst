@@ -15,24 +15,17 @@ def _small_network():
 
 def _write_normalized_circular_table(path, n_points=2001):
     eta = np.linspace(0.0, 1.0, n_points)
-    theta = 2.0 * np.arccos(np.clip(1.0 - 2.0 * eta, -1.0, 1.0))
-    area_norm = 0.125 * (theta - np.sin(theta))
-    perimeter_norm = 0.5 * theta
-    top_width_norm = 2.0 * np.sqrt(np.maximum(eta - eta**2, 0.0))
+    width_norm = 2.0 * np.sqrt(np.maximum(eta - eta**2, 0.0))
 
-    area_norm[0] = 0.0
-    area_norm[-1] = np.pi / 4.0
-    perimeter_norm[0] = 0.0
-    perimeter_norm[-1] = np.pi
-    top_width_norm[0] = 0.0
-    top_width_norm[-1] = 0.0
+    width_norm[0] = 0.0
+    width_norm[-1] = 0.0
 
-    table = np.column_stack((eta, area_norm, perimeter_norm, top_width_norm))
+    table = np.column_stack((eta, width_norm))
     np.savetxt(
         path,
         table,
         delimiter=",",
-        header="eta,area_norm,perimeter_norm,top_width_norm",
+        header="eta,width_norm",
         comments="",
     )
 
@@ -43,10 +36,13 @@ def _small_flow_simulation(
     table_points=None,
     table_file=None,
     scale_by_diameter=True,
+    interpolation_method=None,
 ):
     geometry_settings = {"backend": geometry_backend}
     if table_points is not None:
         geometry_settings["table_points"] = table_points
+    if interpolation_method is not None:
+        geometry_settings["interpolation_method"] = interpolation_method
     if table_file is not None:
         geometry_settings["table_file"] = str(table_file)
         geometry_settings["scale_by_diameter"] = scale_by_diameter
@@ -109,13 +105,24 @@ def test_flow_simulation_runs_on_small_linear_network(tmp_path):
             "time": True,
             "flowrates": True,
             "water_depths": True,
+            "picard_iterations": True,
+            "picard_iterations_total": True,
         }
     )
 
-    assert set(results) == {"time", "flowrates", "water_depths"}
+    assert set(results) == {
+        "time",
+        "flowrates",
+        "water_depths",
+        "picard_iterations",
+        "picard_iterations_total",
+    }
     assert results["time"].shape[0] >= 1
     assert results["flowrates"].shape[1] == geometry.Nt
     assert results["water_depths"].shape[1] == geometry.Np
+    assert results["picard_iterations"].shape == results["time"].shape
+    assert results["picard_iterations_total"].shape == results["time"].shape
+    assert np.all(np.diff(results["picard_iterations_total"]) >= 0)
     assert np.isfinite(results["flowrates"]).all()
     assert np.isfinite(results["water_depths"]).all()
 
@@ -125,6 +132,7 @@ def test_flow_simulation_defaults_to_analytical_geometry_backend(tmp_path):
 
     assert flow.geometry_backend == "circular_analytical"
     assert flow.geometry_table_points == 1000
+    assert flow.geometry_interpolation_method == "pchip"
 
 
 def test_flow_simulation_applies_geometry_table_points(tmp_path):
@@ -136,6 +144,17 @@ def test_flow_simulation_applies_geometry_table_points(tmp_path):
 
     assert flow.geometry_table_points == 1234
     assert flow.cross_section_geometry.n_points == 1234
+
+
+def test_flow_simulation_applies_geometry_interpolation_method(tmp_path):
+    flow = _small_flow_simulation(
+        tmp_path,
+        geometry_backend="circular_tabulated",
+        interpolation_method="linear",
+    )
+
+    assert flow.geometry_interpolation_method == "linear"
+    assert flow.cross_section_geometry.interpolation_method == "linear"
 
 
 def test_flow_simulation_tabulated_circular_matches_analytical(tmp_path):
@@ -177,7 +196,7 @@ def test_flow_simulation_tabulated_circular_matches_analytical(tmp_path):
 
 def test_flow_simulation_user_tabulated_csv_matches_analytical(tmp_path):
     table_file = tmp_path / "normalized_circle.csv"
-    _write_normalized_circular_table(table_file)
+    _write_normalized_circular_table(table_file, n_points=50001)
 
     def run_backend(backend, table_file=None):
         flow = _small_flow_simulation(

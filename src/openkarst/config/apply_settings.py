@@ -45,6 +45,7 @@ def apply_settings(simulation, physical_properties, geometry_settings,
     simulation.geometry_table_points = geometry_settings.table_points
     simulation.geometry_table_file = geometry_settings.table_file
     simulation.geometry_scale_by_diameter = geometry_settings.scale_by_diameter
+    simulation.geometry_interpolation_method = geometry_settings.interpolation_method
     simulation.channel_type = physical_properties.channel_type
     simulation.channel_width =  physical_properties.channel_width
     simulation.channel_manning =  physical_properties.channel_manning
