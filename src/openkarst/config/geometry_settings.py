@@ -9,7 +9,7 @@ from typing import Optional
 @dataclass
 class GeometrySettings:
     backend: str = 'circular_analytical'
-    table_points: int = 1000
+    table_points: int = 100
     table_file: Optional[str] = None
     scale_by_diameter: bool = True
     interpolation_method: str = 'pchip'

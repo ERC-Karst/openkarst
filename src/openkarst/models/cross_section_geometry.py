@@ -162,7 +162,7 @@ class CircularTabulatedGeometry(CrossSectionGeometry):
 
     name = "circular_tabulated"
 
-    def __init__(self, diameters, n_points=1000, interpolation_method="pchip"):
+    def __init__(self, diameters, n_points=100, interpolation_method="pchip"):
         super().__init__(diameters)
         if not isinstance(n_points, int) or n_points < 2:
             raise ValueError("n_points must be an integer greater than or equal to 2.")
@@ -397,7 +397,7 @@ class TabulatedGeometry(CrossSectionGeometry):
 def create_cross_section_geometry(
     backend,
     diameters,
-    table_points=1000,
+    table_points=100,
     table_file=None,
     scale_by_diameter=True,
     interpolation_method="pchip",

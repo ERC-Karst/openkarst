@@ -131,7 +131,7 @@ def test_flow_simulation_defaults_to_analytical_geometry_backend(tmp_path):
     flow = _small_flow_simulation_with_default_geometry_settings(tmp_path)
 
     assert flow.geometry_backend == "circular_analytical"
-    assert flow.geometry_table_points == 1000
+    assert flow.geometry_table_points == 100
     assert flow.geometry_interpolation_method == "pchip"
 
 
@@ -159,7 +159,12 @@ def test_flow_simulation_applies_geometry_interpolation_method(tmp_path):
 
 def test_flow_simulation_tabulated_circular_matches_analytical(tmp_path):
     def run_backend(backend):
-        flow = _small_flow_simulation(tmp_path, geometry_backend=backend)
+        table_points = 1001 if backend == "circular_tabulated" else None
+        flow = _small_flow_simulation(
+            tmp_path,
+            geometry_backend=backend,
+            table_points=table_points,
+        )
         geometry = flow.network
         flow.set_initial_conditions(
             initial_Q=np.zeros(geometry.Nt, dtype=float),

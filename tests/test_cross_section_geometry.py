@@ -126,7 +126,7 @@ def test_circular_geometry_backends_support_per_conduit_diameters():
 
     for geometry in (
         CircularAnalyticalGeometry(diameters),
-        CircularTabulatedGeometry(diameters),
+        CircularTabulatedGeometry(diameters, n_points=1001),
     ):
         np.testing.assert_allclose(
             geometry.area(depths),
