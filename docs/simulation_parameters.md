@@ -23,18 +23,6 @@ Passed to `FlowSimulation` as `physical_properties={...}`.
 | `channel_manning` | `int` or `float` | Manning roughness coefficient for open-channel geometry. Only used when `geometry_channel=True`. | `>= 0` | `0.03` |
 | `friction_model` | `str` | Closed-conduit friction model. Used when `geometry_channel=False`; ignored when `geometry_channel=True`. | `"hybrid"` or `"churchill"` | `"churchill"` |
 
-## Geometry Settings
-
-Passed to `FlowSimulation` as `geometry_settings={...}`.
-
-| Parameter | Type | Description | Valid values | Default |
-| --- | --- | --- | --- | --- |
-| `backend` | `str` | Closed-conduit cross-section geometry backend. | `"circular_analytical"`, `"circular_tabulated"`, or `"tabulated"` | `"circular_analytical"` |
-| `table_points` | `int` | Number of normalized depth points used by the internal `"circular_tabulated"` backend. | `>= 2` | `1000` |
-| `table_file` | `str` | CSV file used by the `"tabulated"` backend. Normalized tables use `eta,width_norm`; physical tables use `depth,width`. Width means free-surface width as a function of depth. Area and wetted perimeter are precomputed internally from the width table. | Required for `"tabulated"` | `None` |
-| `scale_by_diameter` | `bool` | If `True`, interpret the CSV as normalized and scale depth/width by each conduit diameter. If `False`, use the physical table values directly. | `True` or `False` | `True` |
-| `interpolation_method` | `str` | Interpolator used by `"circular_tabulated"` and `"tabulated"`. `"pchip"` is smoother; `"linear"` is simpler and usually faster. Ignored by `"circular_analytical"`. | `"pchip"` or `"linear"` | `"pchip"` |
-
 ## Solver Settings
 
 Passed to `FlowSimulation` as `solver_settings={...}`.
