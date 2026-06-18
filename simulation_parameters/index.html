@@ -314,6 +314,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#geometry-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Geometry Settings
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#solver-settings" class="md-nav__link">
     <span class="md-ellipsis">
       Solver Settings
@@ -476,6 +485,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#geometry-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Geometry Settings
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#solver-settings" class="md-nav__link">
     <span class="md-ellipsis">
       Solver Settings
@@ -601,6 +619,56 @@ simulations require <code>t_max &gt; 0</code>, and all simulations require a num
 <td>Closed-conduit friction model. Used when <code>geometry_channel=False</code>; ignored when <code>geometry_channel=True</code>.</td>
 <td><code>"hybrid"</code> or <code>"churchill"</code></td>
 <td><code>"churchill"</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="geometry-settings">Geometry Settings</h2>
+<p>Passed to <code>FlowSimulation</code> as <code>geometry_settings={...}</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+<th>Valid values</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>backend</code></td>
+<td><code>str</code></td>
+<td>Closed-conduit cross-section geometry backend.</td>
+<td><code>"circular_analytical"</code>, <code>"circular_tabulated"</code>, or <code>"tabulated"</code></td>
+<td><code>"circular_analytical"</code></td>
+</tr>
+<tr>
+<td><code>table_points</code></td>
+<td><code>int</code></td>
+<td>Number of normalized depth points used by the internal <code>"circular_tabulated"</code> backend.</td>
+<td><code>&gt;= 2</code></td>
+<td><code>1000</code></td>
+</tr>
+<tr>
+<td><code>table_file</code></td>
+<td><code>str</code></td>
+<td>CSV file used by the <code>"tabulated"</code> backend. Normalized tables use <code>eta,width_norm</code>; physical tables use <code>depth,width</code>. Width means free-surface width as a function of depth. Area and wetted perimeter are precomputed internally from the width table.</td>
+<td>Required for <code>"tabulated"</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>scale_by_diameter</code></td>
+<td><code>bool</code></td>
+<td>If <code>True</code>, interpret the CSV as normalized and scale depth/width by each conduit diameter. If <code>False</code>, use the physical table values directly.</td>
+<td><code>True</code> or <code>False</code></td>
+<td><code>True</code></td>
+</tr>
+<tr>
+<td><code>interpolation_method</code></td>
+<td><code>str</code></td>
+<td>Interpolator used by <code>"circular_tabulated"</code> and <code>"tabulated"</code>. <code>"pchip"</code> is smoother; <code>"linear"</code> is simpler and usually faster. Ignored by <code>"circular_analytical"</code>.</td>
+<td><code>"pchip"</code> or <code>"linear"</code></td>
+<td><code>"pchip"</code></td>
 </tr>
 </tbody>
 </table>
@@ -821,6 +889,13 @@ are not stored. Unknown keys raise a <code>ValueError</code>.</p>
 <td><code>picard_iterations</code></td>
 <td><code>bool</code></td>
 <td>Store the Picard iteration count from each stored time step.</td>
+<td><code>True</code> or <code>False</code></td>
+<td>Not stored</td>
+</tr>
+<tr>
+<td><code>picard_iterations_total</code></td>
+<td><code>bool</code></td>
+<td>Store cumulative Picard iterations up to each stored output time.</td>
 <td><code>True</code> or <code>False</code></td>
 <td>Not stored</td>
 </tr>
