@@ -368,7 +368,6 @@ class FlowSimulation:
                 scale_by_diameter=self.geometry_scale_by_diameter,
             )
             self.full_conduit_areas = self.cross_section_geometry.full_area()
-            self.full_conduit_perimeters = self.cross_section_geometry.full_perimeter()
             self.full_hydraulic_diameters = (
                 self.cross_section_geometry.full_hydraulic_diameter()
             )
