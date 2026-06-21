@@ -47,4 +47,5 @@ pythonpath = ["src"]
 testpaths = ["tests"]
 
 [tool.setuptools.package-data]
+"openkarst" = ["cave_data/*/*.csv"]
 "openkarst.visualization" = ["assets/*.png"]

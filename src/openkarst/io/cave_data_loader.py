@@ -7,12 +7,57 @@ Created on Wed Jul 24 17:22:54 2024
 @contact: jannes.kordilla@idaea.csic.es
 """
 
+from importlib import resources
+from os import PathLike
+
 import networkx as nx
 import openpnm as op
 import numpy as np
 
 
-def load_cave_data(nodes_file: str, edges_file: str, diameters_file: str):
+_BUILTIN_CAVES = {
+    "seefeldhoehle": {
+        "nodes": "seefeldhoehle_nodes.csv",
+        "edges": "seefeldhoehle_edges.csv",
+        "diameters": "seefeldhoehle_diameters.csv",
+    },
+}
+
+
+def _available_caves() -> str:
+    return ", ".join(sorted(_BUILTIN_CAVES))
+
+
+def _resolve_builtin_cave_files(cave: str):
+    cave_key = cave.lower()
+    try:
+        cave_files = _BUILTIN_CAVES[cave_key]
+    except KeyError:
+        raise ValueError(
+            f"Unknown cave '{cave}'. Available caves: {_available_caves()}."
+        ) from None
+
+    data_dir = resources.files("openkarst").joinpath("cave_data", cave_key)
+    return (
+        data_dir.joinpath(cave_files["nodes"]),
+        data_dir.joinpath(cave_files["edges"]),
+        data_dir.joinpath(cave_files["diameters"]),
+    )
+
+
+def _open_text(file):
+    if hasattr(file, "open"):
+        return file.open("r", encoding="utf-8")
+    return open(file, "r", encoding="utf-8")
+
+
+def load_cave_data(
+    nodes_file: str | PathLike[str] | None = None,
+    edges_file: str | PathLike[str] | None = None,
+    diameters_file: str | PathLike[str] | None = None,
+    *,
+    cave: str | None = None,
+):
     """
     Load cave network data from CSV files and create an OpenPNM geometry object.
 
@@ -22,33 +67,51 @@ def load_cave_data(nodes_file: str, edges_file: str, diameters_file: str):
     and diameters.
 
     Args:
-        nodes_file (str): Path to the CSV file containing node coordinates.
-        edges_file (str): Path to the CSV file containing edge connections.
-        diameters_file (str): Path to the CSV file containing node diameters.
+        nodes_file (str | os.PathLike | None): Path to the CSV file containing
+            node coordinates. Required unless ``cave`` is provided.
+        edges_file (str | os.PathLike | None): Path to the CSV file containing
+            edge connections. Required unless ``cave`` is provided.
+        diameters_file (str | os.PathLike | None): Path to the CSV file
+            containing node diameters. Required unless ``cave`` is provided.
+        cave (str | None): Name of a bundled cave dataset to load. Available
+            caves: seefeldhoehle.
 
     Returns:
         openpnm.network.GenericNetwork: An OpenPNM geometry object representing
             the network with assigned conduit lengths and diameters.
     """
+    if cave is not None:
+        if any(file is not None for file in (nodes_file, edges_file, diameters_file)):
+            raise ValueError(
+                "Pass either cave='seefeldhoehle' or nodes_file, edges_file, "
+                "and diameters_file, not both."
+            )
+        nodes_file, edges_file, diameters_file = _resolve_builtin_cave_files(cave)
+    elif any(file is None for file in (nodes_file, edges_file, diameters_file)):
+        raise ValueError(
+            "Pass either cave='seefeldhoehle' or nodes_file, edges_file, "
+            "and diameters_file."
+        )
+
     G = nx.Graph()
     node_diameters = {}
 
     # Load nodes and their coordinates from the file, skipping the header
-    with open(nodes_file, 'r') as file:
+    with _open_text(nodes_file) as file:
         next(file)  # Skip the header line
         for line in file:
             node_id, x, y, z = line.strip().split(';')
             G.add_node(int(node_id), coords=[float(x), float(y), float(z)])
 
     # Load edges from the file, skipping the header
-    with open(edges_file, 'r') as file:
+    with _open_text(edges_file) as file:
         next(file)  # Skip the header line
         for line in file:
             node_a, node_b = map(int, line.strip().split(';'))
             G.add_edge(node_a, node_b)
 
     # Load diameters from the file, skipping the header
-    with open(diameters_file, 'r') as file:
+    with _open_text(diameters_file) as file:
         next(file)  # Skip the header line
         for line in file:
             node_id, cswidth, csheight = line.strip().split(';')
