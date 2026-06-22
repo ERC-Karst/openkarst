@@ -297,6 +297,7 @@ class FlowSimulation:
         self.bc_inflow_vol_node = np.zeros(self.network.Np, dtype=float) # [m^3/s]
         self.bc_flux_node = np.zeros(self.network.Np, dtype=float) # [m/s]
         self.bc_flux_to_vol_node = np.zeros(self.network.Np, dtype=float) # [m^3/s]
+        self.bc_reservoir_exchange_node = np.zeros(self.network.Np, dtype=float) # [m^3/s]
         self.bc_prescribed_y_mask = np.zeros(self.network.Np, dtype=bool) # Dirichlet mask [m] 
         self.bc_prescribed_y_vals = np.zeros(self.network.Np, dtype=float) # Dirichlet values [m] 
         self.bc_Qin_node = np.zeros(self.network.Np, dtype=float) # total external inflow [m^3/s] 
@@ -812,7 +813,72 @@ class FlowSimulation:
             self.boundary_conditions['inflow'].append(bc)
 
  
-            
+    def set_reservoir_BC(self, nodes, fixed_exchange_rate, mode='add'):
+        """
+        Set fixed reservoir exchange boundary conditions at specified nodes.
+
+        Positive exchange injects water from the reservoir into a conduit node.
+        Negative exchange drains water from an conduit node into the reservoir.
+        This minimal test stores fixed volumetric exchange rates as constant boundary
+        conditions. Here we can implement a more complex reservoir dynamic then.
+
+        Args:
+            nodes (int, list of int, or np.ndarray):
+                Index or indices of nodes coupled to the reservoir.
+
+            fixed_exchange_rate (float, list, or np.ndarray):
+                Fixed volumetric reservoir-to-node exchange rate in m^3/s.
+                Scalars are broadcast automatically to all specified nodes.
+
+            mode (str, optional):
+                Defines how new reservoir conditions interact with existing ones:
+                - `'add'` (default): add new reservoir BCs; raises an error if one
+                  already exists at a node.
+                - `'overwrite'`: replace existing reservoir BCs at the given nodes.
+                - `'remove'`: remove reservoir BCs from the specified nodes.
+
+        Raises:
+            ValueError: If an unrecognized mode or non-scalar exchange rate is
+                provided, or if a reservoir BC already exists in `'add'` mode.
+        """
+
+        if not hasattr(self, 'boundary_conditions'):
+            self.boundary_conditions = {}
+
+        if 'reservoir' not in self.boundary_conditions:
+            self.boundary_conditions['reservoir'] = []
+
+        nodes = normalize_target_ids(nodes)
+        fixed_exchange_rate = broadcast_boundary_values(nodes, fixed_exchange_rate)
+
+        if mode == 'remove':
+            self.boundary_conditions['reservoir'] = [
+                bc for bc in self.boundary_conditions['reservoir']
+                if all(n not in nodes for n in bc.target_ids)
+            ]
+            return
+
+        if mode not in ('add', 'overwrite'):
+            raise ValueError("mode must be one of 'add', 'overwrite', or 'remove'.")
+
+        for node, rate in zip(nodes, fixed_exchange_rate):
+            if mode == 'overwrite':
+                self.boundary_conditions['reservoir'] = [
+                    bc for bc in self.boundary_conditions['reservoir']
+                    if node not in bc.target_ids
+                ]
+            elif mode == 'add':
+                for bc in self.boundary_conditions['reservoir']:
+                    if node in bc.target_ids:
+                        raise ValueError(f"Reservoir BC already exists at node {node}. Use mode='overwrite' to replace it.")
+
+            if not isinstance(rate, Real):
+                raise ValueError(f"Reservoir fixed_exchange_rate at node {node} must be a scalar value.")
+
+            bc = ConstantBC([node], value=float(rate), bc_type='volumetric')
+            self.boundary_conditions['reservoir'].append(bc)
+
+
     def set_stop_conditions(self, flowrate_condition=None, flowrate_threshold=0.98):
         
         if flowrate_condition is not None:
@@ -870,10 +936,12 @@ class FlowSimulation:
             3. A node cannot have both an inflow BC and a critical depth BC.
             4. Transport BCs are only allowed if transport is enabled.
             5. A node cannot have both inflow concentration BC and water-depth concentration BC.
-            6. A node with water-depth concentration BC must also have a water-depth BC.
+            6. A node with water depth concentration BC must also have a water depth BC.
             7. A node with inflow concentration BC must also have an inflow BC.
             8. A node cannot have a mass-injection BC together with any concentration BC
-            (water-depth concentration or inflow concentration) on the same node.
+            (water depth concentration or inflow concentration) on the same node.
+            9. A reservoir node cannot also have water depth, inflow, or critical depth BCs.
+            10. A node cannot have duplicate reservoir BCs.
 
         Raises:
             ValueError: If any conflicting or inconsistent boundary conditions are detected.
@@ -888,6 +956,8 @@ class FlowSimulation:
         wd_conc_nodes       = set()
         inflow_conc_nodes   = set()
         mass_inj_nodes      = set()
+        reservoir_nodes     = set()
+        reservoir_node_list = []
 
         if hasattr(self, "boundary_conditions"):
             bcs = self.boundary_conditions
@@ -910,6 +980,10 @@ class FlowSimulation:
             mass_inj_nodes.update(
                 n for bc in bcs.get("mass_injection", []) for n in bc.target_ids
             )
+            reservoir_node_list = [
+                n for bc in bcs.get("reservoir", []) for n in bc.target_ids
+            ]
+            reservoir_nodes.update(reservoir_node_list)
 
         transport_enabled = bool(getattr(self.simulation_settings, "enable_transport", False))
 
@@ -945,13 +1019,39 @@ class FlowSimulation:
                 f"Conflict: nodes {sorted(both)} have both inflow and critical depth BCs."
             )
 
+        duplicate_reservoir_nodes = {
+            n for n in reservoir_node_list if reservoir_node_list.count(n) > 1
+        }
+        if duplicate_reservoir_nodes:
+            raise ValueError(
+                f"Conflict: nodes {sorted(duplicate_reservoir_nodes)} have duplicate reservoir BCs."
+            )
+
+        both = reservoir_nodes & wd_nodes
+        if both:
+            raise ValueError(
+                f"Conflict: nodes {sorted(both)} have both reservoir and prescribed water depth BCs."
+            )
+
+        both = reservoir_nodes & inflow_nodes
+        if both:
+            raise ValueError(
+                f"Conflict: nodes {sorted(both)} have both reservoir and inflow BCs."
+            )
+
+        both = reservoir_nodes & crit_nodes
+        if both:
+            raise ValueError(
+                f"Conflict: nodes {sorted(both)} have both reservoir and critical depth BCs."
+            )
+
         # Transport BC consistency (only if enabled)
         if transport_enabled:
             both = wd_conc_nodes & inflow_conc_nodes
             if both:
                 raise ValueError(
                     f"Conflict: nodes {sorted(both)} have both inflow concentration and "
-                    "water-depth concentration BCs."
+                    "water depth concentration BCs."
                 )
 
             missing = wd_conc_nodes - wd_nodes
@@ -1835,6 +1935,7 @@ class FlowSimulation:
 
         self.dQ_new += self.bc_inflow_vol_node
         self.dQ_new += self.bc_flux_to_vol_node
+        self.dQ_new += self.bc_reservoir_exchange_node
 
         # Compute the change in volume at each node (dV)
         dV = 0.5 * (self.dQ_old_t + self.dQ_new) * self.dt
@@ -1914,6 +2015,7 @@ class FlowSimulation:
         self.bc_inflow_vol_node.fill(0.0)
         self.bc_flux_node.fill(0.0)
         self.bc_flux_to_vol_node.fill(0.0)
+        self.bc_reservoir_exchange_node.fill(0.0)
         self.bc_prescribed_y_mask.fill(False)
         self.bc_prescribed_y_vals.fill(0.0)
 
@@ -1923,6 +2025,10 @@ class FlowSimulation:
                 self.bc_flux_node[bc.target_ids] += v
             else:
                 self.bc_inflow_vol_node[bc.target_ids] += v
+
+        for bc in self.boundary_conditions.get('reservoir', []):
+            v = bc.get_value(t)
+            self.bc_reservoir_exchange_node[bc.target_ids] += v
 
         # Dirichlet water depth BCs
         for bc in self.boundary_conditions.get('waterdepth', []):

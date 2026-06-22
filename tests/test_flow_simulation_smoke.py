@@ -1,5 +1,6 @@
 import numpy as np
 import openpnm as op
+import pytest
 
 from openkarst.models import FlowSimulation
 from openkarst.network_generation import compute_conduit_lengths
@@ -266,3 +267,88 @@ def test_box_flux_inflow_bc_preserves_flux_type_for_all_nodes(tmp_path):
     assert [bc.target_ids for bc in bcs] == [[0], [1]]
     assert all(bc.bc_type == "flux" for bc in bcs)
     assert all(bc.get_value(6.0) == 1e-5 for bc in bcs)
+
+
+def test_reservoir_bc_stores_fixed_exchange_and_caches(tmp_path):
+    flow = _small_flow_simulation(tmp_path)
+
+    flow.set_reservoir_BC(nodes=[0, 1], fixed_exchange_rate=0.001)
+
+    bcs = flow.boundary_conditions["reservoir"]
+    assert [bc.target_ids for bc in bcs] == [[0], [1]]
+    assert all(bc.bc_type == "volumetric" for bc in bcs)
+    assert all(bc.get_value(0.0) == 0.001 for bc in bcs)
+
+    flow.current_time = 0.0
+    flow._cache_hydraulic_bcs()
+    expected = np.zeros(flow.network.Np, dtype=float)
+    expected[[0, 1]] = 0.001
+    np.testing.assert_allclose(flow.bc_reservoir_exchange_node, expected)
+
+
+def test_duplicate_reservoir_bc_raises_unless_overwritten_or_removed(tmp_path):
+    flow = _small_flow_simulation(tmp_path)
+
+    flow.set_reservoir_BC(nodes=0, fixed_exchange_rate=0.001)
+
+    with pytest.raises(ValueError, match="Reservoir BC already exists"):
+        flow.set_reservoir_BC(nodes=0, fixed_exchange_rate=0.002)
+
+    flow.set_reservoir_BC(nodes=0, fixed_exchange_rate=0.002, mode="overwrite")
+    bcs = flow.boundary_conditions["reservoir"]
+    assert len(bcs) == 1
+    assert bcs[0].target_ids == [0]
+    assert bcs[0].get_value(0.0) == 0.002
+
+    flow.set_reservoir_BC(nodes=0, fixed_exchange_rate=0.0, mode="remove")
+    assert flow.boundary_conditions["reservoir"] == []
+
+
+def test_reservoir_and_inflow_same_node_conflict(tmp_path):
+    flow = _small_flow_simulation(tmp_path)
+
+    flow.set_reservoir_BC(nodes=0, fixed_exchange_rate=0.001)
+    flow.set_inflow_BC(nodes=0, values=0.001)
+
+    with pytest.raises(ValueError, match="reservoir and inflow"):
+        flow._check_bc_conflicts()
+
+
+def test_reservoir_and_waterdepth_same_node_conflict(tmp_path):
+    flow = _small_flow_simulation(tmp_path)
+
+    flow.set_reservoir_BC(nodes=0, fixed_exchange_rate=0.001)
+    flow.set_waterdepth_BC(nodes=0, values=0.01)
+
+    with pytest.raises(ValueError, match="reservoir and prescribed water depth"):
+        flow._check_bc_conflicts()
+
+
+def test_positive_fixed_reservoir_exchange_matches_equivalent_inflow(tmp_path):
+    def run_with_source(source_kind):
+        flow = _small_flow_simulation(tmp_path / source_kind)
+        geometry = flow.network
+        flow.set_initial_conditions(
+            initial_Q=np.zeros(geometry.Nt, dtype=float),
+            initial_y=np.full(geometry.Np, 0.01, dtype=float),
+        )
+        if source_kind == "inflow":
+            flow.set_inflow_BC(nodes=0, values=0.001)
+        else:
+            flow.set_reservoir_BC(nodes=0, fixed_exchange_rate=0.001)
+        flow.set_waterdepth_BC(nodes=4, values=0.01)
+        return flow.run_simulation(
+            desired_outputs={
+                "output_interval": 0.1,
+                "time": True,
+                "flowrates": True,
+                "water_depths": True,
+            }
+        )
+
+    inflow = run_with_source("inflow")
+    reservoir = run_with_source("reservoir")
+
+    np.testing.assert_allclose(reservoir["time"], inflow["time"])
+    np.testing.assert_allclose(reservoir["flowrates"], inflow["flowrates"])
+    np.testing.assert_allclose(reservoir["water_depths"], inflow["water_depths"])
