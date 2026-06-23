@@ -14,13 +14,7 @@ from numbers import Real
 from termcolor import colored
 from typing import Optional, Dict, Any
 
-from openkarst.config.physical_properties import PhysicalProperties
-from openkarst.config.geometry_settings import GeometrySettings
-from openkarst.config.solver_settings import SolverSettings
-from openkarst.config.simulation_settings import SimulationSettings
-from openkarst.config.transport_settings import TransportSettings
-from openkarst.config.validate_settings import validate_settings
-from openkarst.config.apply_settings import apply_settings
+from openkarst.config.saint_venant_settings import SaintVenantSettings
 
 from openkarst.io.results_handling import initialize_results_container, store_results
 from openkarst.io.observation_recorder import ObservationRecorder
@@ -53,20 +47,16 @@ class FlowSimulation:
     to compute the flow rates, water depths, concentrations and other relevant properties over time.
 
     Attributes:
-        GEOMETRY_CHANNEL (int): Indicator for channel geometry. Set to 1 for channel validation.
         logger (Logger): Logger instance for logging simulation information and debugging.
-        physical_properties (PhysicalProperties): Object containing the physical properties of the simulation.
-        solver_settings (SolverSettings): Object containing the solver settings.
-        simulation_settings (SimulationSettings): Object containing the simulation settings.
-        transport_settings (TransportSettings): Object containing the transport settings.
-        logging_settings (LoggingSettings): Object containing the logger settings.
+        settings (SaintVenantSettings): Canonical container for all validated
+            simulation settings.
         network (openpnm.network.GenericNetwork): The OpenPNM network used in the simulation.
         waterdepth_boundary (dict): Dictionary storing water depth boundary conditions.
         inflow_boundary (dict): Dictionary storing inflow boundary conditions.
         critical_depth_boundary (dict): Dictionary storing critical depth boundary conditions.
 
     Methods:
-        __init__(self, openpnm_network, physical_properties=None, solver_settings=None, simulation_settings=None, transport_settings=None):
+        __init__(self, openpnm_network, physical_properties=None, geometry_settings=None, solver_settings=None, simulation_settings=None, transport_settings=None):
             Initializes the FlowSimulation class with the provided settings and network.
         _initialize_arrays(self):
             Initializes the arrays used in the simulation.
@@ -136,14 +126,13 @@ class FlowSimulation:
             geometry_settings (Optional[Dict[str, Any]]): Geometry backend settings.
             solver_settings (Optional[Dict[str, Any]]): Solver settings.
             simulation_settings (Optional[Dict[str, Any]]): Simulation settings.
+            transport_settings (Optional[Dict[str, Any]]): Transport settings.
             logging_settings (Optional[Dict[str, Any]]): Logging configuration settings.
         
         Attributes:
             logger: Logger for logging information and debugging.
-            physical_properties: Instance of PhysicalProperties with provided or default settings.
-            solver_settings: Instance of SolverSettings with provided or default settings.
-            simulation_settings: Instance of SimulationSettings with provided or default settings.
-            transport_settings: Instance of TransportSettings with provided or default settings.
+            settings: Validated SaintVenantSettings instance with provided or
+                default settings.
             network: The OpenPNM network to be used in the simulation.
             waterdepth_boundary (dict): Dictionary for water depth boundary conditions.
             inflow_boundary (dict): Dictionary for inflow boundary conditions.
@@ -153,41 +142,14 @@ class FlowSimulation:
         # Set up logger
         self.logger = setup_logging(logging_settings)
 
-        physical_properties = dict(physical_properties) if physical_properties else {}
-        geometry_settings = dict(geometry_settings) if geometry_settings else {}
-        
-        self.physical_properties = (PhysicalProperties(**physical_properties) 
-                                    if physical_properties else PhysicalProperties()
-                                    )
-        self.geometry_settings = (GeometrySettings(**geometry_settings)
-                                  if geometry_settings else GeometrySettings()
-                                  )
-        self.solver_settings = (SolverSettings(**solver_settings)
-                                if solver_settings else SolverSettings()
-                                )
-        self.simulation_settings= (SimulationSettings(**simulation_settings)
-                                   if simulation_settings else SimulationSettings()
-                                   )
-        self.transport_settings= (TransportSettings(**transport_settings)
-                                   if transport_settings else TransportSettings()
-                                   )
-
-        validate_settings(self.physical_properties,
-                          self.geometry_settings,
-                          self.solver_settings,
-                          self.simulation_settings,
-                          self.transport_settings,
-                          self.logger
-                          )
-        
-        apply_settings(self,
-                       self.physical_properties,
-                       self.geometry_settings,
-                       self.solver_settings,
-                       self.simulation_settings,
-                       self.transport_settings,
-                       self.logger
-                       )
+        self.settings = SaintVenantSettings.from_user_input(
+            physical_properties=physical_properties,
+            geometry_settings=geometry_settings,
+            solver_settings=solver_settings,
+            simulation_settings=simulation_settings,
+            transport_settings=transport_settings,
+        )
+        self.settings.validate(self.logger)
         
         #Get OpenPNM network (this will later come from another class)
         self.network = openpnm_network
@@ -210,15 +172,15 @@ class FlowSimulation:
         self._initialize_conduit_properties()
         
         self.logger.info('FlowSimulation initialized with physical properties: %s',
-                         self.physical_properties)
+                         self.settings.physical)
         self.logger.info('FlowSimulation initialized with geometry settings: %s',
-                         self.geometry_settings)
+                         self.settings.geometry)
         self.logger.info('FlowSimulation initialized with solver settings: %s',
-                         self.solver_settings)
+                         self.settings.solver)
         self.logger.info('FlowSimulation initialized with simulation settings: %s',
-                         self.simulation_settings)
+                         self.settings.simulation)
         self.logger.info('FlowSimulation initialized with transport settings: %s',
-                         self.transport_settings)
+                         self.settings.transport)
         
         
     def _initialize_arrays(self):
@@ -312,7 +274,7 @@ class FlowSimulation:
         self.D_eff = np.zeros(self.network.Nt, dtype=float)
 
          # Transport arrays (only initialize when transport is enabled)
-        if self.simulation_settings.enable_transport:
+        if self.settings.simulation.enable_transport:
             self.C = np.zeros(self.network.Np, dtype=float) # concentration [kg/m^3]
             self.C_new = np.zeros(self.network.Np, dtype=float)
             self.M = np.zeros(self.network.Np, dtype=float) # mass [kg]
@@ -344,11 +306,11 @@ class FlowSimulation:
 
         
         """
-        if self.geometry_channel == True:
+        if self.settings.physical.geometry_channel == True:
             self.cross_section_geometry = None
             
             # Get Manning coefficient from physical property settings
-            self.conduit_manning = np.full(self.network.Nt, self.channel_manning, dtype=float)
+            self.conduit_manning = np.full(self.network.Nt, self.settings.physical.channel_manning, dtype=float)
             
             self.conduit_lengths = np.asarray(self.network['throat.lengths'], dtype=float)
             
@@ -364,12 +326,12 @@ class FlowSimulation:
             self.conduit_lengths = np.asarray(self.network['throat.lengths'], dtype=float)
             self.conduit_epsilon = np.asarray(self.network['throat.epsilon'], dtype=float)
             self.cross_section_geometry = create_cross_section_geometry(
-                self.geometry_backend,
+                self.settings.geometry.backend,
                 self.conduit_diameters,
-                table_points=self.geometry_table_points,
-                table_file=self.geometry_table_file,
-                scale_by_diameter=self.geometry_scale_by_diameter,
-                interpolation_method=self.geometry_interpolation_method,
+                table_points=self.settings.geometry.table_points,
+                table_file=self.settings.geometry.table_file,
+                scale_by_diameter=self.settings.geometry.scale_by_diameter,
+                interpolation_method=self.settings.geometry.interpolation_method,
             )
             self.full_conduit_areas = self.cross_section_geometry.full_area()
             self.full_hydraulic_diameters = (
@@ -398,7 +360,7 @@ class FlowSimulation:
             
             # Compute equivalent Manning coefficient at f(epsilon, Re->infty)
             # This is the equivalent Manning coefficient used for pressurized conduits
-            if self.friction_model == 'hybrid':
+            if self.settings.physical.friction_model == 'hybrid':
                 RE_INFTY = 1e7
                 f = compute_churchill_friction_factor(
                     RE_INFTY,
@@ -406,7 +368,7 @@ class FlowSimulation:
                     self.conduit_diameters,
                 )
                 self.conduit_manning = (
-                1 / (np.sqrt(8 * self.gravity)) 
+                1 / (np.sqrt(8 * self.settings.physical.gravity)) 
                 * np.sqrt(f) 
                 * (0.5 * self.conduit_diameters)**(1 / 3)
                 )
@@ -449,7 +411,7 @@ class FlowSimulation:
         with time_this('run_simulation'):
 
             self.convergence_fails = 0
-            self.dt = self.dt_init
+            self.dt = self.settings.simulation.dt_init
             self.current_time = 0.0
             self.current_timestep = 0
             self.relative_y_l2_norm = 0.0
@@ -488,11 +450,11 @@ class FlowSimulation:
 
                 # Compute AD Transport with updated flow field
                 # Only if enable_transport is True
-                if self.simulation_settings.enable_transport:
+                if self.settings.simulation.enable_transport:
                     self._advance_transport()
                 
                 # Compute new step size based on Froude and Courant number 
-                if self.adaptive_timesteps and self.current_timestep > 0:
+                if self.settings.simulation.adaptive_timesteps and self.current_timestep > 0:
                     self._compute_new_dt(self._v_mid_last, self._froude_last)
 
                 # Record observation data if recorder is active and it is time
@@ -514,7 +476,7 @@ class FlowSimulation:
                         
                         total_flowrate = np.sum(np.abs(self.Q_new[connected_conduits]))
                         
-                        if math.fmod(self.current_timestep, self.print_info_interval) == 0:
+                        if math.fmod(self.current_timestep, self.settings.simulation.print_info_interval) == 0:
                             
                             print(f'Outflow rate = {100 * (total_flowrate / flowrate_value):.2f}%')
                                         
@@ -537,7 +499,7 @@ class FlowSimulation:
                     break
                 
                 # Check if steady-state achieved and exit (only if stop condition not set)
-                if not self.stop_condition_set and self.steady_state:
+                if not self.stop_condition_set and self.settings.simulation.steady_state:
                     if self._has_reached_steady_state() and self.current_timestep > 10:
                         self.logger.info(
                             f'Steady state reached: Simulation finished at time = {self.current_time:.2f}s'
@@ -555,7 +517,11 @@ class FlowSimulation:
                 self.current_timestep += 1
                 
                 # If no steady-state simulation, exit when t_max is exceeded (only if stop condition not set)
-                if not self.stop_condition_set and not self.steady_state and self.current_time > self.t_max:
+                if (
+                    not self.stop_condition_set
+                    and not self.settings.simulation.steady_state
+                    and self.current_time > self.settings.simulation.t_max
+                ):
                     
                     self.logger.info(
                         f'Maximum time reached: Simulation finished at time = {self.current_time:.2f}s'
@@ -880,7 +846,7 @@ class FlowSimulation:
 
         # Check if user wants C and M saved in observation and stop is transport is not enabled
         wants_trans_output = any(v in ("concentrations", "mass") for v in variables)
-        if wants_trans_output and not getattr(self.simulation_settings, "enable_transport", False):
+        if wants_trans_output and not self.settings.simulation.enable_transport:
             raise ValueError(
                 "Observation variables include 'concentrations' and/or 'mass'"
                 "but enable_transport=False. Enable transport or remove these variables."
@@ -958,7 +924,7 @@ class FlowSimulation:
             ]
             reservoir_nodes.update(reservoir_node_list)
 
-        transport_enabled = bool(getattr(self.simulation_settings, "enable_transport", False))
+        transport_enabled = self.settings.simulation.enable_transport
 
         # Transport disabled: Do NOT allow any transport BCs (including mass injection)
         if not transport_enabled:
@@ -1124,10 +1090,10 @@ class FlowSimulation:
         
         iteration = 0
 
-        while iteration < self.max_iterations:
+        while iteration < self.settings.solver.max_iterations:
              
             # Set flow depths to a minimum value
-            self.y_new[self.y_new <= self.min_waterdepth] = self.min_waterdepth
+            self.y_new[self.y_new <= self.settings.simulation.min_waterdepth] = self.settings.simulation.min_waterdepth
             
             y1, y2, y_mid = self._get_water_depths()
             
@@ -1148,7 +1114,7 @@ class FlowSimulation:
             # Compute velocity and Frounde number at conduit center 
             #v_mid = self.Q_prev_i / self.a_mid_new
             # Slot is only taken into account for free-surface cases
-            if self.geometry_channel:
+            if self.settings.physical.geometry_channel:
                 v_mid = self.Q_prev_i / self.a_mid_new
             else:
                 v_mid = np.where(
@@ -1157,7 +1123,7 @@ class FlowSimulation:
                     self.Q_prev_i / self.a_mid_new
                 )
 
-            froude = np.abs(v_mid) / np.sqrt(self.gravity * self.a_mid_new / w_mid)
+            froude = np.abs(v_mid) / np.sqrt(self.settings.physical.gravity * self.a_mid_new / w_mid)
 
 
             # Store to use for adaptive timestep update outside of dynamic_wave
@@ -1167,7 +1133,7 @@ class FlowSimulation:
             # Compute alpha for upstream weighting
             alpha = compute_upstream_weight_alpha(froude, self.is_full_y_mid)
             
-            #if self.adaptive_timesteps:
+            #if self.settings.simulation.adaptive_timesteps:
             #    # Compute new step size based on Froude and Courant number
             #    self._compute_new_dt(v_mid, froude)
             
@@ -1254,7 +1220,7 @@ class FlowSimulation:
             y_mid (numpy.ndarray): Array of water depths at the middle of the conduits.
         """
         
-        if self.geometry_channel == True: # Channel examples never pressurized
+        if self.settings.physical.geometry_channel == True: # Channel examples never pressurized
             self.is_full_y1.fill(False)
             self.is_full_y2.fill(False)
             self.is_full_y_mid.fill(False)
@@ -1321,22 +1287,22 @@ class FlowSimulation:
                 )
             )
 
-        if not self.geometry_channel:
+        if not self.settings.physical.geometry_channel:
             conduit_w1 = self.cross_section_geometry.top_width(y1)
             conduit_w2 = self.cross_section_geometry.top_width(y2)
             conduit_w_mid = self.cross_section_geometry.top_width(y_mid)
     
         # Mask for both nodes being wet
-        mask1 = (y1 > self.min_waterdepth) & (y2 > self.min_waterdepth)
+        mask1 = (y1 > self.settings.simulation.min_waterdepth) & (y2 > self.settings.simulation.min_waterdepth)
         
         if np.any(mask1):
             
             # 1.0 unit width for anayltical solutions, 0.12 for laboratory experiment (Delestre)
-            if self.geometry_channel == True:
-                if self.channel_type == 'finite':
-                    w1[mask1] = self.channel_width
-                    w2[mask1] = self.channel_width
-                    w_mid[mask1] = self.channel_width
+            if self.settings.physical.geometry_channel == True:
+                if self.settings.physical.channel_type == 'finite':
+                    w1[mask1] = self.settings.physical.channel_width
+                    w2[mask1] = self.settings.physical.channel_width
+                    w_mid[mask1] = self.settings.physical.channel_width
                 else:
                     w1[mask1] = 1.0
                     w2[mask1] = 1.0
@@ -1381,16 +1347,16 @@ class FlowSimulation:
                 )
 
         # Calculation when y1 and y2 are below LOWER_LIMIT
-        mask2 = (y1 <= self.min_waterdepth) & (y2 <= self.min_waterdepth)
+        mask2 = (y1 <= self.settings.simulation.min_waterdepth) & (y2 <= self.settings.simulation.min_waterdepth)
         
         if np.any(mask2):
             
             # 1.0 unit width for anayltical solutions, 0.12 for laboratory experiment (Delestre)
-            if self.geometry_channel == True:
-                if self.channel_type == 'finite':
-                    w1[mask2] = self.channel_width
-                    w2[mask2] = self.channel_width
-                    w_mid[mask2] = self.channel_width
+            if self.settings.physical.geometry_channel == True:
+                if self.settings.physical.channel_type == 'finite':
+                    w1[mask2] = self.settings.physical.channel_width
+                    w2[mask2] = self.settings.physical.channel_width
+                    w_mid[mask2] = self.settings.physical.channel_width
                 else:
                     w1[mask2] = 1.0
                     w2[mask2] = 1.0
@@ -1419,16 +1385,16 @@ class FlowSimulation:
         
         # Calculation when only y1 is below LOWER_LIMIT
         # y2 could be pressurized
-        mask3 = (y1 <= self.min_waterdepth) & (y2 > self.min_waterdepth)
+        mask3 = (y1 <= self.settings.simulation.min_waterdepth) & (y2 > self.settings.simulation.min_waterdepth)
         
         if np.any(mask3):
             
             # 1.0 unit width for anayltical solutions, 0.12 for laboratory experiment (Delestre)
-            if self.geometry_channel == True:
-                if self.channel_type == 'finite':
-                    w1[mask3] = self.channel_width
-                    w2[mask3] = self.channel_width
-                    w_mid[mask3] = self.channel_width
+            if self.settings.physical.geometry_channel == True:
+                if self.settings.physical.channel_type == 'finite':
+                    w1[mask3] = self.settings.physical.channel_width
+                    w2[mask3] = self.settings.physical.channel_width
+                    w_mid[mask3] = self.settings.physical.channel_width
                 else:
                     w1[mask3] = 1.0
                     w2[mask3] = 1.0
@@ -1466,16 +1432,16 @@ class FlowSimulation:
         
         # Calculation when only y2 is below LOWER_LIMIT
         # y1 could be pressurized
-        mask4 = (y1 > self.min_waterdepth) & (y2 <= self.min_waterdepth)
+        mask4 = (y1 > self.settings.simulation.min_waterdepth) & (y2 <= self.settings.simulation.min_waterdepth)
         
         if np.any(mask4):
             
             # 1.0 unit width for anayltical solutions, 0.12 for laboratory experiment (Delestre)
-            if self.geometry_channel == True:
-                if self.channel_type == 'finite':
-                    w1[mask4] = self.channel_width
-                    w2[mask4] = self.channel_width
-                    w_mid[mask4] = self.channel_width
+            if self.settings.physical.geometry_channel == True:
+                if self.settings.physical.channel_type == 'finite':
+                    w1[mask4] = self.settings.physical.channel_width
+                    w2[mask4] = self.settings.physical.channel_width
+                    w_mid[mask4] = self.settings.physical.channel_width
                 else:
                     w1[mask4] = 1.0
                     w2[mask4] = 1.0
@@ -1521,11 +1487,11 @@ class FlowSimulation:
     # # Slot is only taken into account for free-surface cases
     def _compute_discharge_areas(self, y1, y2, y_mid, slot_widths):
 
-        if self.geometry_channel == True:
-            if self.channel_type == 'finite':
-                a1 = self.channel_width * y1
-                a2 = self.channel_width * y2
-                self.a_mid_new = self.channel_width * y_mid
+        if self.settings.physical.geometry_channel == True:
+            if self.settings.physical.channel_type == 'finite':
+                a1 = self.settings.physical.channel_width * y1
+                a2 = self.settings.physical.channel_width * y2
+                self.a_mid_new = self.settings.physical.channel_width * y_mid
             else:
                 a1 = 1.0 * y1
                 a2 = 1.0 * y2
@@ -1560,9 +1526,9 @@ class FlowSimulation:
         # Check if any conduit is full and halve the Courant number
         # Currently not used
         if np.any(self.is_full_y_mid):
-            effective_courant = self.courant #/ 2
+            effective_courant = self.settings.simulation.courant #/ 2
         else:
-            effective_courant = self.courant
+            effective_courant = self.settings.simulation.courant
 
         # 1. Courant–Froude criterion
         v_mask = np.abs(v_mid) > 1e-8
@@ -1584,14 +1550,14 @@ class FlowSimulation:
         # Fallback logic
         if not np.isfinite(dt_new) or dt_new <= 0.0:
             self.logger.warning("Invalid dt computed. Falling back to dt_init.")
-            dt_new = self.dt_init
+            dt_new = self.settings.simulation.dt_init
 
         # Enforce max limit
-        #self.dt = min(dt_new, self.dt_max)
+        #self.dt = min(dt_new, self.settings.simulation.dt_max)
         
         # Enforce limits (dt_init is lower bound)
-        dt_new = max(dt_new, self.dt_init)
-        self.dt = min(dt_new, self.dt_max)
+        dt_new = max(dt_new, self.settings.simulation.dt_init)
+        self.dt = min(dt_new, self.settings.simulation.dt_max)
 
                     
     def _compute_hydraulic_radius(self, flow_depths, flow_areas, slot_width, is_full):
@@ -1612,11 +1578,15 @@ class FlowSimulation:
             numpy.ndarray: Array of computed hydraulic radii for the conduits.
         """
         
-        if self.geometry_channel:
-            if self.channel_type == 'infinite':
+        if self.settings.physical.geometry_channel:
+            if self.settings.physical.channel_type == 'infinite':
                 hydraulic_radii = flow_depths
-            elif self.channel_type == 'finite':
-                hydraulic_radii = (self.channel_width * flow_depths) / (self.channel_width + 2 * flow_depths)
+            elif self.settings.physical.channel_type == 'finite':
+                hydraulic_radii = (
+                    self.settings.physical.channel_width * flow_depths
+                ) / (
+                    self.settings.physical.channel_width + 2 * flow_depths
+                )
             
         # else:
         #     # Calculate hydraulic radius for both free surface and pressurized conditions
@@ -1730,7 +1700,7 @@ class FlowSimulation:
         inertial terms with a correction applied only at nodes with flux boundaries,
         and friction losses computed either with Churchill only (pressurized and
         free-surface via D_eff) or with a hybrid approach (Churchill for pressurized,
-        Manning for free-surface), depending on self.friction_model.
+        Manning for free-surface), depending on self.settings.physical.friction_model.
 
 
         Args:
@@ -1759,15 +1729,15 @@ class FlowSimulation:
         D_eff = self.D_eff
 
         # Pressure term (upstream weighting)
-        #dQ_pressure = -self.gravity * a_mid_upwtd * (h2 - h1) / self.conduit_lengths * self.dt
+        #dQ_pressure = -self.settings.physical.gravity * a_mid_upwtd * (h2 - h1) / self.conduit_lengths * self.dt
         ### 14.4.26, slot not taken into account for pressurized flows
-        if self.geometry_channel:
+        if self.settings.physical.geometry_channel:
             a_pressure = a_mid_upwtd
         else:
             a_pressure = np.where(self.is_full_y_mid, self.full_conduit_areas, a_mid_upwtd)
 
         dQ_pressure = (
-            -self.gravity * a_pressure * (h2 - h1) / self.conduit_lengths * self.dt
+            -self.settings.physical.gravity * a_pressure * (h2 - h1) / self.conduit_lengths * self.dt
         )
     
         # Add correction term. This is currently only applied for flux BCs
@@ -1784,17 +1754,19 @@ class FlowSimulation:
         #abs_vmid = np.abs(v_mid)
 
         # Case: Open channel geometry
-        if self.geometry_channel == True:
+        if self.settings.physical.geometry_channel == True:
 
             # Approximate Reynolds number using flow depth as hydraulic radius.
             # Notice that r_mid takes into account channel width (finite or infinite)
             D_eff[:] = 4.0 * r_mid
-            self.Re_conduit[:] = (self.rho * np.abs(v_mid) * D_eff) / self.dyn_viscosity
+            self.Re_conduit[:] = (
+                self.settings.physical.water_density * np.abs(v_mid) * D_eff
+            ) / self.settings.physical.dynamic_viscosity
    
             # Compute friction term using Manning's equation for free-surface flow
             # Manning n is provided directly via physical properties
             dQ_friction[~self.is_full_y_mid] = (
-                self.gravity * self.conduit_manning[~self.is_full_y_mid]**2 *
+                self.settings.physical.gravity * self.conduit_manning[~self.is_full_y_mid]**2 *
                 np.abs(v_mid[~self.is_full_y_mid]) /
                 (r_mid_upwtd[~self.is_full_y_mid]**(4/3)) * self.dt
             )
@@ -1802,7 +1774,7 @@ class FlowSimulation:
         # Case: Circular conduits
         else:
             # Only Churchill friction
-            if self.friction_model == "churchill":
+            if self.settings.physical.friction_model == "churchill":
 
                 # Define effective diameter
                 D_eff[self.is_full_y_mid] = self.full_hydraulic_diameters[self.is_full_y_mid]
@@ -1810,7 +1782,8 @@ class FlowSimulation:
 
                 # Reynolds number using D_eff
                 self.Re_conduit[:] = (
-                    self.rho * np.abs(v_mid) * D_eff / self.dyn_viscosity
+                    self.settings.physical.water_density * np.abs(v_mid) * D_eff
+                    / self.settings.physical.dynamic_viscosity
                 )
 
                 # Define masks for flow regimes under pressurized conditions
@@ -1836,7 +1809,9 @@ class FlowSimulation:
 
                 D_eff[self.is_full_y_mid]  = self.full_hydraulic_diameters[self.is_full_y_mid]
                 D_eff[~self.is_full_y_mid] = 4.0 * r_mid[~self.is_full_y_mid]
-                self.Re_conduit[:] = (self.rho * np.abs(v_mid) * D_eff) / self.dyn_viscosity
+                self.Re_conduit[:] = (
+                    self.settings.physical.water_density * np.abs(v_mid) * D_eff
+                ) / self.settings.physical.dynamic_viscosity
 
                 # Define masks for flow regimes under pressurized conditions
                 laminar_flow_mask = (self.Re_conduit <= 2300) & self.is_full_y_mid
@@ -1862,7 +1837,7 @@ class FlowSimulation:
 
                 # Compute Manning-based friction dQ for free-surface flow in circular conduits
                 dQ_friction[~self.is_full_y_mid] = (
-                    self.gravity * self.conduit_manning[~self.is_full_y_mid]**2 *
+                    self.settings.physical.gravity * self.conduit_manning[~self.is_full_y_mid]**2 *
                     np.abs(v_mid[~self.is_full_y_mid]) /
                     (r_mid_upwtd[~self.is_full_y_mid]**(4/3)) * self.dt
                 )
@@ -1871,7 +1846,10 @@ class FlowSimulation:
         self.Q_new[:] = (self.Q_old_t + dQ_pressure + dQ_inertia1 + dQ_inertia2)/(1 + dQ_friction)
        
         # Update flows using under-relaxation
-        self.Q_new[:] = (1.0 - self.w) * self.Q_prev_i + self.w * self.Q_new
+        self.Q_new[:] = (
+            (1.0 - self.settings.solver.relaxation_factor) * self.Q_prev_i
+            + self.settings.solver.relaxation_factor * self.Q_new
+        )
         
         # Check for flow rate sign changes to address potential numerical instabilities.
         # Currently not needed, but retained for future debugging.
@@ -1928,7 +1906,10 @@ class FlowSimulation:
         self.y_new = self.y_old_t + dy
                  
         # Update water depths using under-relaxation
-        self.y_new[:] = (1.0 - self.w) * self.y_prev_i + self.w * self.y_new
+        self.y_new[:] = (
+            (1.0 - self.settings.solver.relaxation_factor) * self.y_prev_i
+            + self.settings.solver.relaxation_factor * self.y_new
+        )
     
         # Enforce water depth (_cache_hydraulic_bcs)
         self.y_new[self.bc_prescribed_y_mask] = self.bc_prescribed_y_vals[self.bc_prescribed_y_mask]    
@@ -1952,10 +1933,14 @@ class FlowSimulation:
         
         """
         
-        self.Q_new[(self.Q_new > self.min_flowrate) &
-                   (self.y_new[self.n_indices1] <= self.min_waterdepth)] = self.min_flowrate
-        self.Q_new[(self.Q_new < -self.min_flowrate) &
-                   (self.y_new[self.n_indices2] <= self.min_waterdepth)] = -self.min_flowrate
+        self.Q_new[
+            (self.Q_new > self.settings.simulation.min_flowrate)
+            & (self.y_new[self.n_indices1] <= self.settings.simulation.min_waterdepth)
+        ] = self.settings.simulation.min_flowrate
+        self.Q_new[
+            (self.Q_new < -self.settings.simulation.min_flowrate)
+            & (self.y_new[self.n_indices2] <= self.settings.simulation.min_waterdepth)
+        ] = -self.settings.simulation.min_flowrate
     
     def _print_timestep_info(self, n_iterations, converged, froude):
         """
@@ -1975,7 +1960,7 @@ class FlowSimulation:
         """
     
         # Print information at specified intervals
-        if math.fmod(self.current_timestep, self.print_info_interval) == 0:
+        if math.fmod(self.current_timestep, self.settings.simulation.print_info_interval) == 0:
             print(f'Timestep = {self.current_timestep}, '
                   f'Time = {self.current_time:.1f}, dt = {self.dt:.2e}')
             print(f'Converged = {converged}, Picard iterations = {n_iterations}, '
@@ -2018,11 +2003,11 @@ class FlowSimulation:
 
         # Precompute flux-to-volume conversion for channels
         if np.any(self.bc_flux_node):
-            if self.geometry_channel:
-                if self.channel_type == 'infinite':
+            if self.settings.physical.geometry_channel:
+                if self.settings.physical.channel_type == 'infinite':
                     self.bc_flux_to_vol_node[:] = self.bc_flux_node * self.half_lengths_sum_per_node
                 else:
-                    self.bc_flux_to_vol_node[:] = (self.bc_flux_node * self.channel_width *
+                    self.bc_flux_to_vol_node[:] = (self.bc_flux_node * self.settings.physical.channel_width *
                                             self.half_lengths_sum_per_node)
             else:
                 raise ValueError("Flux BCs detected but geometry_channel=False."
@@ -2076,7 +2061,7 @@ class FlowSimulation:
 
         """
 
-        # if np.all(np.abs(self.y_new - self.y_prev_i) < self.picard_depth_tol):
+        # if np.all(np.abs(self.y_new - self.y_prev_i) < self.settings.solver.picard_depth_tol):
         #     return True
         # else:
         #     return False
@@ -2095,7 +2080,7 @@ class FlowSimulation:
             relative_l2_norm = l2_norm_diff
     
         # Check if the relative L2 norm is below the specified tolerance
-        if relative_l2_norm < self.picard_depth_tol:
+        if relative_l2_norm < self.settings.solver.picard_depth_tol:
             return True
         else:
             return False
@@ -2137,7 +2122,7 @@ class FlowSimulation:
         This method evaluates convergence based on the previously computed
         relative L2 norms of water depth (`y`) and discharge (`Q`). The system
         is considered converged when both relative norms are below the steady-
-        state tolerance `self.ss_rel_l2tol`.
+        state tolerance `self.settings.solver.ss_rel_l2tol`.
 
         The relative norms (`self.relative_y_l2_norm` and
         `self.relative_Q_l2_norm`) are computed by calling
@@ -2149,11 +2134,11 @@ class FlowSimulation:
         """
 
         is_y_converged = (
-            self.relative_y_l2_norm < self.ss_rel_l2tol
+            self.relative_y_l2_norm < self.settings.solver.ss_rel_l2tol
         )
 
         is_Q_converged = (
-            self.relative_Q_l2_norm < self.ss_rel_l2tol
+            self.relative_Q_l2_norm < self.settings.solver.ss_rel_l2tol
         )
 
         return is_y_converged and is_Q_converged
@@ -2205,9 +2190,10 @@ class FlowSimulation:
         Requires simulation_settings.enable_transport == True.
         """
         # If enable_transport is False raise warning and stop
-        if not getattr(self.simulation_settings, "enable_transport", False):
+        if not self.settings.simulation.enable_transport:
             msg = ("set_initial_concentration() called but enable_transport=False. "
-                "Enable transport (solver_settings.enable_transport=True) before initializing concentrations.")
+                "Enable transport (simulation_settings.enable_transport=True) "
+                "before initializing concentrations.")
             try:
                 self.logger.warning(msg)
             except Exception:
@@ -2247,7 +2233,7 @@ class FlowSimulation:
             desired_outputs.get(k, False)
             for k in ("concentrations", "mass")
         )
-        if wants_transport and not getattr(self.simulation_settings, "enable_transport", False):
+        if wants_transport and not self.settings.simulation.enable_transport:
             raise ValueError(
                 "User requests to save transport fields (e.g., 'concentrations' or 'mass') "
                 "but enable_transport=False. Enable transport or remove these outputs."
@@ -2563,12 +2549,12 @@ class FlowSimulation:
         Qe = self.Q_new.copy()
         Ae = self.a_mid
         ve = Qe / np.maximum(Ae, 1e-30)
-        De = self.molecular_diffusivity + self.alpha_l * np.abs(ve)
+        De = self.settings.transport.molecular_diffusivity + self.settings.transport.alpha_l * np.abs(ve)
 
         # CFL substepping
         dt_adv  = np.min(L / np.maximum(np.abs(ve), 1e-12))
         dt_diff = np.min(L**2 / np.maximum(2.0 * De, 1e-30))
-        dt_lim  = self.transport_cfl * min(dt_adv, dt_diff)
+        dt_lim  = self.settings.transport.transport_cfl * min(dt_adv, dt_diff)
         n_sub   = max(1, int(np.ceil(self.dt / np.maximum(dt_lim, 1e-12))))
         dt_s    = self.dt / n_sub
 

@@ -12,5 +12,5 @@ from .geometry_settings import GeometrySettings
 from .solver_settings import SolverSettings
 from .simulation_settings import SimulationSettings
 from .transport_settings import TransportSettings
+from .saint_venant_settings import SaintVenantSettings
 from .validate_settings import validate_settings
-from .apply_settings import apply_settings
