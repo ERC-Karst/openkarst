@@ -80,10 +80,12 @@ class FlowSimulation:
             Runs the simulation and returns the results.
         _dynamic_wave(self):
             Computes the dynamic wave for the current timestep.
-        _update_network_state(self):
-            Updates the state of the network with the new values.
-        _initialize_state_variables(self):
-            Initializes the state variables at the beginning of each timestep.
+        _accept_picard_iteration(self):
+            Accepts the latest Picard iterate for the next iteration.
+        _accept_hydraulic_solution(self):
+            Accepts the solved hydraulic state for the current timestep.
+        _prepare_timestep_state(self):
+            Prepares state buffers at the beginning of each timestep.
         _compute_conduit_state(self, y1, y2, y_mid):
             Computes the pressurization state of the conduits.
         _compute_surface_area(self, y1, y2, y_mid):
@@ -106,11 +108,11 @@ class FlowSimulation:
             Adjusts the flow rates for dry nodes.
         _print_timestep_info(self, n_iterations, converged, froude):
             Prints information about the current timestep.
-        _check_picard_convergence(self):
+        _has_picard_converged(self):
             Checks the convergence of the Picard iterations.
-        _compute_error_norms(self):
+        _update_timestep_error_norms(self):
             Computes the L2 error norms.
-        _check_steady_state_convergence(self):
+        _has_reached_steady_state(self):
             Checks the convergence to steady state using the L2 norms.
         __del__(self):
             Destructor for the FlowSimulation class, closes the logger.
@@ -456,9 +458,10 @@ class FlowSimulation:
             self.picard_iterations_total = 0
             
             while True:
-                self._initialize_state_variables()
-               
 
+                # Prepare timestep snapshot and buffer for Picard iteration
+                self._prepare_timestep_state()
+               
                 # Compute boundary condition values
                 # This currently also computes 
                 self._cache_hydraulic_bcs()
@@ -475,11 +478,11 @@ class FlowSimulation:
                     ))
                     self.convergence_fails += 1
                     
-                # Update the network state with the new values
-                self._update_network_state()
+                # Accept the solved hydraulic state for this timestep
+                self._accept_hydraulic_solution()
 
                 # Compute L2 error norms for each timestep
-                self._compute_error_norms()
+                self._update_timestep_error_norms()
 
                 self._print_timestep_info(n_iterations, converged, self._froude_last)
 
@@ -535,7 +538,7 @@ class FlowSimulation:
                 
                 # Check if steady-state achieved and exit (only if stop condition not set)
                 if not self.stop_condition_set and self.steady_state:
-                    if self._check_steady_state_convergence() and self.current_timestep > 10:
+                    if self._has_reached_steady_state() and self.current_timestep > 10:
                         self.logger.info(
                             f'Steady state reached: Simulation finished at time = {self.current_time:.2f}s'
                         )
@@ -1080,9 +1083,9 @@ class FlowSimulation:
         # Passed all tests
         self.logger.info("Boundary condition consistency check passed.")
         
-    def _initialize_state_variables(self):
+    def _prepare_timestep_state(self):
         """
-        Initialize state variables for the simulation.
+        Prepare state buffers for the next hydraulic timestep.
 
         This method copies the current state variables to their respective previous and
         old state variables to prepare for the next iteration of the simulation.
@@ -1096,11 +1099,11 @@ class FlowSimulation:
         np.copyto(self.a_mid_old_t, self.a_mid) 
         np.copyto(self.dQ_old_t, self.dQ)
          
-    def _update_network_state(self):
+    def _accept_hydraulic_solution(self):
         """
-        Update the network state properties.
+        Accept the solved hydraulic state for the current timestep.
 
-        This method updates the state properties of the network by assigning the new values
+        This method updates the hydraulic state properties by assigning the new values
         to the current state variables.
         """
         
@@ -1112,6 +1115,14 @@ class FlowSimulation:
         # Transport: Accept the volume change after each timestep 
         self.V_node += self._dV_last
         self.V_node[self.V_node < 0.0] = 0.0  # For safety
+
+    def _accept_picard_iteration(self):
+        """
+        Accept the latest Picard iterate as the reference for the next iteration.
+        """
+
+        np.copyto(self.Q_prev_i, self.Q_new)
+        np.copyto(self.y_prev_i, self.y_new)
 
     def _dynamic_wave(self):
         """
@@ -1209,12 +1220,11 @@ class FlowSimulation:
 
             self._adjust_flowrates_dry_nodes()
 
-            if self._check_picard_convergence():
+            if self._has_picard_converged():
                 return True, iteration + 1
             
-            # Update iteration state variables 
-            np.copyto(self.Q_prev_i, self.Q_new)
-            np.copyto(self.y_prev_i, self.y_new)
+            # Accept the iteration state for the next Picard iteration
+            self._accept_picard_iteration()
             
             iteration += 1
 
@@ -2083,7 +2093,7 @@ class FlowSimulation:
             self.bc_mass_injection_node[bc.target_ids] = mdot
 
 
-    def _check_picard_convergence(self):
+    def _has_picard_converged(self):
         """
         Check if the Picard iteration has converged.
 
@@ -2120,9 +2130,9 @@ class FlowSimulation:
         else:
             return False
         
-    def _compute_error_norms(self):
+    def _update_timestep_error_norms(self):
         """
-        Compute relative error norms between the new and old states.
+        Update relative error norms between the new and old states.
 
         This method computes relative L2 norms for both `y` and `Q`, comparing
         the new state (`self.y_new`, `self.Q_new`) with the previous state
@@ -2150,7 +2160,7 @@ class FlowSimulation:
         else:
             self.relative_Q_l2_norm = 0.0
         
-    def _check_steady_state_convergence(self):
+    def _has_reached_steady_state(self):
         """
         Check whether steady-state convergence has been reached.
 
@@ -2160,7 +2170,8 @@ class FlowSimulation:
         state tolerance `self.ss_rel_l2tol`.
 
         The relative norms (`self.relative_y_l2_norm` and
-        `self.relative_Q_l2_norm`) are computed by calling `_compute_error_norms()`.
+        `self.relative_Q_l2_norm`) are computed by calling
+        `_update_timestep_error_norms()`.
 
         Returns:
             bool: True if both `y` and `Q` satisfy the steady-state convergence
