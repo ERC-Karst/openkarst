@@ -131,9 +131,10 @@ def test_flow_simulation_runs_on_small_linear_network(tmp_path):
 def test_flow_simulation_defaults_to_analytical_geometry_backend(tmp_path):
     flow = _small_flow_simulation_with_default_geometry_settings(tmp_path)
 
-    assert flow.geometry_backend == "circular_analytical"
-    assert flow.geometry_table_points == 100
-    assert flow.geometry_interpolation_method == "pchip"
+    assert flow.settings.geometry.backend == "circular_analytical"
+    assert flow.settings.geometry.table_points == 100
+    assert flow.settings.geometry.interpolation_method == "pchip"
+    assert not hasattr(flow, "geometry_backend")
 
 
 def test_flow_simulation_applies_geometry_table_points(tmp_path):
@@ -143,7 +144,7 @@ def test_flow_simulation_applies_geometry_table_points(tmp_path):
         table_points=1234,
     )
 
-    assert flow.geometry_table_points == 1234
+    assert flow.settings.geometry.table_points == 1234
     assert flow.cross_section_geometry.n_points == 1234
 
 
@@ -154,7 +155,7 @@ def test_flow_simulation_applies_geometry_interpolation_method(tmp_path):
         interpolation_method="linear",
     )
 
-    assert flow.geometry_interpolation_method == "linear"
+    assert flow.settings.geometry.interpolation_method == "linear"
     assert flow.cross_section_geometry.interpolation_method == "linear"
 
 
