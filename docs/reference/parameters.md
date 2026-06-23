@@ -1,0 +1,101 @@
+# Parameters
+
+This page summarizes commonly used settings. Values are passed as dictionaries
+to a `FlowSimulation` object or `run_simulation()`.
+
+## Physical properties
+
+```python
+physical_properties = {
+    "water_density": 1000.0,
+    "gravity": 9.81,
+    "dynamic_viscosity": 0.001,
+    "geometry_channel": False,
+    "friction_model": "churchill",
+}
+```
+
+| Parameter | Meaning | Typical value |
+| --- | --- | --- |
+| `water_density` | Water density in kg/m^3. | `1000.0` |
+| `gravity` | Gravitational acceleration in m/s^2. | `9.81` |
+| `dynamic_viscosity` | Dynamic viscosity in Pa s. | `0.001` |
+| `geometry_channel` | Use channel-style geometry. | `False` |
+| `channel_type` | `finite` or `infinite` channel. | `finite` |
+| `channel_width` | Width for finite channel geometry. | `1.0` |
+| `channel_manning` | Manning coefficient for channel geometry. | `0.03` |
+| `friction_model` | Closed-conduit friction model. | `churchill` or `hybrid` |
+
+## Solver settings
+
+```python
+solver_settings = {
+    "relaxation_factor": 0.6,
+    "max_iterations": 100,
+    "picard_depth_tol": 1e-7,
+    "ss_rel_l2tol": 1e-3,
+}
+```
+
+| Parameter | Meaning |
+| --- | --- |
+| `relaxation_factor` | Damping factor for Picard iterations. |
+| `max_iterations` | Maximum Picard iterations per time step. |
+| `picard_depth_tol` | Water-depth tolerance for Picard convergence. |
+| `ss_rel_l2tol` | Relative L2 tolerance for steady-state detection. |
+
+## Simulation settings
+
+```python
+simulation_settings = {
+    "min_waterdepth": 1e-10,
+    "min_flowrate": 1e-10,
+    "courant": 0.5,
+    "adaptive_timesteps": True,
+    "dt_init": 0.01,
+    "dt_max": 0.1,
+    "steady_state": False,
+    "t_max": 100.0,
+    "print_info_interval": 500,
+}
+```
+
+| Parameter | Meaning |
+| --- | --- |
+| `min_waterdepth` | Minimum water depth used for numerical stability. |
+| `min_flowrate` | Minimum flow rate used for numerical stability. |
+| `courant` | Courant number for time-step control. |
+| `adaptive_timesteps` | Whether time step changes during the run. |
+| `dt_init` | Initial or constant time step. |
+| `dt_max` | Maximum adaptive time step. |
+| `steady_state` | Stop based on steady-state convergence. |
+| `t_max` | End time for transient simulations. |
+| `print_info_interval` | Number of steps between progress messages. |
+
+## Output settings
+
+```python
+outputs = {
+    "output_interval": 1.0,
+    "time": True,
+    "time_step_size": True,
+    "flowrates": True,
+    "water_depths": True,
+}
+```
+
+| Output key | Stored value |
+| --- | --- |
+| `time` | Simulation time. |
+| `time_step_size` | Time-step size. |
+| `flowrates` | Flow rate per conduit. |
+| `velocities` | Velocity per conduit. |
+| `water_depths` | Water depth per node. |
+| `y_l2_norms` | Relative water-depth L2 norm. |
+| `Q_l2_norms` | Relative flow-rate L2 norm. |
+| `convergence_fails` | Cumulative convergence failures. |
+| `reynolds_numbers` | Reynolds number per conduit. |
+| `picard_iterations` | Picard iterations at stored time. |
+| `picard_iterations_total` | Cumulative Picard iterations. |
+
+Only keys set to `True` are stored.

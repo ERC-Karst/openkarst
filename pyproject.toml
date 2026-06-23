@@ -39,6 +39,7 @@ dependencies = [
 dev = [
     "mkdocs",
     "mkdocs-material",
+    "pymdown-extensions",
     "pytest"
 ]
 

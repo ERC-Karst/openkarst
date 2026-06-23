@@ -1,16 +1,28 @@
-<img src="images/openkarst_header_color.png" alt="openKARST logo" width="220">
+<p align="center">
+  <img src="assets/images/openkarst_header_color.png" alt="openKARST logo" width="300">
+</p>
 
-# Documentation
+# User manual
 
-[![DOI](https://img.shields.io/badge/DOI-10.1016%2Fj.cageo.2025.106066-blue)](https://doi.org/10.1016/j.cageo.2025.106066)
-![version](https://img.shields.io/badge/version-0.3.0-blue)
+openKARST is a Python package for simulating flow through karst conduit
+networks. This manual is intended for researchers and practitioners who want to
+set up, run, and evaluate hydraulic simulations with openKARST.
 
-This site introduces you to openKARST and provides guidance on how to use it. The included working examples illustrate the core functionality, while the accompanying paper offers a detailed description of the model for readers seeking a deeper understanding.
+## Start here
 
-## Contents
+New users should begin with [Installation](getting-started/installation.md) and
+then run the [Quick start](getting-started/quick-start.md). The numbered
+tutorials build on that first example and gradually introduce boundary
+conditions, observations, cave data, and model validation.
 
-- [Installation](installation.md)
-- [Examples](examples.md)
-- [Simulation Parameters](simulation_parameters.md)
-- [Contributing](contributing.md)
-- [API Reference](reference/openkarst.md)
+[Install openKARST](getting-started/installation.md){ .md-button .md-button--primary }
+[Run the quick start](getting-started/quick-start.md){ .md-button }
+
+## Using the manual
+
+After the quick start, use the left navigation according to your task:
+
+- **Concepts** explain the model structure and simulation workflow.
+- **Tutorials** develop complete examples in a recommended order.
+- **How-to guides** cover visualization and data export.
+- **Reference** provides parameter definitions and terminology.

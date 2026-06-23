@@ -1,3 +1,0 @@
-# openKARST API Reference
-
-::: openkarst
