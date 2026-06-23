@@ -603,36 +603,6 @@ class FlowSimulation:
         np.copyto(self.Q, initial_Q)
         np.copyto(self.y, initial_y)
 
-        # # Compute initial nodal volumes for transport
-        # # NOTE: Move into its own private function?
-        # y0   = np.array(initial_y, dtype=float)
-        # y1   = y0[self.n_indices1]
-        # y2   = y0[self.n_indices2]
-        # y_mid = 0.5*(y1 + y2)
-
-        # # Get slot widths at mid (and set pressurization masks) via surface-area routine
-        # n_surface_a, slot_w1, slot_w2, slot_w_mid, w_mid = self._compute_surface_area(y1, y2, y_mid)
-
-        # # Cross-sectional discharge areas at ends and mid
-        # A1, A2, A_mid = self._compute_discharge_areas(y1, y2, y_mid, slot_w_mid)
-
-        # # Conduit volumes (Simpsons rule)
-        # L = np.asarray(self.conduit_lengths, dtype=float)
-        # V_conduit = (L / 6.0) * (A1 + 4.0*A_mid + A2)   # [m^3]
-
-        # # Distribute half of each conduit volume to its end nodes
-        # self.V_node = np.zeros(self.network.Np, dtype=float)
-        # np.add.at(self.V_node, self.n_indices1, 0.5 * V_conduit)
-        # np.add.at(self.V_node, self.n_indices2, 0.5 * V_conduit)
-        # self.V_node[self.V_node < 0.0] = 0.0  # for safety
-
-        # # Initialize transport mass if concentration already provided
-        # # NOTE: This is set by the user via set_initial_concentrations
-        # # (which should typically set after set_initial_conditions)
-        # # Need to be careful to make sure the user cant go wrong here  
-        # #if np.any(self.C):
-        # #    self.M = self.C * np.maximum(self.V_node, 1e-20)
-
 
     def set_waterdepth_BC(self, nodes, values, mode='add', extrapolate='hold'):
         """
