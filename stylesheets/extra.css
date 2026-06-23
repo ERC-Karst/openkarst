@@ -1,0 +1,105 @@
+:root {
+  --ok-navy: #002a4c;
+  --ok-navy-dark: #001d35;
+  --ok-cyan: #00a8ba;
+  --ok-cyan-text: #007b89;
+  --ok-ink: #172536;
+}
+
+[data-md-color-scheme="default"] {
+  --md-primary-fg-color: var(--ok-navy);
+  --md-primary-fg-color--light: #164a68;
+  --md-primary-fg-color--dark: var(--ok-navy-dark);
+  --md-accent-fg-color: var(--ok-cyan-text);
+  --md-typeset-a-color: var(--ok-cyan-text);
+}
+
+.md-header {
+  border-bottom: 3px solid var(--ok-cyan);
+}
+
+.md-header__button.md-logo {
+  display: inline-flex;
+  flex-shrink: 0;
+  margin-right: 0.35rem;
+  padding: 0.25rem 0;
+}
+
+.md-header__button.md-logo img,
+.md-header__button.md-logo svg {
+  height: 1.65rem;
+  width: auto;
+}
+
+.md-header__title {
+  display: none;
+}
+
+.md-search__form {
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+.md-search__form:hover {
+  background-color: rgba(255, 255, 255, 0.18);
+}
+
+.md-tabs__link--active,
+.md-tabs__link:hover,
+.md-nav__link:is(:focus, :hover),
+.md-nav__link--active {
+  color: var(--ok-cyan-text);
+}
+
+.md-typeset .md-button {
+  border-color: var(--ok-navy);
+  color: var(--ok-navy);
+}
+
+.md-typeset .md-button:is(:focus, :hover) {
+  background-color: var(--ok-cyan);
+  border-color: var(--ok-cyan);
+  color: var(--ok-navy);
+}
+
+.md-typeset .md-button--primary {
+  background-color: var(--ok-navy);
+  border-color: var(--ok-navy);
+  color: #fff;
+}
+
+.md-typeset .md-button--primary:is(:focus, :hover) {
+  background-color: var(--ok-navy-dark);
+  border-color: var(--ok-cyan);
+  color: #fff;
+}
+
+.md-typeset h1 {
+  color: var(--ok-ink);
+  font-weight: 720;
+}
+
+.md-typeset h2 {
+  margin-top: 2.1em;
+}
+
+.md-typeset table:not([class]) {
+  font-size: 0.78rem;
+}
+
+.md-typeset code {
+  border-radius: 0.2rem;
+}
+
+.md-typeset .admonition.tip,
+.md-typeset details.tip {
+  border-color: var(--ok-cyan);
+}
+
+.md-typeset .admonition.tip > .admonition-title,
+.md-typeset details.tip > summary {
+  background-color: rgba(0, 168, 186, 0.1);
+}
+
+.md-typeset img {
+  border-radius: 4px;
+}

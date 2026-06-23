@@ -10,26 +10,28 @@
       
       
       
-        <link rel="canonical" href="https://erc-karst.github.io/openkarst/">
+        <link rel="canonical" href="https://erc-karst.github.io/openkarst/how-to/export-vtk/">
       
       
+        <link rel="prev" href="../visualize-viewer/">
       
-        <link rel="next" href="getting-started/installation/">
+      
+        <link rel="next" href="../../reference/parameters/">
       
       
-      <link rel="icon" href="assets/images/openkarst_favicon.png">
+      <link rel="icon" href="../../assets/images/openkarst_favicon.png">
       <meta name="generator" content="mkdocs-1.6.0, mkdocs-material-9.5.29">
     
     
       
-        <title>openKARST manual</title>
+        <title>Export to VTK - openKARST manual</title>
       
     
     
-      <link rel="stylesheet" href="assets/stylesheets/main.76a95c52.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.76a95c52.min.css">
       
         
-        <link rel="stylesheet" href="assets/stylesheets/palette.06af60db.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
       
       
 
@@ -48,9 +50,9 @@
       
     
     
-      <link rel="stylesheet" href="stylesheets/extra.css">
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
     
-    <script>__md_scope=new URL(".",location),__md_hash=e=>[...e].reduce((e,_)=>(e<<5)-e+_.charCodeAt(0),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce((e,_)=>(e<<5)-e+_.charCodeAt(0),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -76,7 +78,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#user-manual" class="md-skip">
+        <a href="#export-to-vtk" class="md-skip">
           Skip to content
         </a>
       
@@ -96,9 +98,9 @@
 
 <header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="." title="openKARST manual" class="md-header__button md-logo" aria-label="openKARST manual" data-md-component="logo">
+    <a href="../.." title="openKARST manual" class="md-header__button md-logo" aria-label="openKARST manual" data-md-component="logo">
       
-  <img src="assets/images/openkarst_header_white.png" alt="logo">
+  <img src="../../assets/images/openkarst_header_white.png" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -115,7 +117,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Home
+              Export to VTK
             
           </span>
         </div>
@@ -216,9 +218,9 @@
 
 <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="." title="openKARST manual" class="md-nav__button md-logo" aria-label="openKARST manual" data-md-component="logo">
+    <a href="../.." title="openKARST manual" class="md-nav__button md-logo" aria-label="openKARST manual" data-md-component="logo">
       
-  <img src="assets/images/openkarst_header_white.png" alt="logo">
+  <img src="../../assets/images/openkarst_header_white.png" alt="logo">
 
     </a>
     openKARST manual
@@ -242,30 +244,10 @@
       
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  <span class="md-ellipsis">
-    Home
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="." class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -274,44 +256,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#start-here" class="md-nav__link">
-    <span class="md-ellipsis">
-      Start here
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#using-the-manual" class="md-nav__link">
-    <span class="md-ellipsis">
-      Using the manual
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -369,7 +313,7 @@
   
   
     <li class="md-nav__item">
-      <a href="getting-started/installation/" class="md-nav__link">
+      <a href="../../getting-started/installation/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -390,7 +334,7 @@
   
   
     <li class="md-nav__item">
-      <a href="getting-started/quick-start/" class="md-nav__link">
+      <a href="../../getting-started/quick-start/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -468,7 +412,7 @@
   
   
     <li class="md-nav__item">
-      <a href="concepts/overview/" class="md-nav__link">
+      <a href="../../concepts/overview/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -489,7 +433,7 @@
   
   
     <li class="md-nav__item">
-      <a href="concepts/networks/" class="md-nav__link">
+      <a href="../../concepts/networks/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -510,7 +454,7 @@
   
   
     <li class="md-nav__item">
-      <a href="concepts/simulation-workflow/" class="md-nav__link">
+      <a href="../../concepts/simulation-workflow/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -531,7 +475,7 @@
   
   
     <li class="md-nav__item">
-      <a href="concepts/results/" class="md-nav__link">
+      <a href="../../concepts/results/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -611,7 +555,7 @@
   
   
     <li class="md-nav__item">
-      <a href="tutorials/minimal-straight-conduit/" class="md-nav__link">
+      <a href="../../tutorials/minimal-straight-conduit/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -632,7 +576,7 @@
   
   
     <li class="md-nav__item">
-      <a href="tutorials/boundary-conditions/" class="md-nav__link">
+      <a href="../../tutorials/boundary-conditions/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -653,7 +597,7 @@
   
   
     <li class="md-nav__item">
-      <a href="tutorials/observations-and-results/" class="md-nav__link">
+      <a href="../../tutorials/observations-and-results/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -674,7 +618,7 @@
   
   
     <li class="md-nav__item">
-      <a href="tutorials/cave-network/" class="md-nav__link">
+      <a href="../../tutorials/cave-network/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -695,7 +639,7 @@
   
   
     <li class="md-nav__item">
-      <a href="tutorials/analytical-validation/" class="md-nav__link">
+      <a href="../../tutorials/analytical-validation/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -720,8 +664,10 @@
       
   
   
+    
   
   
+  
     
     
       
@@ -737,11 +683,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
         
           
           <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
@@ -755,7 +701,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             How-to guides
@@ -769,7 +715,7 @@
   
   
     <li class="md-nav__item">
-      <a href="how-to/visualize-viewer/" class="md-nav__link">
+      <a href="../visualize-viewer/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -787,10 +733,30 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="how-to/export-vtk/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Export to VTK
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   <span class="md-ellipsis">
@@ -799,6 +765,62 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#basic-export" class="md-nav__link">
+    <span class="md-ellipsis">
+      Basic export
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mark-inlet-and-outlet-nodes" class="md-nav__link">
+    <span class="md-ellipsis">
+      Mark inlet and outlet nodes
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exported-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      Exported fields
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#paraview-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      ParaView workflow
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -864,7 +886,7 @@
   
   
     <li class="md-nav__item">
-      <a href="reference/parameters/" class="md-nav__link">
+      <a href="../../reference/parameters/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -885,7 +907,7 @@
   
   
     <li class="md-nav__item">
-      <a href="reference/glossary/" class="md-nav__link">
+      <a href="../../reference/glossary/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -913,7 +935,7 @@
   
   
     <li class="md-nav__item">
-      <a href="citation/" class="md-nav__link">
+      <a href="../../citation/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -953,18 +975,36 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#start-here" class="md-nav__link">
+  <a href="#basic-export" class="md-nav__link">
     <span class="md-ellipsis">
-      Start here
+      Basic export
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#using-the-manual" class="md-nav__link">
+  <a href="#mark-inlet-and-outlet-nodes" class="md-nav__link">
     <span class="md-ellipsis">
-      Using the manual
+      Mark inlet and outlet nodes
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exported-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      Exported fields
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#paraview-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      ParaView workflow
     </span>
   </a>
   
@@ -988,29 +1028,74 @@
   
 
 
-<p align="center">
-  <img src="assets/images/openkarst_header_color.png" alt="openKARST logo" width="300">
-</p>
-
-<h1 id="user-manual">User manual<a class="headerlink" href="#user-manual" title="Permanent link">&para;</a></h1>
-<p>openKARST is a Python package for simulating flow through karst conduit
-networks. This manual is intended for researchers and practitioners who want to
-set up, run, and evaluate hydraulic simulations with openKARST.</p>
-<h2 id="start-here">Start here<a class="headerlink" href="#start-here" title="Permanent link">&para;</a></h2>
-<p>New users should begin with <a href="getting-started/installation/">Installation</a> and
-then run the <a href="getting-started/quick-start/">Quick start</a>. The numbered
-tutorials build on that first example and gradually introduce boundary
-conditions, observations, cave data, and model validation.</p>
-<p><a class="md-button md-button--primary" href="getting-started/installation/">Install openKARST</a>
-<a class="md-button" href="getting-started/quick-start/">Run the quick start</a></p>
-<h2 id="using-the-manual">Using the manual<a class="headerlink" href="#using-the-manual" title="Permanent link">&para;</a></h2>
-<p>After the quick start, use the left navigation according to your task:</p>
-<ul>
-<li><strong>Concepts</strong> explain the model structure and simulation workflow.</li>
-<li><strong>Tutorials</strong> develop complete examples in a recommended order.</li>
-<li><strong>How-to guides</strong> cover visualization and data export.</li>
-<li><strong>Reference</strong> provides parameter definitions and terminology.</li>
-</ul>
+<h1 id="export-to-vtk">Export to VTK<a class="headerlink" href="#export-to-vtk" title="Permanent link">&para;</a></h1>
+<p>Use VTK export when you want to inspect results in ParaView or another
+scientific visualization tool.</p>
+<h2 id="basic-export">Basic export<a class="headerlink" href="#basic-export" title="Permanent link">&para;</a></h2>
+<div class="language-python highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span> <span class="nn">os</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="kn">from</span> <span class="nn">openkarst.io</span> <span class="kn">import</span> <span class="n">VtkDataExporter</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">results</span> <span class="o">=</span> <span class="n">flow</span><span class="o">.</span><span class="n">run_simulation</span><span class="p">(</span><span class="n">desired_outputs</span><span class="o">=</span><span class="n">outputs</span><span class="p">)</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="n">Q_history</span> <span class="o">=</span> <span class="n">results</span><span class="p">[</span><span class="s2">&quot;flowrates&quot;</span><span class="p">]</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="n">y_history</span> <span class="o">=</span> <span class="n">results</span><span class="p">[</span><span class="s2">&quot;water_depths&quot;</span><span class="p">]</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="n">t_history</span> <span class="o">=</span> <span class="n">results</span><span class="p">[</span><span class="s2">&quot;time&quot;</span><span class="p">]</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="n">output_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getcwd</span><span class="p">(),</span> <span class="s2">&quot;vtk_output&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="n">vtk_exporter</span> <span class="o">=</span> <span class="n">VtkDataExporter</span><span class="p">(</span><span class="n">output_dir</span><span class="p">)</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="n">vtk_exporter</span><span class="o">.</span><span class="n">export</span><span class="p">(</span><span class="n">network</span><span class="p">,</span> <span class="n">Q_history</span><span class="p">,</span> <span class="n">y_history</span><span class="p">,</span> <span class="n">t_history</span><span class="p">)</span>
+</code></pre></div>
+<h2 id="mark-inlet-and-outlet-nodes">Mark inlet and outlet nodes<a class="headerlink" href="#mark-inlet-and-outlet-nodes" title="Permanent link">&para;</a></h2>
+<div class="language-python highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">vtk_exporter</span><span class="o">.</span><span class="n">export</span><span class="p">(</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="n">network</span><span class="p">,</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    <span class="n">Q_history</span><span class="p">,</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="n">y_history</span><span class="p">,</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">t_history</span><span class="p">,</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="n">inflow_nodes</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="n">outflow_nodes</span><span class="o">=</span><span class="p">[</span><span class="mi">19</span><span class="p">],</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="p">)</span>
+</code></pre></div>
+<p>This also writes a static marker file for inlet and outlet nodes.</p>
+<h2 id="exported-fields">Exported fields<a class="headerlink" href="#exported-fields" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>VTK location</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Flow rate</td>
+<td>conduit/cell data</td>
+</tr>
+<tr>
+<td>Water depth</td>
+<td>node/point data</td>
+</tr>
+<tr>
+<td>Roughness</td>
+<td>conduit/cell data, if available</td>
+</tr>
+<tr>
+<td>Diameter</td>
+<td>conduit/cell data, if available</td>
+</tr>
+<tr>
+<td>Time</td>
+<td>field data</td>
+</tr>
+</tbody>
+</table>
+<h2 id="paraview-workflow">ParaView workflow<a class="headerlink" href="#paraview-workflow" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Open the generated <code>output_timestep_*.vtk</code> files.</li>
+<li>Apply time-aware loading if ParaView detects the sequence.</li>
+<li>Color conduits by <code>Flowrate</code>.</li>
+<li>Color nodes or points by <code>WaterDepth</code>.</li>
+<li>Load <code>static_node_markers.vtk</code> if inlet/outlet labels are helpful.</li>
+</ol>
 
 
 
@@ -1059,10 +1144,10 @@ conditions, observations, cave data, and model validation.</p>
     </div>
     
     
-    <script id="__config" type="application/json">{"base": ".", "features": ["navigation.instant", "navigation.sections", "navigation.indexes", "toc.follow", "content.code.copy", "content.tabs.link", "search.suggest", "search.highlight"], "search": "assets/javascripts/workers/search.b8dbb3d2.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": "0.3.0"}</script>
+    <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.instant", "navigation.sections", "navigation.indexes", "toc.follow", "content.code.copy", "content.tabs.link", "search.suggest", "search.highlight"], "search": "../../assets/javascripts/workers/search.b8dbb3d2.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": "0.3.0"}</script>
     
     
-      <script src="assets/javascripts/bundle.fe8b6f2b.min.js"></script>
+      <script src="../../assets/javascripts/bundle.fe8b6f2b.min.js"></script>
       
     
   </body>
