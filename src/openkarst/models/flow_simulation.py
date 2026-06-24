@@ -35,6 +35,7 @@ from openkarst.models.hydraulics import (
     compute_upstream_weight_alpha,
 )
 from openkarst.models.cross_section_geometry import create_cross_section_geometry
+from openkarst.models.reservoir import UnconfinedReservoir
 
 
 class FlowSimulation:
@@ -156,6 +157,7 @@ class FlowSimulation:
         
         # Additional tools
         self.observation_recorder = None
+        self.reservoirs = []
 
         # Constant boundary conditions dictionary {node_index: value}
         #self.waterdepth_boundary = {}
@@ -424,8 +426,7 @@ class FlowSimulation:
                 # Prepare timestep snapshot and buffer for Picard iteration
                 self._prepare_timestep_state()
                
-                # Compute boundary condition values
-                # This currently also computes 
+                # Cache boundary conditions and reservoir exchange for this timestep
                 self._cache_hydraulic_bcs()
 
                 # Perform the dynamic wave computation for the current time step
@@ -442,6 +443,7 @@ class FlowSimulation:
                     
                 # Accept the solved hydraulic state for this timestep
                 self._accept_hydraulic_solution()
+                self._advance_reservoirs()
 
                 # Compute L2 error norms for each timestep
                 self._update_timestep_error_norms()
@@ -817,6 +819,64 @@ class FlowSimulation:
             bc = ConstantBC([node], value=float(rate), bc_type='volumetric')
             self.boundary_conditions['reservoir'].append(bc)
 
+    def add_reservoir(
+        self,
+        node,
+        area,
+        specific_yield,
+        initial_water_depth,
+        conductance,
+        recharge=0.0,
+    ):
+        """
+        Create and register a reservoir connected to one network node.
+
+        The reservoir base elevation is taken from the connected node elevation.
+        This model is separate from set_reservoir_BC, which will be removed.
+        Reservoirs develop their internal state, hence a classical BC is not useful.
+
+        Args:
+            node (int): Index of the single connected network node.
+            area (float): Reservoir plan area [m^2].
+            specific_yield (float): Drainable specific yield [-].
+            initial_water_depth (float): Initial depth above the node elevation [m].
+            conductance (float): Reservoir-node exchange conductance [m^3/s/m].
+            recharge (float, optional): External reservoir recharge [m^3/s].
+
+        Returns:
+            UnconfinedReservoir: The registered reservoir object.
+        """
+        nodes = normalize_target_ids(node)
+        if len(nodes) != 1:
+            raise ValueError("A reservoir must connect to exactly one node.")
+
+        node = int(nodes[0])
+        if node < 0 or node >= self.network.Np:
+            raise ValueError(
+                f"Reservoir node {node} is outside the network node range."
+            )
+
+        if any(reservoir.node == node for reservoir in self.reservoirs):
+            raise ValueError(
+                f"A reservoir already exists at node {node}."
+            )
+
+        reservoir = UnconfinedReservoir(
+            node=node,
+            base_elevation=float(self.Z[node]),
+            area=area,
+            specific_yield=specific_yield,
+            initial_water_depth=initial_water_depth,
+            conductance=conductance,
+            recharge=recharge,
+        )
+        self.reservoirs.append(reservoir)
+
+        if not hasattr(self, 'boundary_conditions'):
+            self.boundary_conditions = {}
+
+        return reservoir
+
 
     def set_stop_conditions(self, flowrate_condition=None, flowrate_threshold=0.98):
         
@@ -922,7 +982,11 @@ class FlowSimulation:
             reservoir_node_list = [
                 n for bc in bcs.get("reservoir", []) for n in bc.target_ids
             ]
-            reservoir_nodes.update(reservoir_node_list)
+
+        reservoir_node_list.extend(
+            reservoir.node for reservoir in self.reservoirs
+        )
+        reservoir_nodes.update(reservoir_node_list)
 
         transport_enabled = self.settings.simulation.enable_transport
 
@@ -1051,6 +1115,14 @@ class FlowSimulation:
         # Transport: Accept the volume change after each timestep 
         self.V_node += self._dV_last
         self.V_node[self.V_node < 0.0] = 0.0  # For safety
+
+    def _advance_reservoirs(self):
+        """Advance all reservoirs after accepting a hydraulic timestep."""
+        for reservoir in self.reservoirs:
+            reservoir.advance(
+                exchange_rate=reservoir.last_exchange_rate,
+                dt=self.dt,
+            )
 
     def _accept_picard_iteration(self):
         """
@@ -1991,9 +2063,12 @@ class FlowSimulation:
             else:
                 self.bc_inflow_vol_node[bc.target_ids] += v
 
+        # This will be removed later as I now use a new add_reservoir model
         for bc in self.boundary_conditions.get('reservoir', []):
             v = bc.get_value(t)
             self.bc_reservoir_exchange_node[bc.target_ids] += v
+
+        self._cache_reservoir_exchanges()
 
         # Dirichlet water depth BCs
         for bc in self.boundary_conditions.get('waterdepth', []):
@@ -2015,6 +2090,23 @@ class FlowSimulation:
         
         # Total external inflow per node
         self.bc_Qin_node = self.bc_inflow_vol_node + self.bc_flux_to_vol_node
+
+    def _cache_reservoir_exchanges(self):
+        """Cache stateful reservoir exchange once for the full Picard solve."""
+        for reservoir in self.reservoirs:
+            exchange_rate = reservoir.compute_exchange(
+                node_water_depth=float(self.y_old_t[reservoir.node]),
+                dt=self.dt,
+            )
+            if not isinstance(exchange_rate, Real) or not np.isfinite(exchange_rate):
+                raise ValueError(
+                    "Reservoir compute_exchange() must return a finite scalar."
+                )
+
+            reservoir.last_exchange_rate = float(exchange_rate)
+            self.bc_reservoir_exchange_node[reservoir.node] += float(
+                exchange_rate
+            )
 
     def _cache_transport_bcs(self, t=None):
         """Evaluate transport BC values at current time and cache per-node arrays."""
