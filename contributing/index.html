@@ -13,6 +13,10 @@
         <link rel="canonical" href="https://erc-karst.github.io/openkarst/contributing/">
       
       
+        <link rel="prev" href="../reference/glossary/">
+      
+      
+        <link rel="next" href="../citation/">
       
       
       <link rel="icon" href="../assets/images/openkarst_favicon.png">
@@ -850,6 +854,93 @@
       
   
   
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Contributing
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Contributing
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#report-a-problem" class="md-nav__link">
+    <span class="md-ellipsis">
+      Report a problem
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#submit-a-change" class="md-nav__link">
+    <span class="md-ellipsis">
+      Submit a change
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#improve-the-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Improve the documentation
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
   
   
     <li class="md-nav__item">
@@ -893,9 +984,27 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#how-to-contribute" class="md-nav__link">
+  <a href="#report-a-problem" class="md-nav__link">
     <span class="md-ellipsis">
-      How to Contribute
+      Report a problem
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#submit-a-change" class="md-nav__link">
+    <span class="md-ellipsis">
+      Submit a change
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#improve-the-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Improve the documentation
     </span>
   </a>
   
@@ -920,14 +1029,37 @@
 
 
 <h1 id="contributing">Contributing<a class="headerlink" href="#contributing" title="Permanent link">&para;</a></h1>
-<h2 id="how-to-contribute">How to Contribute<a class="headerlink" href="#how-to-contribute" title="Permanent link">&para;</a></h2>
-<p>I welcome all contributions! Here are some ways you can help:</p>
+<p>Contributions to openKARST are welcome, including bug reports, documentation
+improvements, feature proposals, and code changes.</p>
+<h2 id="report-a-problem">Report a problem<a class="headerlink" href="#report-a-problem" title="Permanent link">&para;</a></h2>
+<p>Use the <a href="https://github.com/ERC-Karst/openkarst/issues">GitHub issue tracker</a> to
+report reproducible bugs or propose new functionality. Before opening an issue,
+check whether a related report or discussion already exists.</p>
+<p>For bug reports, include:</p>
 <ul>
-<li>Report bugs</li>
-<li>Improve documentation</li>
-<li>Suggest new features</li>
-<li>Submit pull requests</li>
+<li>the openKARST and Python versions;</li>
+<li>a minimal example that reproduces the problem;</li>
+<li>the expected and observed behavior;</li>
+<li>the complete error message, when applicable.</li>
 </ul>
+<h2 id="submit-a-change">Submit a change<a class="headerlink" href="#submit-a-change" title="Permanent link">&para;</a></h2>
+<p>Code and documentation changes can be proposed through a
+<a href="https://github.com/ERC-Karst/openkarst/pulls">pull request</a>. Keep each pull
+request focused on one change and explain its purpose and user-visible effect.</p>
+<p>When changing model behavior, add or update the relevant tests. Run the test
+suite before submitting:</p>
+<div class="language-bash highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pytest
+</code></pre></div>
+<h2 id="improve-the-documentation">Improve the documentation<a class="headerlink" href="#improve-the-documentation" title="Permanent link">&para;</a></h2>
+<p>The manual is built with MkDocs. From the repository root, preview documentation
+changes with:</p>
+<div class="language-bash highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pyenv<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>mkdocs<span class="w"> </span>serve
+</code></pre></div>
+<p>Check the production build before submitting:</p>
+<div class="language-bash highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pyenv<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>mkdocs<span class="w"> </span>build<span class="w"> </span>--strict
+</code></pre></div>
+<p>Documentation should use sentence-case headings, concise examples, and
+terminology consistent with the rest of the manual.</p>
 
 
 
