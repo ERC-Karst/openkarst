@@ -4,9 +4,6 @@ site_url: https://erc-karst.github.io/openkarst/
 repo_url: https://github.com/ERC-Karst/openkarst
 repo_name: ERC-Karst/openkarst
 
-not_in_nav: |
-  contributing.md
-
 nav:
   - Home: index.md
   - Getting started:
@@ -29,6 +26,7 @@ nav:
   - Reference:
       - Parameters: reference/parameters.md
       - Glossary: reference/glossary.md
+  - Contributing: contributing.md
   - Citation: citation.md
 
 theme:
