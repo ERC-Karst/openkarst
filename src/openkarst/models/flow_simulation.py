@@ -2092,7 +2092,7 @@ class FlowSimulation:
         self.bc_Qin_node = self.bc_inflow_vol_node + self.bc_flux_to_vol_node
 
     def _cache_reservoir_exchanges(self):
-        """Cache stateful reservoir exchange once for the full Picard solve."""
+        """Cache reservoir exchange once for the full Picard solve."""
         for reservoir in self.reservoirs:
             exchange_rate = reservoir.compute_exchange(
                 node_water_depth=float(self.y_old_t[reservoir.node]),
