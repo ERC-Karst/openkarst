@@ -1,16 +1,17 @@
 # 2. Boundary conditions
 
 Boundary conditions define how water enters the network and how the hydraulic
-state is constrained at selected nodes. openKARST provides two principal
+state is constrained at selected nodes. openKARST provides three principal
 hydraulic boundary types:
 
 | Boundary type | Method | Prescribed quantity |
 | --- | --- | --- |
 | Inflow | `set_inflow_BC()` | Volumetric flow rate in m^3/s, or flux in m/s for channel geometries |
 | Water depth | `set_waterdepth_BC()` | Water depth in m |
+| Spring | `set_spring_BC()` | One-way outflow computed from node head above an outlet elevation |
 
-Both methods accept one node or several nodes, and both support constant,
-box-shaped, and time-series values.
+Inflow and water-depth boundaries accept one node or several nodes, and both
+support constant, box-shaped, and time-series values.
 
 ## Assigning nodes and values
 
@@ -129,6 +130,46 @@ flow.set_waterdepth_BC(
 
 `extrapolate="hold"` uses the first or last value outside the supplied time
 range. `extrapolate="zero"` uses zero instead.
+
+## Spring boundaries
+
+Spring boundaries are one-way, head-dependent outflow boundaries. They prescribe
+an absolute outlet elevation and compute discharge from the excess hydraulic
+head at the node:
+
+```python
+flow.set_spring_BC(
+    nodes=19,
+    outlet_elevation=432.5,
+    coefficient=0.02,
+    exponent=1.0,
+)
+```
+
+The model computes `H_node = Z_node + y_node`. If `H_node` is below
+`outlet_elevation`, spring discharge is zero. If `H_node` is above the outlet,
+the power-law form is used:
+
+```python
+Qspring = coefficient * (H_node - outlet_elevation) ** exponent
+```
+
+Use `exponent=1.0` for a linear drain, `0.5` for an orifice-like spring, and
+`1.5` for a weir-like spring. If a measured stage-discharge relation is
+available, use a rating curve instead:
+
+```python
+flow.set_spring_BC(
+    nodes=19,
+    outlet_elevation=432.5,
+    rating_curve=(
+        [0.0, 0.2, 0.5, 1.0],      # excess head above outlet [m]
+        [0.0, 0.01, 0.08, 0.30],   # spring outflow [m^3/s]
+    ),
+)
+```
+
+Spring boundaries do not allow reverse flow into the model domain.
 
 ## Replacing and removing boundaries
 
