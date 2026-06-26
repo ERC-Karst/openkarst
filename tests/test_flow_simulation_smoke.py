@@ -396,6 +396,9 @@ def test_add_reservoir_returns_and_registers_stateful_object(tmp_path):
     assert reservoir.get_hydraulic_head() == flow.Z[0] + 2.0
     assert reservoir.get_storage() == 200.0
     assert reservoir._get_recharge_value(12.0) == 0.001
+    assert reservoir.last_recharge_rate == 0.001
+    assert not hasattr(reservoir, "exchange_history")
+    assert not hasattr(reservoir, "water_depth_history")
 
 
 def test_add_reservoir_accepts_timeseries_recharge(tmp_path):
@@ -512,6 +515,67 @@ def test_stateful_reservoir_conflicts_with_hydraulic_bc(tmp_path):
 
     with pytest.raises(ValueError, match="reservoir and inflow"):
         flow._check_bc_conflicts()
+
+
+def test_reservoir_observation_variables_require_reservoir_nodes(tmp_path):
+    flow = _small_flow_simulation(tmp_path)
+    flow.add_reservoir(
+        node=0,
+        area=1000.0,
+        specific_yield=0.1,
+        initial_water_depth=2.0,
+        conductance=1e-4,
+    )
+
+    flow.set_observation_points(
+        nodes=0,
+        variables=["reservoir_storage", "reservoir_exchange"],
+    )
+
+    with pytest.raises(ValueError, match="without reservoirs"):
+        flow.set_observation_points(
+            nodes=[0, 1],
+            variables=["reservoir_storage"],
+        )
+
+
+def test_reservoir_outputs_can_be_requested_from_run_simulation(tmp_path):
+    flow = _small_flow_simulation(tmp_path)
+    geometry = flow.network
+    flow.set_initial_conditions(
+        initial_Q=np.zeros(geometry.Nt, dtype=float),
+        initial_y=np.full(geometry.Np, 0.01, dtype=float),
+    )
+    flow.add_reservoir(
+        node=0,
+        area=1000.0,
+        specific_yield=0.1,
+        initial_water_depth=2.0,
+        conductance=1e-4,
+        recharge=0.001,
+    )
+    flow.set_waterdepth_BC(nodes=4, values=0.01)
+
+    results = flow.run_simulation(
+        desired_outputs={
+            "output_interval": 0.1,
+            "time": True,
+            "reservoir_nodes": True,
+            "reservoir_water_depths": True,
+            "reservoir_heads": True,
+            "reservoir_storage": True,
+            "reservoir_exchange": True,
+            "reservoir_recharge": True,
+        }
+    )
+
+    assert results["reservoir_nodes"].shape[1] == 1
+    assert results["reservoir_nodes"][0, 0] == 0
+    assert results["reservoir_water_depths"].shape == results["reservoir_heads"].shape
+    assert results["reservoir_storage"].shape == results["reservoir_heads"].shape
+    assert results["reservoir_exchange"].shape == results["reservoir_heads"].shape
+    assert results["reservoir_recharge"].shape == results["reservoir_heads"].shape
+    assert np.isfinite(results["reservoir_storage"]).all()
 
 
 def test_duplicate_reservoir_bc_raises_unless_overwritten_or_removed(tmp_path):

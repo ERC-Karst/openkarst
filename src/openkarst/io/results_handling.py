@@ -10,6 +10,31 @@ Created on Fri Jul 19 11:39:15 2024
 import numpy as np
 from typing import Dict
 
+
+def _reservoir_nodes(simulation_instance):
+    return np.array([reservoir.node for reservoir in simulation_instance.reservoirs], dtype=int)
+
+
+def _reservoir_water_depths(simulation_instance):
+    return np.array([reservoir.water_depth for reservoir in simulation_instance.reservoirs], dtype=float)
+
+
+def _reservoir_heads(simulation_instance):
+    return np.array([reservoir.get_hydraulic_head() for reservoir in simulation_instance.reservoirs], dtype=float)
+
+
+def _reservoir_storage(simulation_instance):
+    return np.array([reservoir.get_storage() for reservoir in simulation_instance.reservoirs], dtype=float)
+
+
+def _reservoir_exchange(simulation_instance):
+    return np.array([reservoir.last_exchange_rate for reservoir in simulation_instance.reservoirs], dtype=float)
+
+
+def _reservoir_recharge(simulation_instance):
+    return np.array([reservoir.last_recharge_rate for reservoir in simulation_instance.reservoirs], dtype=float)
+
+
 def initialize_results_container(desired_outputs: Dict[str, bool], logger):
     """
     Initializes a results container for storing selected simulation outputs.
@@ -45,7 +70,13 @@ def initialize_results_container(desired_outputs: Dict[str, bool], logger):
         'picard_iterations',
         'picard_iterations_total',
         'concentrations',
-        'mass'
+        'mass',
+        'reservoir_nodes',
+        'reservoir_water_depths',
+        'reservoir_heads',
+        'reservoir_storage',
+        'reservoir_exchange',
+        'reservoir_recharge',
     }
 
     invalid_keys = [key for key in desired_outputs if key not in allowed_keys and key != 'output_interval']
@@ -105,5 +136,19 @@ def store_results(simulation_instance, results_container):
         results_container['concentrations'].append(np.copy(simulation_instance.C))
     if 'mass' in results_container:
         results_container['mass'].append(np.copy(simulation_instance.M))
+    if 'reservoir_nodes' in results_container:
+        results_container['reservoir_nodes'].append(_reservoir_nodes(simulation_instance))
+    if 'reservoir_water_depths' in results_container:
+        results_container['reservoir_water_depths'].append(
+            _reservoir_water_depths(simulation_instance)
+        )
+    if 'reservoir_heads' in results_container:
+        results_container['reservoir_heads'].append(_reservoir_heads(simulation_instance))
+    if 'reservoir_storage' in results_container:
+        results_container['reservoir_storage'].append(_reservoir_storage(simulation_instance))
+    if 'reservoir_exchange' in results_container:
+        results_container['reservoir_exchange'].append(_reservoir_exchange(simulation_instance))
+    if 'reservoir_recharge' in results_container:
+        results_container['reservoir_recharge'].append(_reservoir_recharge(simulation_instance))
 
     return results_container

@@ -17,7 +17,10 @@ from typing import Optional, Dict, Any
 from openkarst.config.saint_venant_settings import SaintVenantSettings
 
 from openkarst.io.results_handling import initialize_results_container, store_results
-from openkarst.io.observation_recorder import ObservationRecorder
+from openkarst.io.observation_recorder import (
+    ObservationRecorder,
+    RESERVOIR_OBSERVATION_VARIABLES,
+)
 
 from openkarst.utils.helpers import time_this
 from openkarst.utils.logging_config import setup_logging
@@ -1031,7 +1034,23 @@ class FlowSimulation:
             - ``'concentrations'``: concentration at each observed node when
               transport is enabled.
             - ``'mass'``: mass at each observed node when transport is enabled.
+            - ``'reservoir_water_depth'``: reservoir water depth at each
+              observed reservoir node.
+            - ``'reservoir_head'``: reservoir hydraulic head at each observed
+              reservoir node.
+            - ``'reservoir_storage'``: reservoir storage at each observed
+              reservoir node.
+            - ``'reservoir_exchange'``: reservoir-node exchange rate at each
+              observed reservoir node.
+            - ``'reservoir_recharge'``: reservoir recharge rate at each
+              observed reservoir node.
         """
+
+        nodes = normalize_target_ids(nodes)
+        if isinstance(variables, str):
+            variables = [variables]
+        else:
+            variables = list(variables)
 
         # Check if user wants C and M saved in observation and stop is transport is not enabled
         wants_trans_output = any(v in ("concentrations", "mass") for v in variables)
@@ -1040,6 +1059,18 @@ class FlowSimulation:
                 "Observation variables include 'concentrations' and/or 'mass'"
                 "but enable_transport=False. Enable transport or remove these variables."
             )
+
+        wants_reservoir_output = any(
+            v in RESERVOIR_OBSERVATION_VARIABLES for v in variables
+        )
+        if wants_reservoir_output:
+            reservoir_nodes = {reservoir.node for reservoir in self.reservoirs}
+            missing = sorted(set(nodes) - reservoir_nodes)
+            if missing:
+                raise ValueError(
+                    "Reservoir observation variables requested for nodes "
+                    f"without reservoirs: {missing}."
+                )
         
         self.observation_recorder = ObservationRecorder(nodes, variables, interval)
     

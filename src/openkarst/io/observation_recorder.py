@@ -12,13 +12,25 @@ import pandas as pd
 
 CONNECTED_ABS_FLOWRATE = "connected_abs_flowrate"
 CONNECTED_NET_FLOWRATE = "connected_net_flowrate"
+RESERVOIR_WATER_DEPTH = "reservoir_water_depth"
+RESERVOIR_HEAD = "reservoir_head"
+RESERVOIR_STORAGE = "reservoir_storage"
+RESERVOIR_EXCHANGE = "reservoir_exchange"
+RESERVOIR_RECHARGE = "reservoir_recharge"
+RESERVOIR_OBSERVATION_VARIABLES = {
+    RESERVOIR_WATER_DEPTH,
+    RESERVOIR_HEAD,
+    RESERVOIR_STORAGE,
+    RESERVOIR_EXCHANGE,
+    RESERVOIR_RECHARGE,
+}
 SUPPORTED_OBSERVATION_VARIABLES = {
     "water_depth",
     CONNECTED_ABS_FLOWRATE,
     CONNECTED_NET_FLOWRATE,
     "concentrations",
     "mass",
-}
+}.union(RESERVOIR_OBSERVATION_VARIABLES)
 
 
 def _validated_observation_variables(variables):
@@ -51,6 +63,13 @@ def _connected_net_flowrate(flow_sim, node):
     return float(inflow - outflow)
 
 
+def _reservoir_at_node(flow_sim, node):
+    for reservoir in getattr(flow_sim, "reservoirs", []):
+        if reservoir.node == node:
+            return reservoir
+    raise ValueError(f"No reservoir is registered at observation node {node}.")
+
+
 class ObservationRecorder:
     """Records simulation outputs at specified nodes and time intervals.
 
@@ -69,6 +88,11 @@ class ObservationRecorder:
               conduit flowrate into the node.
             - 'concentrations': records concentrations at the node (AD-Transport)
             - 'mass': records mass at the node (AD-Transport)
+            - 'reservoir_water_depth': records reservoir water depth at the node.
+            - 'reservoir_head': records reservoir hydraulic head at the node.
+            - 'reservoir_storage': records reservoir storage at the node.
+            - 'reservoir_exchange': records reservoir-node exchange rate at the node.
+            - 'reservoir_recharge': records reservoir recharge rate at the node.
         interval (float): Time interval between recordings, in seconds.
         next_record_time (float): Simulation time at which the next recording is due.
         records (list of dict): Internal buffer storing observation rows.
@@ -81,7 +105,8 @@ class ObservationRecorder:
             nodes (list of int): Node indices to track.
             variables (list of str): List of variables to observe. 
                 Supported values are 'water_depth', 'connected_abs_flowrate',
-                'connected_net_flowrate', 'concentrations', and 'mass'.
+                'connected_net_flowrate', 'concentrations', 'mass', and
+                reservoir variables.
             interval (float, optional): Recording interval in seconds. Defaults to 1.0.
         """
         self.nodes = nodes
@@ -118,6 +143,18 @@ class ObservationRecorder:
                 row['concentrations'] = flow_sim.C[node]
             if 'mass' in self.variables:
                 row['mass'] = flow_sim.M[node]
+            if RESERVOIR_OBSERVATION_VARIABLES & set(self.variables):
+                reservoir = _reservoir_at_node(flow_sim, node)
+                if RESERVOIR_WATER_DEPTH in self.variables:
+                    row[RESERVOIR_WATER_DEPTH] = reservoir.water_depth
+                if RESERVOIR_HEAD in self.variables:
+                    row[RESERVOIR_HEAD] = reservoir.get_hydraulic_head()
+                if RESERVOIR_STORAGE in self.variables:
+                    row[RESERVOIR_STORAGE] = reservoir.get_storage()
+                if RESERVOIR_EXCHANGE in self.variables:
+                    row[RESERVOIR_EXCHANGE] = reservoir.last_exchange_rate
+                if RESERVOIR_RECHARGE in self.variables:
+                    row[RESERVOIR_RECHARGE] = reservoir.last_recharge_rate
             self.records.append(row)
 
     def to_dataframe(self):

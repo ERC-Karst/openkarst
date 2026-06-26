@@ -43,10 +43,6 @@ class UnconfinedReservoir:
             self.conductance = float(conductance)
             self.recharge_extrapolate = recharge_extrapolate.lower()
             self.current_t = float(0.0)
-            self.exchange_history = []
-            self.time_history = []
-            self.water_depth_history = []
-            self.recharge_history = []
         except (TypeError, ValueError) as error:
             raise ValueError("Reservoir parameters must be numeric values.") from error
 
@@ -91,6 +87,7 @@ class UnconfinedReservoir:
 
         # Exchange from the most recently accepted timestep
         self.last_exchange_rate = 0.0
+        self.last_recharge_rate = self._get_recharge_value(self.current_t)
 
     def get_hydraulic_head(self):
         """Return the current reservoir hydraulic head [m]."""
@@ -100,14 +97,6 @@ class UnconfinedReservoir:
         """Return the current drainable reservoir storage [m^3]."""
         return self.area * self.specific_yield * self.water_depth
     
-    def _record_history(self, exchange_rate): 
-        """Record exchange rates + water depth"""
-        self.time_history.append(self.current_t)
-        self.exchange_history.append(exchange_rate)
-        self.water_depth_history.append(self.water_depth)
-        self.recharge_history.append(self._get_recharge_value(self.current_t))
-
-
     def _get_recharge_value(self, t):
         """Returns interpolated value at time `t`.
         Args:
@@ -172,6 +161,6 @@ class UnconfinedReservoir:
         
         storage_old = self.get_storage()
         current_recharge = self._get_recharge_value(self.current_t)
+        self.last_recharge_rate = current_recharge
         storage_new = storage_old + (current_recharge - exchange_rate) * dt
         self.water_depth = max(0.0, storage_new / (self.area * self.specific_yield)) #enfore non-negative storage 
-        self._record_history(exchange_rate) #record history of exchange and water depth
