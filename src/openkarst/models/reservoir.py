@@ -2,7 +2,8 @@
 # -*- coding: utf-8 -*-
 """Reservoir model coupled to single openKARST nodes."""
 
-import math
+from numbers import Real
+
 import numpy as np
 
 
@@ -29,7 +30,8 @@ class UnconfinedReservoir:
         initial_water_depth,
         conductance,
         recharge=0.0,
-        time=None
+        time=None,
+        recharge_extrapolate='hold',
     ):
         self.node = int(node)
 
@@ -39,8 +41,7 @@ class UnconfinedReservoir:
             self.specific_yield = float(specific_yield)
             self.water_depth = float(initial_water_depth)
             self.conductance = float(conductance)
-            self.recharge = recharge #can be float or array
-            self.time = time
+            self.recharge_extrapolate = recharge_extrapolate.lower()
             self.current_t = float(0.0)
             self.exchange_history = []
             self.time_history = []
@@ -55,10 +56,11 @@ class UnconfinedReservoir:
             self.specific_yield,
             self.water_depth,
             self.conductance,
-            self.recharge,
         )
         if not all(np.isfinite(value).all() for value in parameters):
             raise ValueError("Reservoir parameters must be finite values.")
+        if self.recharge_extrapolate not in {'hold', 'zero'}:
+            raise ValueError("recharge_extrapolate must be 'hold' or 'zero'.")
         if self.area <= 0.0:
             raise ValueError("area must be greater than zero.")
         if self.specific_yield <= 0.0:
@@ -67,6 +69,25 @@ class UnconfinedReservoir:
             raise ValueError("initial_water_depth must be non-negative.")
         if self.conductance < 0.0:
             raise ValueError("conductance must be non-negative.")
+
+        if time is None:
+            if not isinstance(recharge, Real):
+                raise ValueError("Constant recharge must be a scalar value.")
+            self.recharge = float(recharge)
+            self.time = None
+        else:
+            self.time = np.asarray(time, dtype=float)
+            self.recharge = np.asarray(recharge, dtype=float)
+            if self.time.ndim != 1 or self.recharge.ndim != 1:
+                raise ValueError("Recharge time series must use 1D arrays.")
+            if len(self.time) == 0:
+                raise ValueError("Recharge time series must contain at least one value.")
+            if len(self.time) != len(self.recharge):
+                raise ValueError("Recharge times and values must have the same length.")
+            if not np.all(np.isfinite(self.time)) or not np.all(np.isfinite(self.recharge)):
+                raise ValueError("Recharge time series values must be finite.")
+            if len(self.time) > 1 and not np.all(np.diff(self.time) > 0.0):
+                raise ValueError("Recharge times must be strictly increasing.")
 
         # Exchange from the most recently accepted timestep
         self.last_exchange_rate = 0.0
@@ -87,7 +108,7 @@ class UnconfinedReservoir:
         self.recharge_history.append(self._get_recharge_value(self.current_t))
 
 
-    def _get_recharge_value(self, t, extrapolate_mode = 'zero'):
+    def _get_recharge_value(self, t):
         """Returns interpolated value at time `t`.
         Args:
             t (float): Time at which to evaluate the BC.
@@ -95,14 +116,14 @@ class UnconfinedReservoir:
             float: The interpolated or extrapolated boundary condition value.
         """
         #constant recharge: return value
-        if type(self.recharge) == float or type(self.recharge) == int:
+        if self.time is None:
             return float(self.recharge)
         
         #timeseries: interpolate or extrapolate
         if t < self.time[0]:
-            return 0.0 if extrapolate_mode == 'zero' else float(self.values[0])
+            return 0.0 if self.recharge_extrapolate == 'zero' else float(self.recharge[0])
         elif t > self.time[-1]:
-            return 0.0 if extrapolate_mode == 'zero' else float(self.values[-1])
+            return 0.0 if self.recharge_extrapolate == 'zero' else float(self.recharge[-1])
         else:
             return float(np.interp(t, self.time, self.recharge))
 

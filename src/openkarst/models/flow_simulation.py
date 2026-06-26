@@ -932,7 +932,7 @@ class FlowSimulation:
         initial_water_depth,
         conductance,
         recharge=0.0,
-        time = None
+        recharge_extrapolate='hold',
     ):
         """
         Create and register a reservoir connected to one network node.
@@ -947,7 +947,12 @@ class FlowSimulation:
             specific_yield (float): Drainable specific yield [-].
             initial_water_depth (float): Initial depth above the node elevation [m].
             conductance (float): Reservoir-node exchange conductance [m^3/s/m].
-            recharge (float, optional): External reservoir recharge [m^3/s].
+            recharge (float or tuple, optional): External reservoir recharge [m^3/s].
+                Supported formats:
+                - float or int: constant recharge.
+                - ('timeseries', times, values): interpolated recharge time series.
+            recharge_extrapolate (str, optional): Extrapolation behavior for
+                time-series recharge. Use 'hold' or 'zero'.
 
         Returns:
             UnconfinedReservoir: The registered reservoir object.
@@ -967,6 +972,22 @@ class FlowSimulation:
                 f"A reservoir already exists at node {node}."
             )
 
+        recharge_times = None
+        recharge_values = recharge
+        if isinstance(recharge, np.ndarray) and recharge.ndim == 0:
+            recharge_values = recharge.item()
+        elif (
+            isinstance(recharge, tuple)
+            and len(recharge) >= 3
+            and recharge[0] == 'timeseries'
+        ):
+            _, recharge_times, recharge_values = recharge[:3]
+        elif not isinstance(recharge, Real):
+            raise ValueError(
+                "Reservoir recharge must be a scalar or "
+                "('timeseries', times, values)."
+            )
+
         reservoir = UnconfinedReservoir(
             node=node,
             base_elevation=float(self.Z[node]),
@@ -974,8 +995,9 @@ class FlowSimulation:
             specific_yield=specific_yield,
             initial_water_depth=initial_water_depth,
             conductance=conductance,
-            recharge=recharge,
-            time = None
+            recharge=recharge_values,
+            time=recharge_times,
+            recharge_extrapolate=recharge_extrapolate,
         )
         self.reservoirs.append(reservoir)
 

@@ -395,6 +395,44 @@ def test_add_reservoir_returns_and_registers_stateful_object(tmp_path):
     assert reservoir.base_elevation == flow.Z[0]
     assert reservoir.get_hydraulic_head() == flow.Z[0] + 2.0
     assert reservoir.get_storage() == 200.0
+    assert reservoir._get_recharge_value(12.0) == 0.001
+
+
+def test_add_reservoir_accepts_timeseries_recharge(tmp_path):
+    flow = _small_flow_simulation(tmp_path)
+    times = np.array([0.0, 10.0, 20.0])
+    recharge_rates = np.array([0.0, 0.001, 0.003])
+
+    reservoir = flow.add_reservoir(
+        node=0,
+        area=1000.0,
+        specific_yield=0.1,
+        initial_water_depth=2.0,
+        conductance=1e-4,
+        recharge=("timeseries", times, recharge_rates),
+        recharge_extrapolate="zero",
+    )
+
+    np.testing.assert_allclose(reservoir.time, times)
+    np.testing.assert_allclose(reservoir.recharge, recharge_rates)
+    assert reservoir.recharge_extrapolate == "zero"
+    assert reservoir._get_recharge_value(-1.0) == 0.0
+    assert reservoir._get_recharge_value(5.0) == 0.0005
+    assert reservoir._get_recharge_value(25.0) == 0.0
+
+
+def test_add_reservoir_rejects_invalid_recharge_format(tmp_path):
+    flow = _small_flow_simulation(tmp_path)
+
+    with pytest.raises(ValueError, match="Reservoir recharge"):
+        flow.add_reservoir(
+            node=0,
+            area=1000.0,
+            specific_yield=0.1,
+            initial_water_depth=2.0,
+            conductance=1e-4,
+            recharge=("box", 0.001, 0.0, 10.0),
+        )
 
 
 def test_add_reservoir_requires_one_unique_valid_node(tmp_path):
