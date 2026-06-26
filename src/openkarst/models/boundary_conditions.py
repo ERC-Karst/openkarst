@@ -7,6 +7,8 @@ Created on Fri Jul 20 12:56:06 2025
 @contact: jannes.kordilla@idaea.csic.es
 """
 
+from numbers import Real
+
 import numpy as np
 
 VALID_BC_TYPES = {'volumetric', 'flux'}
@@ -220,85 +222,118 @@ class TimeSeriesBC(BoundaryCondition):
             return float(np.interp(t, self.times, self.values))
 
 
-# from numba import njit
+class SpringBC:
+    """Head-dependent spring outflow boundary.
 
-# @njit(cache=True)
-# def _ts_eval_with_cursor(t, times, values, slopes, j, extrapolate_zero):
-#     """
-#     Evaluate piecewise-linear time series at time t using a segment cursor.
-#     Returns (value, new_j).
-#     - times: strictly increasing, len >= 2
-#     - slopes: len = len(times) - 1, (values[i+1]-values[i])/(times[i+1]-times[i])
-#     - j: cursor such that times[j] <= t < times[j+1] (if within range)
-#     - extrapolate_zero: bool (True -> zero outside; False -> hold endpoint)
-#     """
-#     n = times.size
+    The boundary computes an outflow from the simulated node head to an
+    external spring node with defined outlet elevation. It never returns
+    negative flow, so it cannot inject water back into the model domain.
+    """
 
-#     # extrapolation ends
-#     if t <= times[0]:
-#         return (0.0 if extrapolate_zero else values[0], 0)
-#     if t >= times[n-1]:
-#         return (0.0 if extrapolate_zero else values[n-1], n-2)
+    def __init__(
+        self,
+        target_ids,
+        outlet_elevation,
+        coefficient=None,
+        exponent=1.0,
+        rating_curve=None,
+    ):
+        """Initialize a spring boundary condition.
 
-#     # ensure cursor is at the correct segment
-#     if t < times[j]:
-#         # rare backward jump: reposition once
-#         jj = np.searchsorted(times, t) - 1
-#         if jj < 0:
-#             jj = 0
-#         elif jj > n - 2:
-#             jj = n - 2
-#         j = jj
-#     else:
-#         # typical forward-only advance; usually 0 or 1 increments
-#         while j < n - 2 and t >= times[j + 1]:
-#             j += 1
+        Args:
+            target_ids (list[int]): List of node indices the BC applies to.
+            outlet_elevation (float): Absolute spring outlet elevation [m].
+            coefficient (float, optional): Power-law coefficient for
+                ``Q = coefficient * excess_head**exponent``.
+            exponent (float, optional): Power-law exponent. Defaults to 1.0.
+            rating_curve (tuple, optional): ``(stages, discharges)`` arrays,
+                where stages are excess heads above the outlet [m] and
+                discharges are non-negative outflows [m^3/s].
+        """
+        if not isinstance(outlet_elevation, Real) or not np.isfinite(outlet_elevation):
+            raise ValueError("Spring outlet_elevation must be a finite scalar.")
 
-#     # linear interpolation using precomputed slope
-#     val = values[j] + slopes[j] * (t - times[j])
-#     return (val, j)
+        if rating_curve is not None and coefficient is not None:
+            raise ValueError(
+                "SpringBC accepts either coefficient/exponent or rating_curve, not both."
+            )
 
+        self.target_ids = target_ids
+        self.outlet_elevation = float(outlet_elevation)
+        self.coefficient = None
+        self.exponent = None
+        self.rating_stages = None
+        self.rating_discharges = None
 
-# class TimeSeriesBC(BoundaryCondition):
-#     """Time-dependent BC with segment cursor + Numba-accelerated evaluator."""
+        if rating_curve is None:
+            if coefficient is None:
+                raise ValueError(
+                    "SpringBC requires coefficient when rating_curve is not provided."
+                )
+            if not isinstance(coefficient, Real) or not np.isfinite(coefficient):
+                raise ValueError("Spring coefficient must be a finite scalar.")
+            if coefficient < 0.0:
+                raise ValueError("Spring coefficient must be non-negative.")
+            if not isinstance(exponent, Real) or not np.isfinite(exponent):
+                raise ValueError("Spring exponent must be a finite scalar.")
+            if exponent <= 0.0:
+                raise ValueError("Spring exponent must be positive.")
 
-#     def __init__(self, target_ids, times, values, bc_type='volumetric', extrapolate='hold'):
-#         super().__init__(target_ids, bc_type)
+            self.coefficient = float(coefficient)
+            self.exponent = float(exponent)
+        else:
+            try:
+                stages, discharges = rating_curve
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    "Spring rating_curve must be a (stages, discharges) pair."
+                ) from exc
 
-#         t = np.asarray(times, dtype=np.float64)
-#         v = np.asarray(values, dtype=np.float64)
-#         if t.ndim != 1 or v.ndim != 1 or t.size != v.size:
-#             raise ValueError("times and values must be 1D and same length.")
-#         if t.size < 2:
-#             raise ValueError("TimeSeriesBC needs at least two points.")
-#         if not np.all(np.diff(t) > 0):
-#             raise ValueError("times must be strictly increasing.")
+            stages = np.asarray(stages, dtype=float)
+            discharges = np.asarray(discharges, dtype=float)
 
-#         self.times = np.ascontiguousarray(t)
-#         self.values = np.ascontiguousarray(v)
+            if stages.ndim != 1 or discharges.ndim != 1:
+                raise ValueError("Spring rating_curve arrays must be one-dimensional.")
+            if stages.size < 2:
+                raise ValueError("Spring rating_curve needs at least two points.")
+            if stages.size != discharges.size:
+                raise ValueError(
+                    "Spring rating_curve stages and discharges must have the same length."
+                )
+            if not np.all(np.isfinite(stages)) or not np.all(np.isfinite(discharges)):
+                raise ValueError("Spring rating_curve values must be finite.")
+            if np.any(stages < 0.0):
+                raise ValueError("Spring rating_curve stages must be non-negative.")
+            if np.any(np.diff(stages) <= 0.0):
+                raise ValueError(
+                    "Spring rating_curve stages must be strictly increasing."
+                )
+            if np.any(discharges < 0.0):
+                raise ValueError(
+                    "Spring rating_curve discharges must be non-negative."
+                )
 
-#         dt = np.diff(self.times)
-#         dv = np.diff(self.values)
-#         self._slopes = np.ascontiguousarray(dv / dt, dtype=np.float64)
+            self.rating_stages = stages
+            self.rating_discharges = discharges
 
-#         ex = extrapolate.lower()
-#         if ex not in {'hold', 'zero'}:
-#             raise ValueError("extrapolate must be 'hold' or 'zero'.")
-#         self._extrapolate_zero = (ex == 'zero')
+    def compute_outflow(self, head):
+        """Return spring outflow for a node with defined hydraulic head [m]."""
+        if not isinstance(head, Real) or not np.isfinite(head):
+            raise ValueError("Spring head must be a finite scalar.")
 
-#         self._j = 0
-#         self._last_t = -np.inf  # optional, not required by the kernel
+        excess_head = float(head) - self.outlet_elevation
+        if excess_head <= 0.0:
+            return 0.0
 
-#     def reset_cursor(self):
-#         self._j = 0
-#         self._last_t = -np.inf
+        if self.rating_stages is not None:
+            outflow = np.interp(
+                excess_head,
+                self.rating_stages,
+                self.rating_discharges,
+                left=0.0,
+                right=float(self.rating_discharges[-1]),
+            )
+        else:
+            outflow = self.coefficient * excess_head**self.exponent
 
-#     def get_value(self, t):
-#         t = float(t)
-#         val, new_j = _ts_eval_with_cursor(
-#             t, self.times, self.values, self._slopes, self._j, self._extrapolate_zero
-#         )
-#         self._j = new_j
-#         self._last_t = t
-#         return float(val)
-
+        return max(float(outflow), 0.0)
