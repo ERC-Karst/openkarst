@@ -42,7 +42,6 @@ class UnconfinedReservoir:
             self.reservoir_water_depth = float(initial_water_depth)
             self.conductance = float(conductance)
             self.recharge_extrapolate = recharge_extrapolate.lower()
-            self.current_t = float(0.0)
         except (TypeError, ValueError) as error:
             raise ValueError("Reservoir parameters must be numeric values.") from error
 
@@ -87,7 +86,7 @@ class UnconfinedReservoir:
 
         # Exchange from the most recently accepted timestep
         self.last_exchange_rate = 0.0
-        self.last_recharge_rate = self._get_recharge_value(self.current_t)
+        self.last_recharge_rate = self._get_recharge_value(0.0)
 
     def get_hydraulic_head(self):
         """Return the current reservoir hydraulic head [m]."""
@@ -153,27 +152,36 @@ class UnconfinedReservoir:
 
         return exchange_rate
 
-    def advance(self, exchange_rate, dt):
+    def advance(self, exchange_rate, dt, t_start):
         """
         Advance reservoir storage after an accepted hydraulic timestep.
 
         Args:
-            exchange_rate (float): Cached reservoir-to-node exchange rate [m^3/s].
+            exchange_rate (float): Cached exchange rate between node and reservoir [m^3/s].
             dt (float): Accepted hydraulic timestep [s].
+            t_start (float): Start time of the accepted timestep [s].
         """
-        # TODO (Jenny): Here we need to ipdate the reservoir state e.g.
-        # storage_old = self.get_storage()
-        # storage_new = storage_old + (self.recharge - exchange_rate) * dt
-        # Enforce non-negative storage, then update self.reservoir_water_depth:
-        # self.reservoir_water_depth = storage_new / (self.area * self.specific_yield)
+        try:
+            exchange_rate = float(exchange_rate)
+            dt = float(dt)
+            t_start = float(t_start)
+        except (TypeError, ValueError) as error:
+            raise ValueError("exchange_rate, dt, and t_start must be numeric.") from error
 
-        # Lets find a way to use self.current_time from FlowSimulation
-        self.current_t += dt
-        
+        if not np.isfinite(exchange_rate):
+            raise ValueError("exchange_rate must be finite.")
+        if not np.isfinite(dt) or dt <= 0.0:
+            raise ValueError("dt must be a finite value greater than zero.")
+        if not np.isfinite(t_start):
+            raise ValueError("t_start must be finite.")
+
         storage_old = self.get_storage()
-        current_recharge = self._get_recharge_value(self.current_t)
+        current_recharge = self._get_recharge_value(t_start)
         self.last_recharge_rate = current_recharge
         storage_new = storage_old + (current_recharge - exchange_rate) * dt
+
+        # I think this is not required because compute_exchange already checks this
+        # To be safe and avoid numerical roundoff issues
         self.reservoir_water_depth = max(
             0.0,
             storage_new / (self.area * self.specific_yield),

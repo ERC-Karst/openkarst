@@ -73,3 +73,66 @@ def test_compute_exchange_rejects_invalid_inputs():
             connected_node_water_depth=float("nan"),
             dt=1.0,
         )
+
+
+def test_advance_uses_passed_timestep_start_for_recharge():
+    reservoir = _reservoir(
+        area=1.0,
+        specific_yield=1.0,
+        initial_water_depth=2.0,
+        recharge=[0.0, 10.0],
+        time=[0.0, 10.0],
+    )
+
+    reservoir.advance(
+        exchange_rate=0.0,
+        dt=5.0,
+        t_start=2.0,
+    )
+
+    assert reservoir.last_recharge_rate == pytest.approx(2.0)
+    assert reservoir.reservoir_water_depth == pytest.approx(12.0)
+    assert not hasattr(reservoir, "current_t")
+
+
+def test_advance_updates_storage_from_recharge_and_exchange():
+    reservoir = _reservoir(
+        area=1.0,
+        specific_yield=1.0,
+        initial_water_depth=2.0,
+        recharge=0.5,
+    )
+
+    reservoir.advance(
+        exchange_rate=0.25,
+        dt=2.0,
+        t_start=4.0,
+    )
+
+    assert reservoir.last_recharge_rate == pytest.approx(0.5)
+    assert reservoir.reservoir_water_depth == pytest.approx(2.5)
+
+
+def test_advance_rejects_invalid_inputs():
+    reservoir = _reservoir()
+
+    with pytest.raises(ValueError, match="exchange_rate"):
+        reservoir.advance(
+            exchange_rate=float("nan"),
+            dt=1.0,
+            t_start=0.0,
+        )
+
+    with pytest.raises(ValueError, match="dt"):
+        reservoir.advance(
+            exchange_rate=0.0,
+            dt=0.0,
+            t_start=0.0,
+        )
+
+    with pytest.raises(ValueError, match="t_start"):
+        reservoir.advance(
+            exchange_rate=0.0,
+            dt=1.0,
+            t_start=float("nan"),
+        )

@@ -1323,6 +1323,7 @@ class FlowSimulation:
             reservoir.advance(
                 exchange_rate=reservoir.last_exchange_rate,
                 dt=self.dt,
+                t_start=self.current_time,
             )
 
     def _accept_picard_iteration(self):

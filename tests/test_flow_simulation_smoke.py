@@ -488,8 +488,8 @@ def test_stateful_reservoir_exchange_is_cached_and_advanced(tmp_path, monkeypatc
         exchange_calls.append((connected_node_water_depth, dt))
         return 0.003
 
-    def advance(exchange_rate, dt):
-        advance_calls.append((exchange_rate, dt))
+    def advance(exchange_rate, dt, t_start):
+        advance_calls.append((exchange_rate, dt, t_start))
 
     monkeypatch.setattr(reservoir, "compute_exchange", compute_exchange)
     monkeypatch.setattr(reservoir, "advance", advance)
@@ -498,7 +498,7 @@ def test_stateful_reservoir_exchange_is_cached_and_advanced(tmp_path, monkeypatc
     flow._advance_reservoirs()
 
     assert exchange_calls == [(0.75, 0.25)]
-    assert advance_calls == [(0.003, 0.25)]
+    assert advance_calls == [(0.003, 0.25, 0.0)]
     assert reservoir.last_exchange_rate == 0.003
     assert flow.bc_reservoir_exchange_node[1] == 0.003
 
