@@ -39,7 +39,7 @@ class UnconfinedReservoir:
             self.base_elevation = float(base_elevation)
             self.area = float(area)
             self.specific_yield = float(specific_yield)
-            self.water_depth = float(initial_water_depth)
+            self.reservoir_water_depth = float(initial_water_depth)
             self.conductance = float(conductance)
             self.recharge_extrapolate = recharge_extrapolate.lower()
             self.current_t = float(0.0)
@@ -50,7 +50,7 @@ class UnconfinedReservoir:
             self.base_elevation,
             self.area,
             self.specific_yield,
-            self.water_depth,
+            self.reservoir_water_depth,
             self.conductance,
         )
         if not all(np.isfinite(value).all() for value in parameters):
@@ -61,7 +61,7 @@ class UnconfinedReservoir:
             raise ValueError("area must be greater than zero.")
         if self.specific_yield <= 0.0:
             raise ValueError("specific_yield must be greater than zero.")
-        if self.water_depth < 0.0:
+        if self.reservoir_water_depth < 0.0:
             raise ValueError("initial_water_depth must be non-negative.")
         if self.conductance < 0.0:
             raise ValueError("conductance must be non-negative.")
@@ -91,11 +91,11 @@ class UnconfinedReservoir:
 
     def get_hydraulic_head(self):
         """Return the current reservoir hydraulic head [m]."""
-        return self.base_elevation + self.water_depth
+        return self.base_elevation + self.reservoir_water_depth
 
     def get_storage(self):
         """Return the current drainable reservoir storage [m^3]."""
-        return self.area * self.specific_yield * self.water_depth
+        return self.area * self.specific_yield * self.reservoir_water_depth
     
     def _get_recharge_value(self, t):
         """Returns interpolated value at time `t`.
@@ -116,31 +116,42 @@ class UnconfinedReservoir:
         else:
             return float(np.interp(t, self.time, self.recharge))
 
-    def compute_exchange(self, node_water_depth, dt):
+    def compute_exchange(self, connected_node_water_depth, dt):
         """
         Compute reservoir-node exchange for the next hydraulic timestep.
 
         Args:
-            node_water_depth (float): Accepted node water depth at timestep start [m].
-            dt (float): Hydraulic timestep [s].
+            connected_node_water_depth (float): Accepted water depth y at the
+                connected node at timestep start [m].
+            dt (float): Current timestep [s].
 
         Returns:
             float: Reservoir-node exchange rate [m^3/s]. Can be positive or negative.
         """
-        # TODO (Jenny): Implement Q = conductance * (water_depth - node_water_depth),
-        # or similar fashion. We discussed C_ex but in principle other forms may work (better)
-        # Need to discuss how to possibly validate or compare...
-        # Positive Q supplies the node. Limit positive Q so the accepted timestep
-        # cannot withdraw more water than the reservoir contains.
-        #calculate Q
+        try:
+            connected_node_water_depth = float(connected_node_water_depth)
+            dt = float(dt)
+        except (TypeError, ValueError) as error:
+            raise ValueError("connected_node_water_depth and dt must be numeric.") from error
 
-        # I think instead of self.get_hydraulic_head() we should have only the water depth in the reservoir
-        # We assume for now that the reservoir base is always at the same height as the connected node height.
-        Q = self.conductance * (self.get_hydraulic_head() - node_water_depth)
+        if not np.isfinite(connected_node_water_depth):
+            raise ValueError("connected_node_water_depth must be finite.")
+        if not np.isfinite(dt) or dt <= 0.0:
+            raise ValueError("dt must be a finite value greater than zero.")
 
-        # Take into account self.dt as Q is a volumetric rate?
-        Q = min(Q, self.get_storage())  # limit positive Q to available storage
-        return Q 
+        # We assume that the reservoir base is equal to the connected node elevation.
+        # This means the hydraulic head difference reduces to a water depth difference.
+        # We can later extend this to introduce a base elevation for each reservoir
+        # different from the connected node height.
+        head_difference = self.reservoir_water_depth - connected_node_water_depth
+        exchange_rate = self.conductance * head_difference
+
+        #  Limit the flow out of the reservoir to the maximum available volume
+        if exchange_rate > 0.0:
+            max_exchange_rate = self.get_storage() / dt
+            exchange_rate = min(exchange_rate, max_exchange_rate)
+
+        return exchange_rate
 
     def advance(self, exchange_rate, dt):
         """
@@ -153,8 +164,8 @@ class UnconfinedReservoir:
         # TODO (Jenny): Here we need to ipdate the reservoir state e.g.
         # storage_old = self.get_storage()
         # storage_new = storage_old + (self.recharge - exchange_rate) * dt
-        # Enforce non-negative storage, then update self.water_depth:
-        # self.water_depth = storage_new / (self.area * self.specific_yield)
+        # Enforce non-negative storage, then update self.reservoir_water_depth:
+        # self.reservoir_water_depth = storage_new / (self.area * self.specific_yield)
 
         # Lets find a way to use self.current_time from FlowSimulation
         self.current_t += dt
@@ -163,4 +174,7 @@ class UnconfinedReservoir:
         current_recharge = self._get_recharge_value(self.current_t)
         self.last_recharge_rate = current_recharge
         storage_new = storage_old + (current_recharge - exchange_rate) * dt
-        self.water_depth = max(0.0, storage_new / (self.area * self.specific_yield)) #enfore non-negative storage 
+        self.reservoir_water_depth = max(
+            0.0,
+            storage_new / (self.area * self.specific_yield),
+        )

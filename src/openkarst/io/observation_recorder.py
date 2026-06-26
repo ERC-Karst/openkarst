@@ -146,7 +146,7 @@ class ObservationRecorder:
             if RESERVOIR_OBSERVATION_VARIABLES & set(self.variables):
                 reservoir = _reservoir_at_node(flow_sim, node)
                 if RESERVOIR_WATER_DEPTH in self.variables:
-                    row[RESERVOIR_WATER_DEPTH] = reservoir.water_depth
+                    row[RESERVOIR_WATER_DEPTH] = reservoir.reservoir_water_depth
                 if RESERVOIR_HEAD in self.variables:
                     row[RESERVOIR_HEAD] = reservoir.get_hydraulic_head()
                 if RESERVOIR_STORAGE in self.variables:

@@ -2310,7 +2310,7 @@ class FlowSimulation:
         """Cache reservoir exchange once for the full Picard solve."""
         for reservoir in self.reservoirs:
             exchange_rate = reservoir.compute_exchange(
-                node_water_depth=float(self.y_old_t[reservoir.node]),
+                connected_node_water_depth=float(self.y_old_t[reservoir.node]),
                 dt=self.dt,
             )
             if not isinstance(exchange_rate, Real) or not np.isfinite(exchange_rate):

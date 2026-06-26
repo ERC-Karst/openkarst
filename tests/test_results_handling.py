@@ -17,7 +17,7 @@ def _reservoir(
 ):
     reservoir = SimpleNamespace(
         node=node,
-        water_depth=water_depth,
+        reservoir_water_depth=water_depth,
         last_exchange_rate=exchange_rate,
         last_recharge_rate=recharge_rate,
     )

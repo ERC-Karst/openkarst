@@ -16,7 +16,10 @@ def _reservoir_nodes(simulation_instance):
 
 
 def _reservoir_water_depths(simulation_instance):
-    return np.array([reservoir.water_depth for reservoir in simulation_instance.reservoirs], dtype=float)
+    return np.array(
+        [reservoir.reservoir_water_depth for reservoir in simulation_instance.reservoirs],
+        dtype=float,
+    )
 
 
 def _reservoir_heads(simulation_instance):

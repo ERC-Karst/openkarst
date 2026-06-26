@@ -393,6 +393,7 @@ def test_add_reservoir_returns_and_registers_stateful_object(tmp_path):
     assert flow.reservoirs == [reservoir]
     assert reservoir.node == 0
     assert reservoir.base_elevation == flow.Z[0]
+    assert reservoir.reservoir_water_depth == 2.0
     assert reservoir.get_hydraulic_head() == flow.Z[0] + 2.0
     assert reservoir.get_storage() == 200.0
     assert reservoir._get_recharge_value(12.0) == 0.001
@@ -483,8 +484,8 @@ def test_stateful_reservoir_exchange_is_cached_and_advanced(tmp_path, monkeypatc
     exchange_calls = []
     advance_calls = []
 
-    def compute_exchange(node_water_depth, dt):
-        exchange_calls.append((node_water_depth, dt))
+    def compute_exchange(connected_node_water_depth, dt):
+        exchange_calls.append((connected_node_water_depth, dt))
         return 0.003
 
     def advance(exchange_rate, dt):
