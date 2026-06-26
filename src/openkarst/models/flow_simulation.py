@@ -25,6 +25,7 @@ from openkarst.utils.logging_config import setup_logging
 from openkarst.models.boundary_conditions import (
     BoxBC,
     ConstantBC,
+    SpringBC,
     TimeSeriesBC,
     broadcast_boundary_values,
     normalize_target_ids,
@@ -35,6 +36,7 @@ from openkarst.models.hydraulics import (
     compute_upstream_weight_alpha,
 )
 from openkarst.models.cross_section_geometry import create_cross_section_geometry
+from openkarst.models.reservoir import UnconfinedReservoir
 
 
 class FlowSimulation:
@@ -156,6 +158,7 @@ class FlowSimulation:
         
         # Additional tools
         self.observation_recorder = None
+        self.reservoirs = []
 
         # Constant boundary conditions dictionary {node_index: value}
         #self.waterdepth_boundary = {}
@@ -262,6 +265,7 @@ class FlowSimulation:
         self.bc_flux_node = np.zeros(self.network.Np, dtype=float) # [m/s]
         self.bc_flux_to_vol_node = np.zeros(self.network.Np, dtype=float) # [m^3/s]
         self.bc_reservoir_exchange_node = np.zeros(self.network.Np, dtype=float) # [m^3/s]
+        self.bc_spring_outflow_node = np.zeros(self.network.Np, dtype=float) # [m^3/s]
         self.bc_prescribed_y_mask = np.zeros(self.network.Np, dtype=bool) # Dirichlet mask [m] 
         self.bc_prescribed_y_vals = np.zeros(self.network.Np, dtype=float) # Dirichlet values [m] 
         self.bc_Qin_node = np.zeros(self.network.Np, dtype=float) # total external inflow [m^3/s] 
@@ -424,8 +428,7 @@ class FlowSimulation:
                 # Prepare timestep snapshot and buffer for Picard iteration
                 self._prepare_timestep_state()
                
-                # Compute boundary condition values
-                # This currently also computes 
+                # Cache boundary conditions and reservoir exchange for this timestep
                 self._cache_hydraulic_bcs()
 
                 # Perform the dynamic wave computation for the current time step
@@ -442,6 +445,7 @@ class FlowSimulation:
                     
                 # Accept the solved hydraulic state for this timestep
                 self._accept_hydraulic_solution()
+                self._advance_reservoirs()
 
                 # Compute L2 error norms for each timestep
                 self._update_timestep_error_norms()
@@ -752,6 +756,108 @@ class FlowSimulation:
             self.boundary_conditions['inflow'].append(bc)
 
  
+    def set_spring_BC(
+        self,
+        nodes,
+        outlet_elevation,
+        coefficient=None,
+        exponent=1.0,
+        rating_curve=None,
+        mode='add',
+    ):
+        """
+        Set a spring outflow boundary condition at specified nodes.
+
+        Springs are head-dependent sink boundaries. The hydraulic head at
+        the node is compared to an absolute outlet elevation, and water 
+        leaves the model only when the node head is higher than the outlet.
+
+        Args:
+            nodes (int, list of int, or np.ndarray):
+                Index or indices of nodes where spring outflow is applied.
+
+            outlet_elevation (float, list, or np.ndarray):
+                Absolute spring outlet elevation in m. Scalars are broadcast
+                automatically to all specified nodes.
+
+            coefficient (float, list, or np.ndarray, optional):
+                Power-law coefficient for
+                ``Q = coefficient * max(H_node - outlet_elevation, 0)**exponent``.
+                Required when ``rating_curve`` is not provided.
+
+            exponent (float, list, or np.ndarray, optional):
+                Power-law exponent. Defaults to 1.0 for a linear drain.
+                Use 0.5 for an orifice-type spring and 1.5 for a weir-like spring.
+
+            rating_curve (tuple, optional):
+                ``(stages, discharges)`` arrays defining discharge as a function
+                of excess head above the outlet. Stages must be non-negative and
+                discharges must be non-negative. If this is provided, ``coefficient``
+                is not used.
+
+            mode (str, optional):
+                Defines how new spring BCs interact with existing ones:
+                - `'add'` (default): add new BCs; raises an error if a spring
+                  BC already exists at a node.
+                - `'overwrite'`: replace existing spring BCs at the given nodes.
+                - `'remove'`: remove spring BCs from the specified nodes.
+
+        Raises:
+            ValueError: If an invalid mode or spring definition is provided, or
+                if a spring BC already exists in `'add'` mode.
+        """
+
+        if not hasattr(self, 'boundary_conditions'):
+            self.boundary_conditions = {}
+
+        if 'spring' not in self.boundary_conditions:
+            self.boundary_conditions['spring'] = []
+
+        nodes = normalize_target_ids(nodes)
+        outlet_elevations = broadcast_boundary_values(nodes, outlet_elevation)
+
+        if mode == 'remove':
+            self.boundary_conditions['spring'] = [
+                bc for bc in self.boundary_conditions['spring']
+                if all(n not in nodes for n in bc.target_ids)
+            ]
+            return
+
+        if mode not in ('add', 'overwrite'):
+            raise ValueError("mode must be one of 'add', 'overwrite', or 'remove'.")
+
+        coefficients = broadcast_boundary_values(nodes, coefficient)
+        exponents = broadcast_boundary_values(nodes, exponent)
+
+        for node, elev, coeff, exp in zip(
+            nodes,
+            outlet_elevations,
+            coefficients,
+            exponents,
+        ):
+            if mode == 'overwrite':
+                self.boundary_conditions['spring'] = [
+                    bc for bc in self.boundary_conditions['spring']
+                    if node not in bc.target_ids
+                ]
+            elif mode == 'add':
+                for bc in self.boundary_conditions['spring']:
+                    if node in bc.target_ids:
+                        raise ValueError(
+                            f"Spring BC already exists at node {node}. "
+                            "Use mode='overwrite' to replace it."
+                        )
+
+            bc = SpringBC(
+                [node],
+                outlet_elevation=elev,
+                coefficient=coeff,
+                exponent=exp,
+                rating_curve=rating_curve,
+            )
+            self.boundary_conditions['spring'].append(bc)
+
+
     def set_reservoir_BC(self, nodes, fixed_exchange_rate, mode='add'):
         """
         Set fixed reservoir exchange boundary conditions at specified nodes.
@@ -818,6 +924,65 @@ class FlowSimulation:
             self.boundary_conditions['reservoir'].append(bc)
 
 
+    def add_reservoir(
+        self,
+        node,
+        area,
+        specific_yield,
+        initial_water_depth,
+        conductance,
+        recharge=0.0,
+    ):
+        """
+        Create and register a reservoir connected to one network node.
+
+        The reservoir base elevation is taken from the connected node elevation.
+        This model is separate from set_reservoir_BC, which will be removed.
+        Reservoirs develop their internal state, hence a classical BC is not useful.
+
+        Args:
+            node (int): Index of the single connected network node.
+            area (float): Reservoir plan area [m^2].
+            specific_yield (float): Drainable specific yield [-].
+            initial_water_depth (float): Initial depth above the node elevation [m].
+            conductance (float): Reservoir-node exchange conductance [m^3/s/m].
+            recharge (float, optional): External reservoir recharge [m^3/s].
+
+        Returns:
+            UnconfinedReservoir: The registered reservoir object.
+        """
+        nodes = normalize_target_ids(node)
+        if len(nodes) != 1:
+            raise ValueError("A reservoir must connect to exactly one node.")
+
+        node = int(nodes[0])
+        if node < 0 or node >= self.network.Np:
+            raise ValueError(
+                f"Reservoir node {node} is outside the network node range."
+            )
+
+        if any(reservoir.node == node for reservoir in self.reservoirs):
+            raise ValueError(
+                f"A reservoir already exists at node {node}."
+            )
+
+        reservoir = UnconfinedReservoir(
+            node=node,
+            base_elevation=float(self.Z[node]),
+            area=area,
+            specific_yield=specific_yield,
+            initial_water_depth=initial_water_depth,
+            conductance=conductance,
+            recharge=recharge,
+        )
+        self.reservoirs.append(reservoir)
+
+        if not hasattr(self, 'boundary_conditions'):
+            self.boundary_conditions = {}
+
+        return reservoir
+
+
     def set_stop_conditions(self, flowrate_condition=None, flowrate_threshold=0.98):
         
         if flowrate_condition is not None:
@@ -881,6 +1046,9 @@ class FlowSimulation:
             (water depth concentration or inflow concentration) on the same node.
             9. A reservoir node cannot also have water depth, inflow, or critical depth BCs.
             10. A node cannot have duplicate reservoir BCs.
+            11. A spring node cannot also have water depth, inflow, reservoir,
+            or critical depth BCs.
+            12. A node cannot have duplicate spring BCs.
 
         Raises:
             ValueError: If any conflicting or inconsistent boundary conditions are detected.
@@ -897,6 +1065,8 @@ class FlowSimulation:
         mass_inj_nodes      = set()
         reservoir_nodes     = set()
         reservoir_node_list = []
+        spring_nodes        = set()
+        spring_node_list    = []
 
         if hasattr(self, "boundary_conditions"):
             bcs = self.boundary_conditions
@@ -922,7 +1092,15 @@ class FlowSimulation:
             reservoir_node_list = [
                 n for bc in bcs.get("reservoir", []) for n in bc.target_ids
             ]
-            reservoir_nodes.update(reservoir_node_list)
+            spring_node_list = [
+                n for bc in bcs.get("spring", []) for n in bc.target_ids
+            ]
+
+        reservoir_node_list.extend(
+            reservoir.node for reservoir in self.reservoirs
+        )
+        reservoir_nodes.update(reservoir_node_list)
+        spring_nodes.update(spring_node_list)
 
         transport_enabled = self.settings.simulation.enable_transport
 
@@ -966,6 +1144,14 @@ class FlowSimulation:
                 f"Conflict: nodes {sorted(duplicate_reservoir_nodes)} have duplicate reservoir BCs."
             )
 
+        duplicate_spring_nodes = {
+            n for n in spring_node_list if spring_node_list.count(n) > 1
+        }
+        if duplicate_spring_nodes:
+            raise ValueError(
+                f"Conflict: nodes {sorted(duplicate_spring_nodes)} have duplicate spring BCs."
+            )
+
         both = reservoir_nodes & wd_nodes
         if both:
             raise ValueError(
@@ -982,6 +1168,30 @@ class FlowSimulation:
         if both:
             raise ValueError(
                 f"Conflict: nodes {sorted(both)} have both reservoir and critical depth BCs."
+            )
+
+        both = spring_nodes & wd_nodes
+        if both:
+            raise ValueError(
+                f"Conflict: nodes {sorted(both)} have both spring and prescribed water depth BCs."
+            )
+
+        both = spring_nodes & inflow_nodes
+        if both:
+            raise ValueError(
+                f"Conflict: nodes {sorted(both)} have both spring and inflow BCs."
+            )
+
+        both = spring_nodes & reservoir_nodes
+        if both:
+            raise ValueError(
+                f"Conflict: nodes {sorted(both)} have both spring and reservoir BCs."
+            )
+
+        both = spring_nodes & crit_nodes
+        if both:
+            raise ValueError(
+                f"Conflict: nodes {sorted(both)} have both spring and critical depth BCs."
             )
 
         # Transport BC consistency (only if enabled)
@@ -1051,6 +1261,14 @@ class FlowSimulation:
         # Transport: Accept the volume change after each timestep 
         self.V_node += self._dV_last
         self.V_node[self.V_node < 0.0] = 0.0  # For safety
+
+    def _advance_reservoirs(self):
+        """Advance all reservoirs after accepting a hydraulic timestep."""
+        for reservoir in self.reservoirs:
+            reservoir.advance(
+                exchange_rate=reservoir.last_exchange_rate,
+                dt=self.dt,
+            )
 
     def _accept_picard_iteration(self):
         """
@@ -1894,6 +2112,8 @@ class FlowSimulation:
         self.dQ_new += self.bc_inflow_vol_node
         self.dQ_new += self.bc_flux_to_vol_node
         self.dQ_new += self.bc_reservoir_exchange_node
+        self._compute_spring_outflows()
+        self.dQ_new -= self.bc_spring_outflow_node
 
         # Compute the change in volume at each node (dV)
         dV = 0.5 * (self.dQ_old_t + self.dQ_new) * self.dt
@@ -1919,8 +2139,19 @@ class FlowSimulation:
         
         # Compute change in water depths
         self.dydt[:] = np.abs(self.y_new - self.y_old_t) / self.dt
-                
+        
         return
+
+    def _compute_spring_outflows(self):
+        """Compute spring outflows for the current Picard iteration."""
+        self.bc_spring_outflow_node.fill(0.0)
+
+        for bc in getattr(self, "boundary_conditions", {}).get("spring", []):
+            for node in bc.target_ids:
+                head = self.Z[node] + self.y_prev_i[node]
+                self.bc_spring_outflow_node[node] += bc.compute_outflow(
+                    float(head)
+                )
     
     def _adjust_flowrates_dry_nodes(self):
         """
@@ -1981,6 +2212,7 @@ class FlowSimulation:
         self.bc_flux_node.fill(0.0)
         self.bc_flux_to_vol_node.fill(0.0)
         self.bc_reservoir_exchange_node.fill(0.0)
+        self.bc_spring_outflow_node.fill(0.0)
         self.bc_prescribed_y_mask.fill(False)
         self.bc_prescribed_y_vals.fill(0.0)
 
@@ -1991,9 +2223,12 @@ class FlowSimulation:
             else:
                 self.bc_inflow_vol_node[bc.target_ids] += v
 
+        # This will be removed later as I now use a new add_reservoir model
         for bc in self.boundary_conditions.get('reservoir', []):
             v = bc.get_value(t)
             self.bc_reservoir_exchange_node[bc.target_ids] += v
+
+        self._cache_reservoir_exchanges()
 
         # Dirichlet water depth BCs
         for bc in self.boundary_conditions.get('waterdepth', []):
@@ -2015,6 +2250,23 @@ class FlowSimulation:
         
         # Total external inflow per node
         self.bc_Qin_node = self.bc_inflow_vol_node + self.bc_flux_to_vol_node
+
+    def _cache_reservoir_exchanges(self):
+        """Cache reservoir exchange once for the full Picard solve."""
+        for reservoir in self.reservoirs:
+            exchange_rate = reservoir.compute_exchange(
+                node_water_depth=float(self.y_old_t[reservoir.node]),
+                dt=self.dt,
+            )
+            if not isinstance(exchange_rate, Real) or not np.isfinite(exchange_rate):
+                raise ValueError(
+                    "Reservoir compute_exchange() must return a finite scalar."
+                )
+
+            reservoir.last_exchange_rate = float(exchange_rate)
+            self.bc_reservoir_exchange_node[reservoir.node] += float(
+                exchange_rate
+            )
 
     def _cache_transport_bcs(self, t=None):
         """Evaluate transport BC values at current time and cache per-node arrays."""

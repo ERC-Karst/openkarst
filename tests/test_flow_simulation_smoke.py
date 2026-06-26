@@ -2,7 +2,7 @@ import numpy as np
 import openpnm as op
 import pytest
 
-from openkarst.models import FlowSimulation
+from openkarst.models import FlowSimulation, UnconfinedReservoir
 from openkarst.network_generation import compute_conduit_lengths
 
 
@@ -270,6 +270,96 @@ def test_box_flux_inflow_bc_preserves_flux_type_for_all_nodes(tmp_path):
     assert all(bc.get_value(6.0) == 1e-5 for bc in bcs)
 
 
+def test_spring_bc_stores_power_law_and_computes_outflow(tmp_path):
+    flow = _small_flow_simulation(tmp_path)
+
+    flow.set_spring_BC(
+        nodes=[3, 4],
+        outlet_elevation=[flow.Z[3] + 0.2, flow.Z[4] + 0.5],
+        coefficient=0.01,
+        exponent=1.0,
+    )
+
+    bcs = flow.boundary_conditions["spring"]
+    assert [bc.target_ids for bc in bcs] == [[3], [4]]
+
+    flow.y_prev_i[3] = 0.5
+    flow.y_prev_i[4] = 0.3
+    flow._compute_spring_outflows()
+
+    expected = np.zeros(flow.network.Np, dtype=float)
+    expected[3] = 0.003
+    np.testing.assert_allclose(flow.bc_spring_outflow_node, expected)
+
+
+def test_spring_bc_overwrite_and_remove(tmp_path):
+    flow = _small_flow_simulation(tmp_path)
+
+    flow.set_spring_BC(
+        nodes=0,
+        outlet_elevation=flow.Z[0],
+        coefficient=0.001,
+    )
+
+    with pytest.raises(ValueError, match="Spring BC already exists"):
+        flow.set_spring_BC(
+            nodes=0,
+            outlet_elevation=flow.Z[0],
+            coefficient=0.002,
+        )
+
+    flow.set_spring_BC(
+        nodes=0,
+        outlet_elevation=flow.Z[0],
+        coefficient=0.002,
+        mode="overwrite",
+    )
+    bcs = flow.boundary_conditions["spring"]
+    assert len(bcs) == 1
+    assert bcs[0].target_ids == [0]
+    assert bcs[0].coefficient == 0.002
+
+    flow.set_spring_BC(
+        nodes=0,
+        outlet_elevation=flow.Z[0],
+        mode="remove",
+    )
+    assert flow.boundary_conditions["spring"] == []
+
+
+def test_spring_outflow_is_subtracted_from_node_balance(tmp_path):
+    flow = _small_flow_simulation(tmp_path)
+    flow.dt = 1.0
+    flow.Q_new.fill(0.0)
+    flow.dQ_old_t.fill(0.0)
+    flow.y_old_t.fill(1.0)
+    flow.y_prev_i.fill(1.0)
+    flow.set_spring_BC(
+        nodes=2,
+        outlet_elevation=flow.Z[2] + 0.5,
+        coefficient=0.02,
+    )
+
+    flow._compute_water_depths(np.ones(flow.network.Np, dtype=float))
+
+    assert flow.bc_spring_outflow_node[2] == pytest.approx(0.01)
+    assert flow.dQ_new[2] == pytest.approx(-0.01)
+
+
+def test_spring_and_waterdepth_same_node_conflict(tmp_path):
+    flow = _small_flow_simulation(tmp_path)
+
+    flow.set_spring_BC(
+        nodes=0,
+        outlet_elevation=flow.Z[0],
+        coefficient=0.001,
+    )
+    flow.set_waterdepth_BC(nodes=0, values=0.01)
+
+    with pytest.raises(ValueError, match="spring and prescribed water depth"):
+        flow._check_bc_conflicts()
+
+
 def test_reservoir_bc_stores_fixed_exchange_and_caches(tmp_path):
     flow = _small_flow_simulation(tmp_path)
 
@@ -285,6 +375,105 @@ def test_reservoir_bc_stores_fixed_exchange_and_caches(tmp_path):
     expected = np.zeros(flow.network.Np, dtype=float)
     expected[[0, 1]] = 0.001
     np.testing.assert_allclose(flow.bc_reservoir_exchange_node, expected)
+
+
+def test_add_reservoir_returns_and_registers_stateful_object(tmp_path):
+    flow = _small_flow_simulation(tmp_path)
+
+    reservoir = flow.add_reservoir(
+        node=0,
+        area=1000.0,
+        specific_yield=0.1,
+        initial_water_depth=2.0,
+        conductance=1e-4,
+        recharge=0.001,
+    )
+
+    assert isinstance(reservoir, UnconfinedReservoir)
+    assert flow.reservoirs == [reservoir]
+    assert reservoir.node == 0
+    assert reservoir.base_elevation == flow.Z[0]
+    assert reservoir.get_hydraulic_head() == flow.Z[0] + 2.0
+    assert reservoir.get_storage() == 200.0
+
+
+def test_add_reservoir_requires_one_unique_valid_node(tmp_path):
+    flow = _small_flow_simulation(tmp_path)
+
+    with pytest.raises(ValueError, match="exactly one node"):
+        flow.add_reservoir(
+            node=[0, 1],
+            area=1000.0,
+            specific_yield=0.1,
+            initial_water_depth=2.0,
+            conductance=1e-4,
+        )
+
+    flow.add_reservoir(
+        node=0,
+        area=1000.0,
+        specific_yield=0.1,
+        initial_water_depth=2.0,
+        conductance=1e-4,
+    )
+    with pytest.raises(ValueError, match="already exists"):
+        flow.add_reservoir(
+            node=0,
+            area=1000.0,
+            specific_yield=0.1,
+            initial_water_depth=2.0,
+            conductance=1e-4,
+        )
+
+
+def test_stateful_reservoir_exchange_is_cached_and_advanced(tmp_path, monkeypatch):
+    flow = _small_flow_simulation(tmp_path)
+    reservoir = flow.add_reservoir(
+        node=1,
+        area=1000.0,
+        specific_yield=0.1,
+        initial_water_depth=2.0,
+        conductance=1e-4,
+    )
+    flow.dt = 0.25
+    flow.current_time = 0.0
+    flow.y_old_t[1] = 0.75
+
+    exchange_calls = []
+    advance_calls = []
+
+    def compute_exchange(node_water_depth, dt):
+        exchange_calls.append((node_water_depth, dt))
+        return 0.003
+
+    def advance(exchange_rate, dt):
+        advance_calls.append((exchange_rate, dt))
+
+    monkeypatch.setattr(reservoir, "compute_exchange", compute_exchange)
+    monkeypatch.setattr(reservoir, "advance", advance)
+
+    flow._cache_hydraulic_bcs()
+    flow._advance_reservoirs()
+
+    assert exchange_calls == [(0.75, 0.25)]
+    assert advance_calls == [(0.003, 0.25)]
+    assert reservoir.last_exchange_rate == 0.003
+    assert flow.bc_reservoir_exchange_node[1] == 0.003
+
+
+def test_stateful_reservoir_conflicts_with_hydraulic_bc(tmp_path):
+    flow = _small_flow_simulation(tmp_path)
+    flow.add_reservoir(
+        node=0,
+        area=1000.0,
+        specific_yield=0.1,
+        initial_water_depth=2.0,
+        conductance=1e-4,
+    )
+    flow.set_inflow_BC(nodes=0, values=0.001)
+
+    with pytest.raises(ValueError, match="reservoir and inflow"):
+        flow._check_bc_conflicts()
 
 
 def test_duplicate_reservoir_bc_raises_unless_overwritten_or_removed(tmp_path):
