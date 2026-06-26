@@ -122,8 +122,13 @@ class UnconfinedReservoir:
         # Need to discuss how to possibly validate or compare...
         # Positive Q supplies the node. Limit positive Q so the accepted timestep
         # cannot withdraw more water than the reservoir contains.
-        #calculate Q 
+        #calculate Q
+
+        # I think instead of self.get_hydraulic_head() we should have only the water depth in the reservoir
+        # We assume for now that the reservoir base is always at the same height as the connected node height.
         Q = self.conductance * (self.get_hydraulic_head() - node_water_depth)
+
+        # Take into account self.dt as Q is a volumetric rate?
         Q = min(Q, self.get_storage())  # limit positive Q to available storage
         return Q 
 
@@ -140,7 +145,10 @@ class UnconfinedReservoir:
         # storage_new = storage_old + (self.recharge - exchange_rate) * dt
         # Enforce non-negative storage, then update self.water_depth:
         # self.water_depth = storage_new / (self.area * self.specific_yield)
+
+        # Lets find a way to use self.current_time from FlowSimulation
         self.current_t += dt
+        
         storage_old = self.get_storage()
         current_recharge = self._get_recharge_value(self.current_t)
         storage_new = storage_old + (current_recharge - exchange_rate) * dt
