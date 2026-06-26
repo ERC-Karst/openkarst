@@ -3,6 +3,7 @@
 """Reservoir model coupled to single openKARST nodes."""
 
 import math
+import numpy as np
 
 
 class UnconfinedReservoir:
@@ -28,6 +29,7 @@ class UnconfinedReservoir:
         initial_water_depth,
         conductance,
         recharge=0.0,
+        time=None
     ):
         self.node = int(node)
 
@@ -37,7 +39,13 @@ class UnconfinedReservoir:
             self.specific_yield = float(specific_yield)
             self.water_depth = float(initial_water_depth)
             self.conductance = float(conductance)
-            self.recharge = float(recharge)
+            self.recharge = recharge #can be float or array
+            self.time = time
+            self.current_t = float(0.0)
+            self.exchange_history = []
+            self.time_history = []
+            self.water_depth_history = []
+            self.recharge_history = []
         except (TypeError, ValueError) as error:
             raise ValueError("Reservoir parameters must be numeric values.") from error
 
@@ -49,7 +57,7 @@ class UnconfinedReservoir:
             self.conductance,
             self.recharge,
         )
-        if not all(math.isfinite(value) for value in parameters):
+        if not all(np.isfinite(value).all() for value in parameters):
             raise ValueError("Reservoir parameters must be finite values.")
         if self.area <= 0.0:
             raise ValueError("area must be greater than zero.")
@@ -70,6 +78,33 @@ class UnconfinedReservoir:
     def get_storage(self):
         """Return the current drainable reservoir storage [m^3]."""
         return self.area * self.specific_yield * self.water_depth
+    
+    def _record_history(self, exchange_rate): 
+        """Record exchange rates + water depth"""
+        self.time_history.append(self.current_t)
+        self.exchange_history.append(exchange_rate)
+        self.water_depth_history.append(self.water_depth)
+        self.recharge_history.append(self._get_recharge_value(self.current_t))
+
+
+    def _get_recharge_value(self, t, extrapolate_mode = 'zero'):
+        """Returns interpolated value at time `t`.
+        Args:
+            t (float): Time at which to evaluate the BC.
+        Returns:
+            float: The interpolated or extrapolated boundary condition value.
+        """
+        #constant recharge: return value
+        if type(self.recharge) == float or type(self.recharge) == int:
+            return float(self.recharge)
+        
+        #timeseries: interpolate or extrapolate
+        if t < self.time[0]:
+            return 0.0 if extrapolate_mode == 'zero' else float(self.values[0])
+        elif t > self.time[-1]:
+            return 0.0 if extrapolate_mode == 'zero' else float(self.values[-1])
+        else:
+            return float(np.interp(t, self.time, self.recharge))
 
     def compute_exchange(self, node_water_depth, dt):
         """
@@ -87,9 +122,10 @@ class UnconfinedReservoir:
         # Need to discuss how to possibly validate or compare...
         # Positive Q supplies the node. Limit positive Q so the accepted timestep
         # cannot withdraw more water than the reservoir contains.
-        raise NotImplementedError(
-            "TODO (Jenny): implement UnconfinedReservoir.compute_exchange()."
-        )
+        #calculate Q 
+        Q = self.conductance * (self.get_hydraulic_head() - node_water_depth)
+        Q = min(Q, self.get_storage())  # limit positive Q to available storage
+        return Q 
 
     def advance(self, exchange_rate, dt):
         """
@@ -104,6 +140,9 @@ class UnconfinedReservoir:
         # storage_new = storage_old + (self.recharge - exchange_rate) * dt
         # Enforce non-negative storage, then update self.water_depth:
         # self.water_depth = storage_new / (self.area * self.specific_yield)
-        raise NotImplementedError(
-            "TODO (Jenny): implement UnconfinedReservoir.advance()."
-        )
+        self.current_t += dt
+        storage_old = self.get_storage()
+        current_recharge = self._get_recharge_value(self.current_t)
+        storage_new = storage_old + (current_recharge - exchange_rate) * dt
+        self.water_depth = max(0.0, storage_new / (self.area * self.specific_yield)) #enfore non-negative storage 
+        self._record_history(exchange_rate) #record history of exchange and water depth

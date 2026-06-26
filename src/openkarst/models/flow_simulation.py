@@ -932,6 +932,7 @@ class FlowSimulation:
         initial_water_depth,
         conductance,
         recharge=0.0,
+        time = None
     ):
         """
         Create and register a reservoir connected to one network node.
@@ -974,6 +975,7 @@ class FlowSimulation:
             initial_water_depth=initial_water_depth,
             conductance=conductance,
             recharge=recharge,
+            time = None
         )
         self.reservoirs.append(reservoir)
 
