@@ -88,6 +88,7 @@ class UnconfinedReservoir:
         self.last_exchange_rate = 0.0
         self.last_recharge_rate = self._get_recharge_value(0.0)
 
+
     def get_hydraulic_head(self):
         """Return the current reservoir hydraulic head [m]."""
         return self.base_elevation + self.reservoir_water_depth

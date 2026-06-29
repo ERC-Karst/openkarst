@@ -161,6 +161,7 @@ class FlowSimulation:
         
         # Additional tools
         self.observation_recorder = None
+        self.observation_recorders = []
         self.reservoirs = []
 
         # Constant boundary conditions dictionary {node_index: value}
@@ -465,9 +466,13 @@ class FlowSimulation:
                     self._compute_new_dt(self._v_mid_last, self._froude_last)
 
                 # Record observation data if recorder is active and it is time
-                if self.observation_recorder and self.current_time >= self.observation_recorder.next_record_time:
-                    self.observation_recorder.record(self.current_time, self)
-                    self.observation_recorder.next_record_time += self.observation_recorder.interval
+                for recorder in self.observation_recorders:
+                    if self.current_time >= recorder.next_record_time:
+                        recorder.record(self.current_time, self)
+                        recorder.next_record_time += recorder.interval
+                # if self.observation_recorder and self.current_time >= self.observation_recorder.next_record_time:
+                #     self.observation_recorder.record(self.current_time, self)
+                #     self.observation_recorder.next_record_time += self.observation_recorder.interval
 
                 # Store the results if the current time exceeds the next output interval
                 if self.current_time >= next_output_time:
@@ -1072,13 +1077,16 @@ class FlowSimulation:
                     f"without reservoirs: {missing}."
                 )
         
-        self.observation_recorder = ObservationRecorder(nodes, variables, interval)
+        self.observation_recorders.append(ObservationRecorder(nodes, variables, interval))
+        # self.observation_recorder = ObservationRecorder(nodes, variables, interval)
     
     def get_observation_dataframe(self):
-        if self.observation_recorder:
-            return self.observation_recorder.to_dataframe()
-        else:
-            raise RuntimeError("No observation recorder initialized.")
+        observation_data = []
+        for recorder in self.observation_recorders:
+            observation_data.append(recorder.to_dataframe())
+        return observation_data
+        # else:
+        #     raise RuntimeError("No observation recorder initialized.")
         
     def _check_bc_conflicts(self):
         """
