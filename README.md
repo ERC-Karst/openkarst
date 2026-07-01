@@ -24,14 +24,16 @@ openKARST is a Python package for modeling and simulating flow in karst networks
 
 ## Features
 
-- Steady-state and transient flow simulation in karst networks using the Saint-Venant equation (dynamic wave equation) 
-- Dynamic switching between free surface and pressurized flows
-- Laminar and turbulent flow dynamics
-- Two friction factor modes (Churchill and Churchill/Manning hybrid)
-- Support for circular conduits and free surface channels
-- Data loader for ERC KARST cave network files
-- Data exporter for VTK files (e.g. Visualization via Paraview)
-- Browser-based Plotly/Dash data visualization
+- Steady-state and transient karst conduit flow simulation using the Saint-Venant equations
+- Dynamic switching between free-surface and pressurized flow
+- Circular analytical, tabulated depth-width, and channel-style cross-section geometry support
+- Churchill and hybrid Churchill/Manning friction formulations for laminar, turbulent and mixed flow regimes
+- Constant, box, and time-series boundary conditions for inflow, water depth, springs
+- Flexible observation recorders for selected node time series
+- Result outputs for flow rates, water depths, Reynolds numbers, transport variables, reservoirs, convergence norms, and solver iteration counts
+- Browser-based Plotly/Dash viewer for 3D inspection, time navigation, observation plots, convergence diagnostics, and Colab/browser use
+- Built-in cave data loading utilities, including packaged example cave datasets
+- VTK export for external visualization workflows such as ParaView
 - Compatibility with OpenPNM and NetworkX for network creation and manipulation
 
 ## Documentation
