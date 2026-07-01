@@ -24,8 +24,28 @@ launch_openkarst_viewer(results, network, obs_df)
 
 Pass the combined dataframe from `get_observation_dataframe()` to the viewer.
 Do not pass the separate dictionary returned by `get_observation_dataframes()`.
+Recorder names are optional for viewer use; they only matter if you later need
+to inspect the separate tables returned by `get_observation_dataframes()`.
 
 ## Mixed observation groups
+
+If every observed node in a recorder has a reservoir, standard node variables
+and reservoir variables can be recorded together:
+
+```python
+flow.set_observation_points(
+    nodes=reservoir_nodes,
+    variables=[
+        "water_depth",
+        "connected_net_flowrate",
+        "reservoir_water_depth",
+        "reservoir_storage",
+        "reservoir_exchange",
+    ],
+    interval=1.0,
+    name="reservoirs",
+)
+```
 
 If the simulation records different variables for different node groups, keep
 using separate `set_observation_points()` calls and then pass the combined

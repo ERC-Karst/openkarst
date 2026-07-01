@@ -22,6 +22,10 @@ flow.set_observation_points(
 Each call defines one observation recorder. All variables in that call must be
 valid for all nodes in that call.
 
+The `name` argument is optional. If you omit it, openKARST assigns names such as
+`observation_0`, `observation_1`, and so on. Names are only needed when you want
+to identify separate recorder outputs from `get_observation_dataframes()`.
+
 ## Run and retrieve data
 
 ```python
@@ -50,6 +54,24 @@ Reservoir variables can only be requested for nodes where a reservoir has been
 registered with `add_reservoir(...)`. If a recorder requests a reservoir
 variable for a non-reservoir node, openKARST raises a `ValueError`.
 
+Reservoir nodes are still normal network nodes, so they can record standard
+node variables and reservoir variables in the same recorder:
+
+```python
+flow.set_observation_points(
+    nodes=reservoir_nodes,
+    variables=[
+        "water_depth",
+        "connected_net_flowrate",
+        "reservoir_water_depth",
+        "reservoir_storage",
+        "reservoir_exchange",
+    ],
+    interval=1.0,
+    name="reservoirs",
+)
+```
+
 ## Mixed node types
 
 Use separate recorder calls when different node groups need different
@@ -74,7 +96,8 @@ flow.set_observation_points(
 `get_observation_dataframe()` returns one combined dataframe, merged by `time`
 and `node`. Columns that were not recorded for a row contain `NaN`.
 
-If you need the individual recorder outputs, use:
+The `name` arguments above are optional, but they make the individual recorder
+tables easier to identify. If you need those individual outputs, use:
 
 ```python
 observation_tables = flow.get_observation_dataframes()

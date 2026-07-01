@@ -52,6 +52,28 @@ variables must be valid for every node in that recorder. For example,
 reservoir variables such as `reservoir_storage` can only be requested for nodes
 that have a registered reservoir.
 
+The `name` argument is optional. If it is not provided, openKARST assigns names
+such as `observation_0` and `observation_1`. Names are useful only when you want
+to retrieve separate recorder tables with `get_observation_dataframes()`.
+
+Reservoir nodes can record standard node variables and reservoir variables in
+the same recorder, provided every node in that call has a reservoir:
+
+```python
+flow.set_observation_points(
+    nodes=reservoir_nodes,
+    variables=[
+        "water_depth",
+        "connected_net_flowrate",
+        "reservoir_water_depth",
+        "reservoir_storage",
+        "reservoir_exchange",
+    ],
+    interval=1.0,
+    name="reservoirs",
+)
+```
+
 For mixed node groups, split the observation setup:
 
 ```python
