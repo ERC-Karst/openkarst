@@ -393,8 +393,50 @@ def test_add_reservoir_returns_and_registers_stateful_object(tmp_path):
     assert flow.reservoirs == [reservoir]
     assert reservoir.node == 0
     assert reservoir.base_elevation == flow.Z[0]
+    assert reservoir.reservoir_water_depth == 2.0
     assert reservoir.get_hydraulic_head() == flow.Z[0] + 2.0
     assert reservoir.get_storage() == 200.0
+    assert reservoir._get_recharge_value(12.0) == 0.001
+    assert reservoir.last_recharge_rate == 0.001
+    assert not hasattr(reservoir, "exchange_history")
+    assert not hasattr(reservoir, "water_depth_history")
+
+
+def test_add_reservoir_accepts_timeseries_recharge(tmp_path):
+    flow = _small_flow_simulation(tmp_path)
+    times = np.array([0.0, 10.0, 20.0])
+    recharge_rates = np.array([0.0, 0.001, 0.003])
+
+    reservoir = flow.add_reservoir(
+        node=0,
+        area=1000.0,
+        specific_yield=0.1,
+        initial_water_depth=2.0,
+        conductance=1e-4,
+        recharge=("timeseries", times, recharge_rates),
+        recharge_extrapolate="zero",
+    )
+
+    np.testing.assert_allclose(reservoir.time, times)
+    np.testing.assert_allclose(reservoir.recharge, recharge_rates)
+    assert reservoir.recharge_extrapolate == "zero"
+    assert reservoir._get_recharge_value(-1.0) == 0.0
+    assert reservoir._get_recharge_value(5.0) == 0.0005
+    assert reservoir._get_recharge_value(25.0) == 0.0
+
+
+def test_add_reservoir_rejects_invalid_recharge_format(tmp_path):
+    flow = _small_flow_simulation(tmp_path)
+
+    with pytest.raises(ValueError, match="Reservoir recharge"):
+        flow.add_reservoir(
+            node=0,
+            area=1000.0,
+            specific_yield=0.1,
+            initial_water_depth=2.0,
+            conductance=1e-4,
+            recharge=("box", 0.001, 0.0, 10.0),
+        )
 
 
 def test_add_reservoir_requires_one_unique_valid_node(tmp_path):
@@ -442,12 +484,12 @@ def test_stateful_reservoir_exchange_is_cached_and_advanced(tmp_path, monkeypatc
     exchange_calls = []
     advance_calls = []
 
-    def compute_exchange(node_water_depth, dt):
-        exchange_calls.append((node_water_depth, dt))
+    def compute_exchange(connected_node_water_depth, dt):
+        exchange_calls.append((connected_node_water_depth, dt))
         return 0.003
 
-    def advance(exchange_rate, dt):
-        advance_calls.append((exchange_rate, dt))
+    def advance(exchange_rate, dt, t_start):
+        advance_calls.append((exchange_rate, dt, t_start))
 
     monkeypatch.setattr(reservoir, "compute_exchange", compute_exchange)
     monkeypatch.setattr(reservoir, "advance", advance)
@@ -456,7 +498,7 @@ def test_stateful_reservoir_exchange_is_cached_and_advanced(tmp_path, monkeypatc
     flow._advance_reservoirs()
 
     assert exchange_calls == [(0.75, 0.25)]
-    assert advance_calls == [(0.003, 0.25)]
+    assert advance_calls == [(0.003, 0.25, 0.0)]
     assert reservoir.last_exchange_rate == 0.003
     assert flow.bc_reservoir_exchange_node[1] == 0.003
 
@@ -474,6 +516,141 @@ def test_stateful_reservoir_conflicts_with_hydraulic_bc(tmp_path):
 
     with pytest.raises(ValueError, match="reservoir and inflow"):
         flow._check_bc_conflicts()
+
+
+def test_reservoir_observation_variables_require_reservoir_nodes(tmp_path):
+    flow = _small_flow_simulation(tmp_path)
+    flow.add_reservoir(
+        node=0,
+        area=1000.0,
+        specific_yield=0.1,
+        initial_water_depth=2.0,
+        conductance=1e-4,
+    )
+
+    flow.set_observation_points(
+        nodes=0,
+        variables=["reservoir_storage", "reservoir_exchange"],
+    )
+
+    with pytest.raises(ValueError, match="without reservoirs"):
+        flow.set_observation_points(
+            nodes=[0, 1],
+            variables=["reservoir_storage"],
+        )
+
+
+def test_multiple_observation_recorders_return_one_combined_dataframe(tmp_path):
+    flow = _small_flow_simulation(tmp_path)
+    flow.add_reservoir(
+        node=0,
+        area=1000.0,
+        specific_yield=0.1,
+        initial_water_depth=2.0,
+        conductance=1e-4,
+    )
+
+    flow.set_observation_points(
+        nodes=[0, 1],
+        variables=["water_depth"],
+        name="nodes",
+    )
+    flow.set_observation_points(
+        nodes=0,
+        variables=["reservoir_storage"],
+        name="reservoir",
+    )
+
+    flow.observation_recorders[0].records = [
+        {"time": 0.0, "node": 0, "water_depth": 0.1},
+        {"time": 0.0, "node": 1, "water_depth": 0.2},
+    ]
+    flow.observation_recorders[1].records = [
+        {"time": 0.0, "node": 0, "reservoir_storage": 200.0},
+    ]
+
+    obs_df = flow.get_observation_dataframe()
+
+    assert list(obs_df.columns) == [
+        "time",
+        "node",
+        "water_depth",
+        "reservoir_storage",
+    ]
+    node_0 = obs_df.loc[obs_df["node"] == 0].iloc[0]
+    node_1 = obs_df.loc[obs_df["node"] == 1].iloc[0]
+    assert node_0["water_depth"] == 0.1
+    assert node_0["reservoir_storage"] == 200.0
+    assert node_1["water_depth"] == 0.2
+    assert np.isnan(node_1["reservoir_storage"])
+
+    observation_dataframes = flow.get_observation_dataframes()
+    assert set(observation_dataframes) == {"nodes", "reservoir"}
+    assert len(observation_dataframes["nodes"]) == 2
+    assert len(observation_dataframes["reservoir"]) == 1
+
+
+def test_observation_recorder_names_must_be_unique(tmp_path):
+    flow = _small_flow_simulation(tmp_path)
+
+    with pytest.raises(ValueError, match="non-empty string"):
+        flow.set_observation_points(
+            nodes=0,
+            variables=["water_depth"],
+            name="",
+        )
+
+    flow.set_observation_points(
+        nodes=0,
+        variables=["water_depth"],
+        name="same",
+    )
+
+    with pytest.raises(ValueError, match="already exists"):
+        flow.set_observation_points(
+            nodes=1,
+            variables=["water_depth"],
+            name="same",
+        )
+
+
+def test_reservoir_outputs_can_be_requested_from_run_simulation(tmp_path):
+    flow = _small_flow_simulation(tmp_path)
+    geometry = flow.network
+    flow.set_initial_conditions(
+        initial_Q=np.zeros(geometry.Nt, dtype=float),
+        initial_y=np.full(geometry.Np, 0.01, dtype=float),
+    )
+    flow.add_reservoir(
+        node=0,
+        area=1000.0,
+        specific_yield=0.1,
+        initial_water_depth=2.0,
+        conductance=1e-4,
+        recharge=0.001,
+    )
+    flow.set_waterdepth_BC(nodes=4, values=0.01)
+
+    results = flow.run_simulation(
+        desired_outputs={
+            "output_interval": 0.1,
+            "time": True,
+            "reservoir_nodes": True,
+            "reservoir_water_depths": True,
+            "reservoir_heads": True,
+            "reservoir_storage": True,
+            "reservoir_exchange": True,
+            "reservoir_recharge": True,
+        }
+    )
+
+    assert results["reservoir_nodes"].shape[1] == 1
+    assert results["reservoir_nodes"][0, 0] == 0
+    assert results["reservoir_water_depths"].shape == results["reservoir_heads"].shape
+    assert results["reservoir_storage"].shape == results["reservoir_heads"].shape
+    assert results["reservoir_exchange"].shape == results["reservoir_heads"].shape
+    assert results["reservoir_recharge"].shape == results["reservoir_heads"].shape
+    assert np.isfinite(results["reservoir_storage"]).all()
 
 
 def test_duplicate_reservoir_bc_raises_unless_overwritten_or_removed(tmp_path):

@@ -7,6 +7,25 @@ import pytest
 from openkarst.io.results_handling import initialize_results_container, store_results
 
 
+def _reservoir(
+    node,
+    water_depth,
+    hydraulic_head,
+    storage,
+    exchange_rate,
+    recharge_rate,
+):
+    reservoir = SimpleNamespace(
+        node=node,
+        reservoir_water_depth=water_depth,
+        last_exchange_rate=exchange_rate,
+        last_recharge_rate=recharge_rate,
+    )
+    reservoir.get_hydraulic_head = lambda: hydraulic_head
+    reservoir.get_storage = lambda: storage
+    return reservoir
+
+
 def test_initialize_results_container_uses_enabled_valid_outputs_only():
     results = initialize_results_container(
         {
@@ -16,6 +35,7 @@ def test_initialize_results_container_uses_enabled_valid_outputs_only():
             "y_l2_norms": True,
             "Q_l2_norms": True,
             "picard_iterations_total": True,
+            "reservoir_storage": True,
             "water_depths": False,
         },
         logging.getLogger("test"),
@@ -27,6 +47,7 @@ def test_initialize_results_container_uses_enabled_valid_outputs_only():
         "y_l2_norms": [],
         "Q_l2_norms": [],
         "picard_iterations_total": [],
+        "reservoir_storage": [],
     }
 
 
@@ -50,6 +71,10 @@ def test_store_results_appends_copies_of_mutable_arrays():
         picard_iterations_total=8,
         C=np.array([0.0, 0.1, 0.2]),
         M=np.array([0.0, 1.0, 2.0]),
+        reservoirs=[
+            _reservoir(1, 2.0, 12.0, 200.0, 0.003, 0.001),
+            _reservoir(3, 1.5, 11.5, 150.0, -0.002, 0.0),
+        ],
     )
     results = {
         "convergence_fails": [],
@@ -66,6 +91,12 @@ def test_store_results_appends_copies_of_mutable_arrays():
         "picard_iterations_total": [],
         "concentrations": [],
         "mass": [],
+        "reservoir_nodes": [],
+        "reservoir_water_depths": [],
+        "reservoir_heads": [],
+        "reservoir_storage": [],
+        "reservoir_exchange": [],
+        "reservoir_recharge": [],
     }
 
     stored = store_results(simulation, results)
@@ -82,3 +113,9 @@ def test_store_results_appends_copies_of_mutable_arrays():
     assert stored["picard_iterations_total"] == [8]
     np.testing.assert_array_equal(stored["flowrates"][0], np.array([1.0, 2.0]))
     np.testing.assert_array_equal(stored["water_depths"][0], np.array([0.1, 0.2, 0.3]))
+    np.testing.assert_array_equal(stored["reservoir_nodes"][0], np.array([1, 3]))
+    np.testing.assert_array_equal(stored["reservoir_water_depths"][0], np.array([2.0, 1.5]))
+    np.testing.assert_array_equal(stored["reservoir_heads"][0], np.array([12.0, 11.5]))
+    np.testing.assert_array_equal(stored["reservoir_storage"][0], np.array([200.0, 150.0]))
+    np.testing.assert_array_equal(stored["reservoir_exchange"][0], np.array([0.003, -0.002]))
+    np.testing.assert_array_equal(stored["reservoir_recharge"][0], np.array([0.001, 0.0]))

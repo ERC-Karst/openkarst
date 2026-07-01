@@ -17,7 +17,10 @@ from typing import Optional, Dict, Any
 from openkarst.config.saint_venant_settings import SaintVenantSettings
 
 from openkarst.io.results_handling import initialize_results_container, store_results
-from openkarst.io.observation_recorder import ObservationRecorder
+from openkarst.io.observation_recorder import (
+    ObservationRecorder,
+    RESERVOIR_OBSERVATION_VARIABLES,
+)
 
 from openkarst.utils.helpers import time_this
 from openkarst.utils.logging_config import setup_logging
@@ -157,7 +160,7 @@ class FlowSimulation:
         self.network = openpnm_network
         
         # Additional tools
-        self.observation_recorder = None
+        self.observation_recorders = []
         self.reservoirs = []
 
         # Constant boundary conditions dictionary {node_index: value}
@@ -461,10 +464,11 @@ class FlowSimulation:
                 if self.settings.simulation.adaptive_timesteps and self.current_timestep > 0:
                     self._compute_new_dt(self._v_mid_last, self._froude_last)
 
-                # Record observation data if recorder is active and it is time
-                if self.observation_recorder and self.current_time >= self.observation_recorder.next_record_time:
-                    self.observation_recorder.record(self.current_time, self)
-                    self.observation_recorder.next_record_time += self.observation_recorder.interval
+                # Record observation data if recorders are active and it is time
+                for recorder in self.observation_recorders:
+                    if self.current_time >= recorder.next_record_time:
+                        recorder.record(self.current_time, self)
+                        recorder.next_record_time += recorder.interval
 
                 # Store the results if the current time exceeds the next output interval
                 if self.current_time >= next_output_time:
@@ -932,6 +936,7 @@ class FlowSimulation:
         initial_water_depth,
         conductance,
         recharge=0.0,
+        recharge_extrapolate='hold',
     ):
         """
         Create and register a reservoir connected to one network node.
@@ -946,7 +951,12 @@ class FlowSimulation:
             specific_yield (float): Drainable specific yield [-].
             initial_water_depth (float): Initial depth above the node elevation [m].
             conductance (float): Reservoir-node exchange conductance [m^3/s/m].
-            recharge (float, optional): External reservoir recharge [m^3/s].
+            recharge (float or tuple, optional): External reservoir recharge [m^3/s].
+                Supported formats:
+                - float or int: constant recharge.
+                - ('timeseries', times, values): interpolated recharge time series.
+            recharge_extrapolate (str, optional): Extrapolation behavior for
+                time-series recharge. Use 'hold' or 'zero'.
 
         Returns:
             UnconfinedReservoir: The registered reservoir object.
@@ -966,6 +976,22 @@ class FlowSimulation:
                 f"A reservoir already exists at node {node}."
             )
 
+        recharge_times = None
+        recharge_values = recharge
+        if isinstance(recharge, np.ndarray) and recharge.ndim == 0:
+            recharge_values = recharge.item()
+        elif (
+            isinstance(recharge, tuple)
+            and len(recharge) >= 3
+            and recharge[0] == 'timeseries'
+        ):
+            _, recharge_times, recharge_values = recharge[:3]
+        elif not isinstance(recharge, Real):
+            raise ValueError(
+                "Reservoir recharge must be a scalar or "
+                "('timeseries', times, values)."
+            )
+
         reservoir = UnconfinedReservoir(
             node=node,
             base_elevation=float(self.Z[node]),
@@ -973,7 +999,9 @@ class FlowSimulation:
             specific_yield=specific_yield,
             initial_water_depth=initial_water_depth,
             conductance=conductance,
-            recharge=recharge,
+            recharge=recharge_values,
+            time=recharge_times,
+            recharge_extrapolate=recharge_extrapolate,
         )
         self.reservoirs.append(reservoir)
 
@@ -992,10 +1020,7 @@ class FlowSimulation:
         else:
             self.stop_condition_set = False
         
-    # def set_observation_points(self, nodes, variables, interval=1.0):
-    #     self.observation_recorder = ObservationRecorder(nodes, variables, interval)
-
-    def set_observation_points(self, nodes, variables, interval=1.0):
+    def set_observation_points(self, nodes, variables, interval=1.0, name=None):
         """Record selected node-based time series during transient simulations.
 
         Supported variables are:
@@ -1007,7 +1032,32 @@ class FlowSimulation:
             - ``'concentrations'``: concentration at each observed node when
               transport is enabled.
             - ``'mass'``: mass at each observed node when transport is enabled.
+            - ``'reservoir_water_depth'``: reservoir water depth at each
+              observed reservoir node.
+            - ``'reservoir_head'``: reservoir hydraulic head at each observed
+              reservoir node.
+            - ``'reservoir_storage'``: reservoir storage at each observed
+              reservoir node.
+            - ``'reservoir_exchange'``: reservoir-node exchange rate at each
+              observed reservoir node.
+            - ``'reservoir_recharge'``: reservoir recharge rate at each
+              observed reservoir node.
         """
+
+        nodes = normalize_target_ids(nodes)
+        if isinstance(variables, str):
+            variables = [variables]
+        else:
+            variables = list(variables)
+        if name is None:
+            name = f"observation_{len(self.observation_recorders)}"
+        elif not isinstance(name, str) or not name:
+            raise ValueError("Observation recorder name must be a non-empty string.")
+        elif any(recorder.name == name for recorder in self.observation_recorders):
+            raise ValueError(
+                f"Observation recorder name '{name}' already exists. "
+                "Use a unique name."
+            )
 
         # Check if user wants C and M saved in observation and stop is transport is not enabled
         wants_trans_output = any(v in ("concentrations", "mass") for v in variables)
@@ -1016,14 +1066,58 @@ class FlowSimulation:
                 "Observation variables include 'concentrations' and/or 'mass'"
                 "but enable_transport=False. Enable transport or remove these variables."
             )
+
+        wants_reservoir_output = any(
+            v in RESERVOIR_OBSERVATION_VARIABLES for v in variables
+        )
+        if wants_reservoir_output:
+            reservoir_nodes = {reservoir.node for reservoir in self.reservoirs}
+            missing = sorted(set(nodes) - reservoir_nodes)
+            if missing:
+                raise ValueError(
+                    "Reservoir observation variables requested for nodes "
+                    f"without reservoirs: {missing}."
+                )
         
-        self.observation_recorder = ObservationRecorder(nodes, variables, interval)
+        self.observation_recorders.append(
+            ObservationRecorder(nodes, variables, interval, name=name)
+        )
     
     def get_observation_dataframe(self):
-        if self.observation_recorder:
-            return self.observation_recorder.to_dataframe()
-        else:
+        """Return all observation records as one wide dataframe.
+
+        Multiple observation recorders are combined on ``time`` and ``node``.
+        Variables that were not recorded for a row are represented as NaN.
+        """
+        import pandas as pd
+
+        if not self.observation_recorders:
             raise RuntimeError("No observation recorder initialized.")
+
+        frames = [recorder.to_dataframe() for recorder in self.observation_recorders]
+        frames = [frame for frame in frames if not frame.empty]
+        if not frames:
+            return pd.DataFrame(columns=["time", "node"])
+
+        combined = pd.concat(frames, ignore_index=True, sort=False)
+        if {"time", "node"}.issubset(combined.columns):
+            combined = (
+                combined
+                .sort_values(["time", "node"], kind="stable")
+                .groupby(["time", "node"], as_index=False, sort=True)
+                .first()
+            )
+        return combined
+
+    def get_observation_dataframes(self):
+        """Return separate observation dataframes keyed by recorder name."""
+        if not self.observation_recorders:
+            raise RuntimeError("No observation recorder initialized.")
+
+        return {
+            recorder.name: recorder.to_dataframe()
+            for recorder in self.observation_recorders
+        }
         
     def _check_bc_conflicts(self):
         """
@@ -1268,6 +1362,7 @@ class FlowSimulation:
             reservoir.advance(
                 exchange_rate=reservoir.last_exchange_rate,
                 dt=self.dt,
+                t_start=self.current_time,
             )
 
     def _accept_picard_iteration(self):
@@ -2255,7 +2350,7 @@ class FlowSimulation:
         """Cache reservoir exchange once for the full Picard solve."""
         for reservoir in self.reservoirs:
             exchange_rate = reservoir.compute_exchange(
-                node_water_depth=float(self.y_old_t[reservoir.node]),
+                connected_node_water_depth=float(self.y_old_t[reservoir.node]),
                 dt=self.dt,
             )
             if not isinstance(exchange_rate, Real) or not np.isfinite(exchange_rate):

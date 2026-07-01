@@ -3,7 +3,7 @@
 openKARST has two complementary output mechanisms:
 
 - the **results container**, which stores arrays for the whole network;
-- the **observation recorder**, which stores compact time series at selected nodes.
+- **observation recorders**, which store compact time series at selected nodes.
 
 ## Results container
 
@@ -43,6 +43,52 @@ flow.set_observation_points(
         "connected_net_flowrate",
     ],
     interval=1.0,
+    name="boundary_nodes",
+)
+```
+
+Each call to `set_observation_points()` creates one recorder. The requested
+variables must be valid for every node in that recorder. For example,
+reservoir variables such as `reservoir_storage` can only be requested for nodes
+that have a registered reservoir.
+
+The `name` argument is optional. If it is not provided, openKARST assigns names
+such as `observation_0` and `observation_1`. Names are useful only when you want
+to retrieve separate recorder tables with `get_observation_dataframes()`.
+
+Reservoir nodes can record standard node variables and reservoir variables in
+the same recorder, provided every node in that call has a reservoir:
+
+```python
+flow.set_observation_points(
+    nodes=reservoir_nodes,
+    variables=[
+        "water_depth",
+        "connected_net_flowrate",
+        "reservoir_water_depth",
+        "reservoir_storage",
+        "reservoir_exchange",
+    ],
+    interval=1.0,
+    name="reservoirs",
+)
+```
+
+For mixed node groups, split the observation setup:
+
+```python
+flow.set_observation_points(
+    nodes=all_observation_nodes,
+    variables=["water_depth", "connected_net_flowrate"],
+    interval=1.0,
+    name="nodes",
+)
+
+flow.set_observation_points(
+    nodes=reservoir_nodes,
+    variables=["reservoir_water_depth", "reservoir_storage"],
+    interval=1.0,
+    name="reservoirs",
 )
 ```
 
@@ -52,5 +98,10 @@ After the run:
 obs_df = flow.get_observation_dataframe()
 ```
 
-The dataframe is convenient for plotting, exporting to CSV, or synchronizing
+`get_observation_dataframe()` returns one combined dataframe, merged by `time`
+and `node`. Variables that were not recorded for a row appear as `NaN`. This
+single table is convenient for plotting, exporting to CSV, or synchronizing
 with the 3D viewer.
+
+Use `get_observation_dataframes()` when you need the separate recorder tables
+keyed by recorder name.
