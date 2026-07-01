@@ -10,7 +10,7 @@
   <a href="https://doi.org/10.1016/j.cageo.2025.106066">
     <img src="https://img.shields.io/badge/DOI-10.1016%2Fj.cageo.2025.106066-blue" alt="DOI">
   </a>
-  <img src="https://img.shields.io/badge/version-0.3.0-blue.svg" alt="version">
+  <img src="https://img.shields.io/badge/version-0.4.0-blue.svg" alt="version">
   <a href="https://erc-karst.github.io/openkarst/">
     <img src="https://img.shields.io/badge/docs-latest-brightgreen.svg" alt="docs">
   </a>
