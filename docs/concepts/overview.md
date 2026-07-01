@@ -33,7 +33,7 @@ What should be saved?
 | `FlowSimulation` object | Holds the hydraulic state and advances the model in time. |
 | Boundary conditions | Prescribe inflow or water depth at selected nodes. |
 | Results container | Stores selected arrays at output intervals. |
-| Observation recorder | Stores node-based time series for selected variables. |
+| Observation recorders | Store node-based time series for selected variables and selected node groups. |
 
 ## Units
 

@@ -160,7 +160,6 @@ class FlowSimulation:
         self.network = openpnm_network
         
         # Additional tools
-        self.observation_recorder = None
         self.observation_recorders = []
         self.reservoirs = []
 
@@ -465,14 +464,11 @@ class FlowSimulation:
                 if self.settings.simulation.adaptive_timesteps and self.current_timestep > 0:
                     self._compute_new_dt(self._v_mid_last, self._froude_last)
 
-                # Record observation data if recorder is active and it is time
+                # Record observation data if recorders are active and it is time
                 for recorder in self.observation_recorders:
                     if self.current_time >= recorder.next_record_time:
                         recorder.record(self.current_time, self)
                         recorder.next_record_time += recorder.interval
-                # if self.observation_recorder and self.current_time >= self.observation_recorder.next_record_time:
-                #     self.observation_recorder.record(self.current_time, self)
-                #     self.observation_recorder.next_record_time += self.observation_recorder.interval
 
                 # Store the results if the current time exceeds the next output interval
                 if self.current_time >= next_output_time:
@@ -1024,10 +1020,7 @@ class FlowSimulation:
         else:
             self.stop_condition_set = False
         
-    # def set_observation_points(self, nodes, variables, interval=1.0):
-    #     self.observation_recorder = ObservationRecorder(nodes, variables, interval)
-
-    def set_observation_points(self, nodes, variables, interval=1.0):
+    def set_observation_points(self, nodes, variables, interval=1.0, name=None):
         """Record selected node-based time series during transient simulations.
 
         Supported variables are:
@@ -1056,6 +1049,15 @@ class FlowSimulation:
             variables = [variables]
         else:
             variables = list(variables)
+        if name is None:
+            name = f"observation_{len(self.observation_recorders)}"
+        elif not isinstance(name, str) or not name:
+            raise ValueError("Observation recorder name must be a non-empty string.")
+        elif any(recorder.name == name for recorder in self.observation_recorders):
+            raise ValueError(
+                f"Observation recorder name '{name}' already exists. "
+                "Use a unique name."
+            )
 
         # Check if user wants C and M saved in observation and stop is transport is not enabled
         wants_trans_output = any(v in ("concentrations", "mass") for v in variables)
@@ -1077,16 +1079,45 @@ class FlowSimulation:
                     f"without reservoirs: {missing}."
                 )
         
-        self.observation_recorders.append(ObservationRecorder(nodes, variables, interval))
-        # self.observation_recorder = ObservationRecorder(nodes, variables, interval)
+        self.observation_recorders.append(
+            ObservationRecorder(nodes, variables, interval, name=name)
+        )
     
     def get_observation_dataframe(self):
-        observation_data = []
-        for recorder in self.observation_recorders:
-            observation_data.append(recorder.to_dataframe())
-        return observation_data
-        # else:
-        #     raise RuntimeError("No observation recorder initialized.")
+        """Return all observation records as one wide dataframe.
+
+        Multiple observation recorders are combined on ``time`` and ``node``.
+        Variables that were not recorded for a row are represented as NaN.
+        """
+        import pandas as pd
+
+        if not self.observation_recorders:
+            raise RuntimeError("No observation recorder initialized.")
+
+        frames = [recorder.to_dataframe() for recorder in self.observation_recorders]
+        frames = [frame for frame in frames if not frame.empty]
+        if not frames:
+            return pd.DataFrame(columns=["time", "node"])
+
+        combined = pd.concat(frames, ignore_index=True, sort=False)
+        if {"time", "node"}.issubset(combined.columns):
+            combined = (
+                combined
+                .sort_values(["time", "node"], kind="stable")
+                .groupby(["time", "node"], as_index=False, sort=True)
+                .first()
+            )
+        return combined
+
+    def get_observation_dataframes(self):
+        """Return separate observation dataframes keyed by recorder name."""
+        if not self.observation_recorders:
+            raise RuntimeError("No observation recorder initialized.")
+
+        return {
+            recorder.name: recorder.to_dataframe()
+            for recorder in self.observation_recorders
+        }
         
     def _check_bc_conflicts(self):
         """

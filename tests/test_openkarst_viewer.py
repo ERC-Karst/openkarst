@@ -110,6 +110,35 @@ def test_build_observation_figure_plots_selected_property():
     np.testing.assert_array_equal(fig.data[0].y, np.array([0.1, 0.2]))
 
 
+def test_build_observation_figure_skips_nodes_without_finite_selected_property():
+    import pandas as pd
+
+    precompute_context, build_figure = _observation_helpers()
+    results = {"time": np.array([0.0, 10.0, 20.0])}
+    obs_df = pd.DataFrame({
+        "time": [0.0, 10.0, 20.0, 0.0, 10.0, 20.0],
+        "node": [1, 1, 1, 2, 2, 2],
+        "water_depth": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6],
+        "reservoir_storage": [100.0, np.nan, 110.0, np.nan, np.nan, np.nan],
+    })
+    context = precompute_context(obs_df)
+
+    fig = build_figure(
+        results,
+        obs_df,
+        context,
+        time_idx=2,
+        node_ids=[1, 2],
+        obs_node_colors={1: "#1f77b4", 2: "#ff7f0e"},
+        observation_property="reservoir_storage",
+    )
+
+    assert [trace.name for trace in fig.data] == ["n 1"]
+    assert fig.layout.yaxis.title.text == "Reservoir storage [m<sup>3</sup>]"
+    np.testing.assert_array_equal(fig.data[0].x, np.array([0.0, 20.0]))
+    np.testing.assert_array_equal(fig.data[0].y, np.array([100.0, 110.0]))
+
+
 def test_build_observation_figure_moves_moderate_legends_above_plot():
     import pandas as pd
 

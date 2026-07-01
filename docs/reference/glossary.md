@@ -11,6 +11,7 @@
 | Manning coefficient | Roughness coefficient often used for open-channel flow. |
 | Node | A point in the network. In OpenPNM this is a pore. |
 | Observation point | A node where selected time series are recorded during simulation. |
+| Observation recorder | A configured group of observation points, variables, and recording interval. A simulation can use multiple recorders. |
 | Outlet node | Node where a water-depth or other outlet condition is prescribed. |
 | Picard iteration | Iterative nonlinear solve used within a time step. |
 | Pore | OpenPNM term for a network node. |

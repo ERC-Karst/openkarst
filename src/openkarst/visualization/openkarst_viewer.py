@@ -47,6 +47,11 @@ OBSERVATION_LABELS = {
     "C": "Concentration [kg/m3]",
     "c": "Concentration [kg/m3]",
     "mass": "Mass [kg]",
+    "reservoir_water_depth": "Reservoir water depth [m]",
+    "reservoir_head": "Reservoir head [m]",
+    "reservoir_storage": "Reservoir storage [m3]",
+    "reservoir_exchange": "Reservoir exchange [m3/s]",
+    "reservoir_recharge": "Reservoir recharge [m3/s]",
 }
 OBSERVATION_AXIS_LABELS = {
     "water_depth": "Water depth [m]",
@@ -61,6 +66,11 @@ OBSERVATION_AXIS_LABELS = {
     "C": "Concentration [kg/m<sup>3</sup>]",
     "c": "Concentration [kg/m<sup>3</sup>]",
     "mass": "Mass [kg]",
+    "reservoir_water_depth": "Reservoir water depth [m]",
+    "reservoir_head": "Reservoir head [m]",
+    "reservoir_storage": "Reservoir storage [m<sup>3</sup>]",
+    "reservoir_exchange": "Reservoir exchange [m<sup>3</sup>/s]",
+    "reservoir_recharge": "Reservoir recharge [m<sup>3</sup>/s]",
 }
 FIELD_RESULT_CANDIDATES = {
     "flowrate": ("flowrates", "flowrate", "Q", "q", "flow", "flows", "discharge", "discharges"),
@@ -976,15 +986,21 @@ def _build_observation_figure(
             continue
 
         end_idx = int(np.searchsorted(df_full["time"].to_numpy(), current_time, side="right"))
-        df_visible = _thin_frame(df_full.iloc[:end_idx])
-        if df_visible.empty:
+        df_property = df_full.iloc[:end_idx]
+        if df_property.empty:
             continue
+        y_values = np.asarray(df_property[observation_property], dtype=float)
+        finite_values = np.isfinite(y_values)
+        if not np.any(finite_values):
+            continue
+        df_visible = _thin_frame(df_property.loc[finite_values])
+        y_values = np.asarray(df_visible[observation_property], dtype=float)
 
         trace_mode = "lines" if len(df_visible) > 500 else "lines+markers"
 
         fig.add_trace(go.Scattergl(
             x=df_visible["time"],
-            y=np.asarray(df_visible[observation_property], dtype=float),
+            y=y_values,
             mode=trace_mode,
             name=f"n {node_id}",
             line=dict(color=obs_node_colors.get(node_id, "blue"), width=2),

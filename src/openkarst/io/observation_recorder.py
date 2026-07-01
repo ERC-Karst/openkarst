@@ -98,7 +98,7 @@ class ObservationRecorder:
         records (list of dict): Internal buffer storing observation rows.
     """
 
-    def __init__(self, nodes, variables, interval=1.0):
+    def __init__(self, nodes, variables, interval=1.0, name=None):
         """Initializes the observation recorder.
 
         Args:
@@ -108,10 +108,12 @@ class ObservationRecorder:
                 'connected_net_flowrate', 'concentrations', 'mass', and
                 reservoir variables.
             interval (float, optional): Recording interval in seconds. Defaults to 1.0.
+            name (str, optional): Identifier used when multiple recorders are configured.
         """
         self.nodes = nodes
         self.variables = _validated_observation_variables(variables)
         self.interval = interval
+        self.name = name
         self.next_record_time = 0.0
         self.records = []  # Each dict becomes a row in the dataframe
 
