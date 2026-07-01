@@ -1016,7 +1016,7 @@
 <p>openKARST has two complementary output mechanisms:</p>
 <ul>
 <li>the <strong>results container</strong>, which stores arrays for the whole network;</li>
-<li>the <strong>observation recorder</strong>, which stores compact time series at selected nodes.</li>
+<li><strong>observation recorders</strong>, which store compact time series at selected nodes.</li>
 </ul>
 <h2 id="results-container">Results container<a class="headerlink" href="#results-container" title="Permanent link">&para;</a></h2>
 <p>Pass <code>desired_outputs</code> to <code>run_simulation()</code>:</p>
@@ -1067,13 +1067,37 @@
 <a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>        <span class="s2">&quot;connected_net_flowrate&quot;</span><span class="p">,</span>
 <a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="p">],</span>
 <a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    <span class="n">interval</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="p">)</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;boundary_nodes&quot;</span><span class="p">,</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="p">)</span>
+</code></pre></div>
+<p>Each call to <code>set_observation_points()</code> creates one recorder. The requested
+variables must be valid for every node in that recorder. For example,
+reservoir variables such as <code>reservoir_storage</code> can only be requested for nodes
+that have a registered reservoir.</p>
+<p>For mixed node groups, split the observation setup:</p>
+<div class="language-python highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">flow</span><span class="o">.</span><span class="n">set_observation_points</span><span class="p">(</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="n">nodes</span><span class="o">=</span><span class="n">all_observation_nodes</span><span class="p">,</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="n">variables</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;water_depth&quot;</span><span class="p">,</span> <span class="s2">&quot;connected_net_flowrate&quot;</span><span class="p">],</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">interval</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;nodes&quot;</span><span class="p">,</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="p">)</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="n">flow</span><span class="o">.</span><span class="n">set_observation_points</span><span class="p">(</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>    <span class="n">nodes</span><span class="o">=</span><span class="n">reservoir_nodes</span><span class="p">,</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>    <span class="n">variables</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;reservoir_water_depth&quot;</span><span class="p">,</span> <span class="s2">&quot;reservoir_storage&quot;</span><span class="p">],</span>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>    <span class="n">interval</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;reservoirs&quot;</span><span class="p">,</span>
+<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="p">)</span>
 </code></pre></div>
 <p>After the run:</p>
-<div class="language-python highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">obs_df</span> <span class="o">=</span> <span class="n">flow</span><span class="o">.</span><span class="n">get_observation_dataframe</span><span class="p">()</span>
+<div class="language-python highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">obs_df</span> <span class="o">=</span> <span class="n">flow</span><span class="o">.</span><span class="n">get_observation_dataframe</span><span class="p">()</span>
 </code></pre></div>
-<p>The dataframe is convenient for plotting, exporting to CSV, or synchronizing
+<p><code>get_observation_dataframe()</code> returns one combined dataframe, merged by <code>time</code>
+and <code>node</code>. Variables that were not recorded for a row appear as <code>NaN</code>. This
+single table is convenient for plotting, exporting to CSV, or synchronizing
 with the 3D viewer.</p>
+<p>Use <code>get_observation_dataframes()</code> when you need the separate recorder tables
+keyed by recorder name.</p>
 
 
 

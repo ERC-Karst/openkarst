@@ -672,6 +672,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#mixed-node-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      Mixed node types
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#simple-plot" class="md-nav__link">
     <span class="md-ellipsis">
       Simple plot
@@ -1031,6 +1040,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#mixed-node-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      Mixed node types
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#simple-plot" class="md-nav__link">
     <span class="md-ellipsis">
       Simple plot
@@ -1079,8 +1097,11 @@ nodes.</p>
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>        <span class="s2">&quot;connected_net_flowrate&quot;</span><span class="p">,</span>
 <a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="p">],</span>
 <a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">interval</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="p">)</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;boundary_nodes&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="p">)</span>
 </code></pre></div>
+<p>Each call defines one observation recorder. All variables in that call must be
+valid for all nodes in that call.</p>
 <h2 id="run-and-retrieve-data">Run and retrieve data<a class="headerlink" href="#run-and-retrieve-data" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">results</span> <span class="o">=</span> <span class="n">flow</span><span class="o">.</span><span class="n">run_simulation</span><span class="p">(</span><span class="n">desired_outputs</span><span class="o">=</span><span class="n">outputs</span><span class="p">)</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">obs_df</span> <span class="o">=</span> <span class="n">flow</span><span class="o">.</span><span class="n">get_observation_dataframe</span><span class="p">()</span>
@@ -1108,18 +1129,71 @@ nodes.</p>
 <td><code>connected_net_flowrate</code></td>
 <td>Signed net conduit flow rate into the node.</td>
 </tr>
+<tr>
+<td><code>concentrations</code></td>
+<td>Concentration at each observed node when transport is enabled.</td>
+</tr>
+<tr>
+<td><code>mass</code></td>
+<td>Mass at each observed node when transport is enabled.</td>
+</tr>
+<tr>
+<td><code>reservoir_water_depth</code></td>
+<td>Reservoir water depth at each observed reservoir node.</td>
+</tr>
+<tr>
+<td><code>reservoir_head</code></td>
+<td>Reservoir hydraulic head at each observed reservoir node.</td>
+</tr>
+<tr>
+<td><code>reservoir_storage</code></td>
+<td>Reservoir storage at each observed reservoir node.</td>
+</tr>
+<tr>
+<td><code>reservoir_exchange</code></td>
+<td>Reservoir-node exchange rate at each observed reservoir node.</td>
+</tr>
+<tr>
+<td><code>reservoir_recharge</code></td>
+<td>Reservoir recharge rate at each observed reservoir node.</td>
+</tr>
 </tbody>
 </table>
+<p>Reservoir variables can only be requested for nodes where a reservoir has been
+registered with <code>add_reservoir(...)</code>. If a recorder requests a reservoir
+variable for a non-reservoir node, openKARST raises a <code>ValueError</code>.</p>
+<h2 id="mixed-node-types">Mixed node types<a class="headerlink" href="#mixed-node-types" title="Permanent link">&para;</a></h2>
+<p>Use separate recorder calls when different node groups need different
+variables:</p>
+<div class="language-python highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">flow</span><span class="o">.</span><span class="n">set_observation_points</span><span class="p">(</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="n">nodes</span><span class="o">=</span><span class="n">all_observation_nodes</span><span class="p">,</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="n">variables</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;water_depth&quot;</span><span class="p">,</span> <span class="s2">&quot;connected_net_flowrate&quot;</span><span class="p">],</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">interval</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;nodes&quot;</span><span class="p">,</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="p">)</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="n">flow</span><span class="o">.</span><span class="n">set_observation_points</span><span class="p">(</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>    <span class="n">nodes</span><span class="o">=</span><span class="n">reservoir_nodes</span><span class="p">,</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>    <span class="n">variables</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;reservoir_water_depth&quot;</span><span class="p">,</span> <span class="s2">&quot;reservoir_storage&quot;</span><span class="p">,</span> <span class="s2">&quot;reservoir_exchange&quot;</span><span class="p">],</span>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>    <span class="n">interval</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;reservoirs&quot;</span><span class="p">,</span>
+<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="p">)</span>
+</code></pre></div>
+<p><code>get_observation_dataframe()</code> returns one combined dataframe, merged by <code>time</code>
+and <code>node</code>. Columns that were not recorded for a row contain <code>NaN</code>.</p>
+<p>If you need the individual recorder outputs, use:</p>
+<div class="language-python highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">observation_tables</span> <span class="o">=</span> <span class="n">flow</span><span class="o">.</span><span class="n">get_observation_dataframes</span><span class="p">()</span>
+</code></pre></div>
 <h2 id="simple-plot">Simple plot<a class="headerlink" href="#simple-plot" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="k">for</span> <span class="n">node</span><span class="p">,</span> <span class="n">group</span> <span class="ow">in</span> <span class="n">obs_df</span><span class="o">.</span><span class="n">groupby</span><span class="p">(</span><span class="s2">&quot;node&quot;</span><span class="p">):</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">group</span><span class="p">[</span><span class="s2">&quot;time&quot;</span><span class="p">],</span> <span class="n">group</span><span class="p">[</span><span class="s2">&quot;water_depth&quot;</span><span class="p">],</span> <span class="n">label</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;node </span><span class="si">{</span><span class="n">node</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
-<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s2">&quot;Time (s)&quot;</span><span class="p">)</span>
-<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s2">&quot;Water depth (m)&quot;</span><span class="p">)</span>
-<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="n">plt</span><span class="o">.</span><span class="n">legend</span><span class="p">()</span>
-<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+<div class="language-python highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="k">for</span> <span class="n">node</span><span class="p">,</span> <span class="n">group</span> <span class="ow">in</span> <span class="n">obs_df</span><span class="o">.</span><span class="n">groupby</span><span class="p">(</span><span class="s2">&quot;node&quot;</span><span class="p">):</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">group</span><span class="p">[</span><span class="s2">&quot;time&quot;</span><span class="p">],</span> <span class="n">group</span><span class="p">[</span><span class="s2">&quot;water_depth&quot;</span><span class="p">],</span> <span class="n">label</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;node </span><span class="si">{</span><span class="n">node</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s2">&quot;Time (s)&quot;</span><span class="p">)</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s2">&quot;Water depth (m)&quot;</span><span class="p">)</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="n">plt</span><span class="o">.</span><span class="n">legend</span><span class="p">()</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
 </code></pre></div>
 <h2 id="results-versus-observations">Results versus observations<a class="headerlink" href="#results-versus-observations" title="Permanent link">&para;</a></h2>
 <p>Use results when you need whole-network arrays at output times. Use observation
