@@ -56,10 +56,10 @@ def validate_settings(physical_properties, geometry_settings, solver_settings,
                 "Error: geometry_settings 'scale_by_diameter' must be True or False."
             )
 
-        if not (geometry_settings.interpolation_method in ['pchip', 'linear']):
+        if geometry_settings.interpolation_method != 'linear':
             raise ValueError(
                 "Error: geometry_settings 'interpolation_method' must be "
-                "'pchip' or 'linear'."
+                "'linear'."
             )
 
         if geometry_settings.backend == 'tabulated':
@@ -97,6 +97,18 @@ def validate_settings(physical_properties, geometry_settings, solver_settings,
             1e-10 < solver_settings.ss_rel_l2tol <= 1e-2):
         raise ValueError("Error: 'ss_rel_l2tol' must be type int/float and greater than 1e-10 and "
                          "less than 1e-2.")
+
+    if not isinstance(solver_settings.parallelization, bool):
+        raise ValueError("Error: 'parallelization' must be a boolean True or False.")
+
+    if solver_settings.num_threads is not None and (
+        isinstance(solver_settings.num_threads, bool)
+        or not isinstance(solver_settings.num_threads, int)
+        or solver_settings.num_threads < 1
+    ):
+        raise ValueError(
+            "Error: 'num_threads' must be None or an integer greater than or equal to 1."
+        )
 
     # Simulation settings   
     if not (isinstance(simulation_settings.min_waterdepth, (int, float)) and 

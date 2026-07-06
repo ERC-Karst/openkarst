@@ -8,6 +8,7 @@ Created on Fri Jul 19 09:13:21 2024
 """
 
 from dataclasses import dataclass
+from typing import Optional
 
 @dataclass
 class SolverSettings:
@@ -15,3 +16,5 @@ class SolverSettings:
     max_iterations: int = 500
     picard_depth_tol: float = 1e-9
     ss_rel_l2tol: float = 1e-3
+    parallelization: bool = False  # Enable optional Numba kernels.
+    num_threads: Optional[int] = None  # None keeps Numba's default thread count.

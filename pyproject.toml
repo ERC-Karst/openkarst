@@ -36,6 +36,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+parallel = [
+    "numba"
+]
 dev = [
     "mkdocs",
     "mkdocs-material",

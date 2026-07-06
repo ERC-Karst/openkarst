@@ -6,11 +6,10 @@ circular interpolation tables, or user-defined cross-section tables.
 """
 
 import numpy as np
-from scipy.interpolate import PchipInterpolator
 
 
 GEOMETRY_BACKENDS = ("circular_analytical", "circular_tabulated", "tabulated")
-INTERPOLATION_METHODS = ("pchip", "linear")
+INTERPOLATION_METHODS = ("linear",)
 
 
 class CrossSectionGeometry:
@@ -162,7 +161,7 @@ class CircularTabulatedGeometry(CrossSectionGeometry):
 
     name = "circular_tabulated"
 
-    def __init__(self, diameters, n_points=100, interpolation_method="pchip"):
+    def __init__(self, diameters, n_points=100, interpolation_method="linear"):
         super().__init__(diameters)
         if not isinstance(n_points, int) or n_points < 2:
             raise ValueError("n_points must be an integer greater than or equal to 2.")
@@ -268,7 +267,7 @@ class TabulatedGeometry(CrossSectionGeometry):
         diameters,
         table_file,
         scale_by_diameter=True,
-        interpolation_method="pchip",
+        interpolation_method="linear",
     ):
         super().__init__(diameters)
         if not isinstance(scale_by_diameter, bool):
@@ -400,7 +399,7 @@ def create_cross_section_geometry(
     table_points=100,
     table_file=None,
     scale_by_diameter=True,
-    interpolation_method="pchip",
+    interpolation_method="linear",
 ):
     """Create the geometry object requested by geometry_settings.backend.
 
@@ -509,8 +508,6 @@ def _validate_interpolation_method(interpolation_method):
 
 def _make_interpolator(x, values, interpolation_method):
     method = _validate_interpolation_method(interpolation_method)
-    if method == "pchip":
-        return PchipInterpolator(x, values, extrapolate=False)
     if method == "linear":
         return LinearInterpolator(x, values)
     raise ValueError(f"Unknown interpolation method '{interpolation_method}'.")

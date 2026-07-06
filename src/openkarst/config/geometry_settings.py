@@ -12,4 +12,4 @@ class GeometrySettings:
     table_points: int = 100
     table_file: Optional[str] = None
     scale_by_diameter: bool = True
-    interpolation_method: str = 'pchip'
+    interpolation_method: str = 'linear'

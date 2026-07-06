@@ -50,7 +50,7 @@ solver_settings = {
 simulation_settings = {
     "min_waterdepth": 1e-10,
     "min_flowrate": 1e-10,
-    "courant": 0.5,
+    "courant": 0.8,
     "adaptive_timesteps": True,
     "dt_init": 0.01,
     "dt_max": 0.1,
