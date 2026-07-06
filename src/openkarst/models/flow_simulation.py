@@ -9,6 +9,7 @@ Created on Thu Jul 18 23:56:06 2024
 
 import numpy as np
 import math
+import time
 from numbers import Real
 
 from termcolor import colored
@@ -37,6 +38,15 @@ from openkarst.models.hydraulics import (
     compute_churchill_friction_factor,
     compute_slot_width,
     compute_upstream_weight_alpha,
+)
+from openkarst.models import numba_flow_kernels
+from openkarst.models.numba_geometry_kernels import (
+    compute_circular_geometry_numba,
+    compute_tabulated_geometry_numba,
+)
+from openkarst.models.numba_support import (
+    configure_numba_threads,
+    ensure_numba_available,
 )
 from openkarst.models.cross_section_geometry import create_cross_section_geometry
 from openkarst.models.reservoir import UnconfinedReservoir
@@ -87,16 +97,20 @@ class FlowSimulation:
             Computes the surface areas and widths of the conduits.
         _compute_discharge_areas(self, y1, y2, y_mid, slot_widths):
             Computes the discharge areas of the conduits.
-        _compute_new_dt(self, v_mid, froude):
-            Computes the new timestep based on the Courant number and Froude number.
+        _compute_geometry_state(self, y1, y2, y_mid):
+            Computes conduit geometry with the active NumPy or Numba backend.
+        _compute_new_dt(self, v_mid, w_mid):
+            Computes the new timestep based on the Courant wave-speed criterion.
         _compute_hydraulic_radius(self, flow_depths, flow_areas, slot_width, is_full):
             Computes the hydraulic radius of the conduits.
         _compute_upstream_weighted_radii(self, r1, r2, r_mid, h1, h2, alpha):
             Computes the upstream weighted hydraulic radii.
         _compute_upstream_weighted_areas(self, a1, a2, a_mid, h1, h2, alpha):
             Computes the upstream weighted areas.
-        _compute_flows(self, a1, a2, a_mid_upwtd, r_mid_upwtd, r_mid, h1, h2, alpha, v_mid, w_mid):
-            Computes the flow rates for the conduits.
+        _compute_flow_update(self, a1, a2, r1, r2, r_mid, h1, h2, w_mid):
+            Computes the conduit flow update with the active NumPy or Numba backend.
+        _compute_flows_numpy(self, a1, a2, a_mid_upwtd, r_mid_upwtd, r_mid, h1, h2, alpha, v_mid, w_mid):
+            Computes the NumPy flow-rate update for the conduits.
         _compute_water_depths(self, n_surface_a):
             Computes the water depths at each node.
         _adjust_flowrates_dry_nodes(self):
@@ -155,6 +169,13 @@ class FlowSimulation:
             transport_settings=transport_settings,
         )
         self.settings.validate(self.logger)
+        if self.settings.solver.parallelization:
+            ensure_numba_available()
+            self.numba_threads = configure_numba_threads(
+                self.settings.solver.num_threads
+            )
+        else:
+            self.numba_threads = None
         
         #Get OpenPNM network (this will later come from another class)
         self.network = openpnm_network
@@ -274,11 +295,25 @@ class FlowSimulation:
         self.bc_Qin_node = np.zeros(self.network.Np, dtype=float) # total external inflow [m^3/s] 
 
 
-        # Scratch arrays reused in _compute_flows
+        # Scratch arrays reused by geometry and flow updates
         self.f = np.zeros(self.network.Nt, dtype=float)             
         self.dQ_friction = np.zeros(self.network.Nt, dtype=float)   
         self.q_correction = np.zeros(self.network.Nt, dtype=float) # momentum correction (flux only currently)
         self.D_eff = np.zeros(self.network.Nt, dtype=float)
+        self._flow_v_mid = np.zeros(self.network.Nt, dtype=float)
+        self._flow_froude = np.zeros(self.network.Nt, dtype=float)
+        self._flow_alpha = np.zeros(self.network.Nt, dtype=float)
+        self._geom_a1 = np.zeros(self.network.Nt, dtype=float)
+        self._geom_a2 = np.zeros(self.network.Nt, dtype=float)
+        self._geom_r1 = np.zeros(self.network.Nt, dtype=float)
+        self._geom_r2 = np.zeros(self.network.Nt, dtype=float)
+        self._geom_r_mid = np.zeros(self.network.Nt, dtype=float)
+        self._geom_w_mid = np.zeros(self.network.Nt, dtype=float)
+        self._geom_surface_a1 = np.zeros(self.network.Nt, dtype=float)
+        self._geom_surface_a2 = np.zeros(self.network.Nt, dtype=float)
+        self._geom_n_surface_a = np.zeros(self.network.Np, dtype=float)
+        self.geometry_runtime = 0.0
+        self.geometry_calls = 0
 
          # Transport arrays (only initialize when transport is enabled)
         if self.settings.simulation.enable_transport:
@@ -294,6 +329,10 @@ class FlowSimulation:
         # Always available for hydraulics; used by transport only if enabled:
         self.V_node = np.zeros(self.network.Np, dtype=float)  # [m^3]
         self._dV_last = np.zeros(self.network.Np, dtype=float)    
+        self.flow_update_runtime = 0.0
+        self.flow_update_calls = 0
+        self.waterdepth_update_runtime = 0.0
+        self.waterdepth_update_calls = 0
         
         self.logger.info('Arrays initialized')
         
@@ -341,6 +380,9 @@ class FlowSimulation:
                 interpolation_method=self.settings.geometry.interpolation_method,
             )
             self.full_conduit_areas = self.cross_section_geometry.full_area()
+            self.full_hydraulic_radii = (
+                self.cross_section_geometry.full_hydraulic_radius()
+            )
             self.full_hydraulic_diameters = (
                 self.cross_section_geometry.full_hydraulic_diameter()
             )
@@ -425,6 +467,12 @@ class FlowSimulation:
             self.relative_Q_l2_norm = 0.0
             self.picard_iterations_last = 0
             self.picard_iterations_total = 0
+            self.flow_update_runtime = 0.0
+            self.flow_update_calls = 0
+            self.waterdepth_update_runtime = 0.0
+            self.waterdepth_update_calls = 0
+            self.geometry_runtime = 0.0
+            self.geometry_calls = 0
             
             while True:
 
@@ -460,9 +508,9 @@ class FlowSimulation:
                 if self.settings.simulation.enable_transport:
                     self._advance_transport()
                 
-                # Compute new step size based on Froude and Courant number 
+                # Compute new step size from the adaptive timestep criteria
                 if self.settings.simulation.adaptive_timesteps and self.current_timestep > 0:
-                    self._compute_new_dt(self._v_mid_last, self._froude_last)
+                    self._compute_new_dt(self._v_mid_last, self._w_mid_last)
 
                 # Record observation data if recorders are active and it is time
                 for recorder in self.observation_recorders:
@@ -1373,6 +1421,151 @@ class FlowSimulation:
         np.copyto(self.Q_prev_i, self.Q_new)
         np.copyto(self.y_prev_i, self.y_new)
 
+    def _uses_numba_geometry(self):
+        """Return True when the Numba closed-conduit geometry path applies."""
+        geometry_backend = self.settings.geometry.backend
+        numba_geometry_backends = {
+            "circular_analytical",
+            "circular_tabulated",
+            "tabulated",
+        }
+        return (
+            self.settings.solver.parallelization
+            and not self.settings.physical.geometry_channel
+            and geometry_backend in numba_geometry_backends
+        )
+
+    def _uses_numba_flow_update(self):
+        """Return True when the Numba flow-update kernel should be used."""
+        return self.settings.solver.parallelization
+
+    def _compute_geometry_state(self, y1, y2, y_mid):
+        """Compute conduit geometry with the active NumPy or Numba backend."""
+        geometry_start = time.perf_counter()
+        if self._uses_numba_geometry():
+            geometry_state = self._compute_geometry_state_numba(y1, y2, y_mid)
+        else:
+            geometry_state = self._compute_geometry_state_numpy(y1, y2, y_mid)
+        self.geometry_runtime += time.perf_counter() - geometry_start
+        self.geometry_calls += 1
+        return geometry_state
+
+    def _compute_geometry_state_numba(self, y1, y2, y_mid):
+        """Compute closed-conduit geometry quantities with the Numba backend."""
+        geometry_backend = self.settings.geometry.backend
+        if geometry_backend == "circular_analytical":
+            compute_circular_geometry_numba(
+                y1,
+                y2,
+                y_mid,
+                self.conduit_diameters,
+                self.conduit_lengths,
+                self.settings.simulation.min_waterdepth,
+                self._geom_a1,
+                self._geom_a2,
+                self.a_mid_new,
+                self._geom_r1,
+                self._geom_r2,
+                self._geom_r_mid,
+                self._geom_w_mid,
+                self._geom_surface_a1,
+                self._geom_surface_a2,
+                self.is_full_y1,
+                self.is_full_y2,
+                self.is_full_y_mid,
+            )
+        else:
+            if geometry_backend == "circular_tabulated":
+                depth_table = self.cross_section_geometry.eta
+                area_table = self.cross_section_geometry.area_norm
+                radius_table = self.cross_section_geometry.radius_norm
+                top_width_table = self.cross_section_geometry.top_width_norm
+                scale_by_diameter = True
+            elif geometry_backend == "tabulated":
+                depth_table = self.cross_section_geometry.depth_table
+                area_table = self.cross_section_geometry.area_table
+                radius_table = self.cross_section_geometry.radius_table
+                top_width_table = self.cross_section_geometry.top_width_table
+                scale_by_diameter = self.cross_section_geometry.scale_by_diameter
+            else:
+                raise ValueError(
+                    f"Unsupported Numba geometry backend '{geometry_backend}'."
+                )
+
+            compute_tabulated_geometry_numba(
+                y1,
+                y2,
+                y_mid,
+                self.conduit_diameters,
+                self.cross_section_geometry.full_depths,
+                self.full_conduit_areas,
+                self.full_hydraulic_radii,
+                self.conduit_lengths,
+                self.settings.simulation.min_waterdepth,
+                depth_table,
+                area_table,
+                radius_table,
+                top_width_table,
+                scale_by_diameter,
+                self._geom_a1,
+                self._geom_a2,
+                self.a_mid_new,
+                self._geom_r1,
+                self._geom_r2,
+                self._geom_r_mid,
+                self._geom_w_mid,
+                self._geom_surface_a1,
+                self._geom_surface_a2,
+                self.is_full_y1,
+                self.is_full_y2,
+                self.is_full_y_mid,
+            )
+
+        self._geom_n_surface_a[:] = (
+            np.bincount(
+                self.n_indices1,
+                weights=self._geom_surface_a1,
+                minlength=self.network.Np,
+            )
+            + np.bincount(
+                self.n_indices2,
+                weights=self._geom_surface_a2,
+                minlength=self.network.Np,
+            )
+        )
+        return (
+            self._geom_n_surface_a,
+            self._geom_a1,
+            self._geom_a2,
+            self._geom_r1,
+            self._geom_r2,
+            self._geom_r_mid,
+            self._geom_w_mid,
+        )
+
+    def _compute_geometry_state_numpy(self, y1, y2, y_mid):
+        """Compute conduit geometry quantities with the NumPy backend."""
+        self._compute_conduit_state(y1, y2, y_mid)
+
+        n_surface_a, slot_w1, slot_w2, slot_w_mid, w_mid = (
+            self._compute_surface_area(y1, y2, y_mid)
+        )
+
+        a1, a2, self.a_mid_new = self._compute_discharge_areas(
+            y1, y2, y_mid, slot_w_mid
+        )
+
+        r1 = self._compute_hydraulic_radius(y1, a1, slot_w1, self.is_full_y1)
+        r2 = self._compute_hydraulic_radius(y2, a2, slot_w2, self.is_full_y2)
+        r_mid = self._compute_hydraulic_radius(
+            y_mid,
+            self.a_mid_new,
+            slot_w_mid,
+            self.is_full_y_mid,
+        )
+
+        return n_surface_a, a1, a2, r1, r2, r_mid, w_mid
+
     def _dynamic_wave(self):
         """
         Perform the dynamic wave computation for the current time step.
@@ -1412,58 +1605,11 @@ class FlowSimulation:
             
             h1, h2 = self._get_hydraulic_heads(y1, y2)
             
-            # Determine conduit state (i.e. full or not)
-            self._compute_conduit_state(y1, y2, y_mid)
-            
-            # Compute surface areas and surface widths
-            (n_surface_a,slot_w1, slot_w2,
-             slot_w_mid, w_mid) = self._compute_surface_area(y1, y2, y_mid)
-            
-            # Compute discharge areas
-            a1, a2, self.a_mid_new = self._compute_discharge_areas(y1, y2, y_mid, slot_w_mid)
-            
-    
-            
-            # Compute velocity and Frounde number at conduit center 
-            #v_mid = self.Q_prev_i / self.a_mid_new
-            # Slot is only taken into account for free-surface cases
-            if self.settings.physical.geometry_channel:
-                v_mid = self.Q_prev_i / self.a_mid_new
-            else:
-                v_mid = np.where(
-                    self.is_full_y_mid,
-                    self.Q_prev_i / self.full_conduit_areas,
-                    self.Q_prev_i / self.a_mid_new
-                )
+            n_surface_a, a1, a2, r1, r2, r_mid, w_mid = (
+                self._compute_geometry_state(y1, y2, y_mid)
+            )
 
-            froude = np.abs(v_mid) / np.sqrt(self.settings.physical.gravity * self.a_mid_new / w_mid)
-
-
-            # Store to use for adaptive timestep update outside of dynamic_wave
-            self._v_mid_last = v_mid
-            self._froude_last = froude  
-           
-            # Compute alpha for upstream weighting
-            alpha = compute_upstream_weight_alpha(froude, self.is_full_y_mid)
-            
-            #if self.settings.simulation.adaptive_timesteps:
-            #    # Compute new step size based on Froude and Courant number
-            #    self._compute_new_dt(v_mid, froude)
-            
-            # Compute hydraulic radii at both ends and middle of conduit
-            r1 = self._compute_hydraulic_radius(y1, a1, slot_w1, self.is_full_y1)
-            r2 = self._compute_hydraulic_radius(y2, a2, slot_w2, self.is_full_y2)
-            r_mid = self._compute_hydraulic_radius(y_mid, self.a_mid_new, slot_w_mid,
-                                                   self.is_full_y_mid)
-                
-            # Compute upstream-weighted hydraulic radii and areas
-            r_mid_upwtd = self._compute_upstream_weighted_radii(r1, r2, r_mid, h1, h2, alpha)
-            
-            a_mid_upwtd = self._compute_upstream_weighted_areas(a1, a2, self.a_mid_new,
-                                                                h1, h2, alpha)
-            
-            # Compute dQ components and new flows
-            self._compute_flows(a1, a2, a_mid_upwtd, r_mid_upwtd, r_mid, h1, h2,alpha, v_mid, w_mid)
+            self._compute_flow_update(a1, a2, r1, r2, r_mid, h1, h2, w_mid)
             
             self._compute_water_depths(n_surface_a)
 
@@ -1565,19 +1711,14 @@ class FlowSimulation:
                 - w_mid: Surface widths at the middle of the conduits.
         """
         
-        # Initialize surface areas and widths
+        # Initialize surface areas and slot widths
         surface_a1 = np.zeros(self.network.Nt, dtype=float)
         surface_a2 = np.zeros(self.network.Nt, dtype=float)
         n_surface_a = np.zeros(self.network.Np, dtype=float)
-        w1 = np.zeros(self.network.Nt, dtype=float)
-        w2 = np.zeros(self.network.Nt, dtype=float)
-        w_mid = np.zeros(self.network.Nt, dtype=float)
-    
-        # Initialize Preissmann slot widths
         slot_w1 = np.zeros(self.network.Nt, dtype=float)
         slot_w2 = np.zeros(self.network.Nt, dtype=float)
         slot_w_mid = np.zeros(self.network.Nt, dtype=float)
-    
+
         if np.any(self.is_full_y1):
             slot_w1[self.is_full_y1] = (
                 compute_slot_width(
@@ -1600,196 +1741,37 @@ class FlowSimulation:
                 )
             )
 
-        if not self.settings.physical.geometry_channel:
-            conduit_w1 = self.cross_section_geometry.top_width(y1)
-            conduit_w2 = self.cross_section_geometry.top_width(y2)
-            conduit_w_mid = self.cross_section_geometry.top_width(y_mid)
-    
-        # Mask for both nodes being wet
-        mask1 = (y1 > self.settings.simulation.min_waterdepth) & (y2 > self.settings.simulation.min_waterdepth)
-        
-        if np.any(mask1):
-            
-            # 1.0 unit width for anayltical solutions, 0.12 for laboratory experiment (Delestre)
-            if self.settings.physical.geometry_channel == True:
-                if self.settings.physical.channel_type == 'finite':
-                    w1[mask1] = self.settings.physical.channel_width
-                    w2[mask1] = self.settings.physical.channel_width
-                    w_mid[mask1] = self.settings.physical.channel_width
-                else:
-                    w1[mask1] = 1.0
-                    w2[mask1] = 1.0
-                    w_mid[mask1] = 1.0  # Default for infinite channel
-                
-                surface_a1[mask1] = (
-                    0.5 * (w1[mask1] + w_mid[mask1]) * (self.conduit_lengths[mask1]/2)
-                )
-                
-                surface_a2[mask1] = (
-                    0.5 * (w_mid[mask1] + w2[mask1]) * (self.conduit_lengths[mask1]/2)
-                )
-                
+        if self.settings.physical.geometry_channel:
+            if self.settings.physical.channel_type == "finite":
+                width = self.settings.physical.channel_width
             else:
-                # If flow depths above conduit ceiling set width = Preissman slot width
-                # otherwise calculate free surface width
-                w1[mask1] = np.where(
-                    self.is_full_y1[mask1],
-                    slot_w1[mask1],
-                    conduit_w1[mask1],
-                )
-                
-                w2[mask1] = np.where(
-                    self.is_full_y2[mask1],
-                    slot_w2[mask1],
-                    conduit_w2[mask1],
-                )
-                
-                w_mid[mask1] = np.where(
-                    self.is_full_y_mid[mask1],
-                    slot_w_mid[mask1],
-                    conduit_w_mid[mask1],
-                )
-            
-                # Calculate surface areas
-                surface_a1[mask1] = (
-                    0.5 * (w1[mask1] + w_mid[mask1]) * (self.conduit_lengths[mask1]/2)
-                )
-                
-                surface_a2[mask1] = (
-                    0.5 * (w_mid[mask1] + w2[mask1]) * (self.conduit_lengths[mask1]/2)
-                )
+                width = 1.0
 
-        # Calculation when y1 and y2 are below LOWER_LIMIT
-        mask2 = (y1 <= self.settings.simulation.min_waterdepth) & (y2 <= self.settings.simulation.min_waterdepth)
-        
-        if np.any(mask2):
-            
-            # 1.0 unit width for anayltical solutions, 0.12 for laboratory experiment (Delestre)
-            if self.settings.physical.geometry_channel == True:
-                if self.settings.physical.channel_type == 'finite':
-                    w1[mask2] = self.settings.physical.channel_width
-                    w2[mask2] = self.settings.physical.channel_width
-                    w_mid[mask2] = self.settings.physical.channel_width
-                else:
-                    w1[mask2] = 1.0
-                    w2[mask2] = 1.0
-                    w_mid[mask2] = 1.0  # Default for infinite channel
-                    
-                surface_a1[mask2] = (
-                    0.5 * (w1[mask2] + w_mid[mask2]) * (self.conduit_lengths[mask2]/2)
-                )
-                
-                surface_a2[mask2] = (
-                    0.5 * (w_mid[mask2] + w2[mask2]) * (self.conduit_lengths[mask2]/2)
-                )
-                
-            else:
-                w1[mask2] = conduit_w1[mask2]
-                w2[mask2] = conduit_w2[mask2]
-                w_mid[mask2] = conduit_w_mid[mask2]
-                
-                surface_a1[mask2] = (
-                    0.5 * (w1[mask2] + w_mid[mask2]) * (self.conduit_lengths[mask2]/2)
-                )
-                
-                surface_a2[mask2] = (
-                    0.5 * (w_mid[mask2] + w2[mask2]) * (self.conduit_lengths[mask2]/2)
-                )
-        
-        # Calculation when only y1 is below LOWER_LIMIT
-        # y2 could be pressurized
-        mask3 = (y1 <= self.settings.simulation.min_waterdepth) & (y2 > self.settings.simulation.min_waterdepth)
-        
-        if np.any(mask3):
-            
-            # 1.0 unit width for anayltical solutions, 0.12 for laboratory experiment (Delestre)
-            if self.settings.physical.geometry_channel == True:
-                if self.settings.physical.channel_type == 'finite':
-                    w1[mask3] = self.settings.physical.channel_width
-                    w2[mask3] = self.settings.physical.channel_width
-                    w_mid[mask3] = self.settings.physical.channel_width
-                else:
-                    w1[mask3] = 1.0
-                    w2[mask3] = 1.0
-                    w_mid[mask3] = 1.0  # Default for infinite channel
+            w1 = np.full(self.network.Nt, width, dtype=float)
+            w2 = np.full(self.network.Nt, width, dtype=float)
+            w_mid = np.full(self.network.Nt, width, dtype=float)
+        else:
+            w1 = self.cross_section_geometry.top_width(y1)
+            w2 = self.cross_section_geometry.top_width(y2)
+            w_mid = self.cross_section_geometry.top_width(y_mid)
 
-                surface_a1[mask3] = (
-                    0.5 * (w1[mask3] + w_mid[mask3]) * (self.conduit_lengths[mask3]/2)
-                )
-                
-                surface_a2[mask3] = (
-                    0.5 * (w_mid[mask3] + w2[mask3]) * (self.conduit_lengths[mask3]/2)
-                )
-                
-            else:
-                w1[mask3] = conduit_w1[mask3]
-                w2[mask3] = np.where(
-                    self.is_full_y2[mask3],
-                    slot_w2[mask3],
-                    conduit_w2[mask3],
-                )
-                
-                w_mid[mask3] = np.where(
-                    self.is_full_y_mid[mask3],
-                    slot_w_mid[mask3],
-                    conduit_w_mid[mask3],
-                )
-                
-                surface_a1[mask3] = (
-                    0.5 * (w1[mask3] + w_mid[mask3]) * (self.conduit_lengths[mask3]/2)
-                )
-                
-                surface_a2[mask3] = (
-                    0.5 * (w_mid[mask3] + w2[mask3]) * (self.conduit_lengths[mask3]/2)
-                )
-        
-        # Calculation when only y2 is below LOWER_LIMIT
-        # y1 could be pressurized
-        mask4 = (y1 > self.settings.simulation.min_waterdepth) & (y2 <= self.settings.simulation.min_waterdepth)
-        
-        if np.any(mask4):
-            
-            # 1.0 unit width for anayltical solutions, 0.12 for laboratory experiment (Delestre)
-            if self.settings.physical.geometry_channel == True:
-                if self.settings.physical.channel_type == 'finite':
-                    w1[mask4] = self.settings.physical.channel_width
-                    w2[mask4] = self.settings.physical.channel_width
-                    w_mid[mask4] = self.settings.physical.channel_width
-                else:
-                    w1[mask4] = 1.0
-                    w2[mask4] = 1.0
-                    w_mid[mask4] = 1.0  # Default for infinite channel
+            min_waterdepth = self.settings.simulation.min_waterdepth
+            y1_uses_slot = (y1 > min_waterdepth) & self.is_full_y1
+            y2_uses_slot = (y2 > min_waterdepth) & self.is_full_y2
+            y_mid_uses_slot = (
+                ((y1 > min_waterdepth) | (y2 > min_waterdepth))
+                & self.is_full_y_mid
+            )
 
-                surface_a1[mask4] = (
-                    0.5 * (w1[mask4] + w_mid[mask4]) * (self.conduit_lengths[mask4]/2)
-                )
-                
-                surface_a2[mask4] = (
-                    0.5 * (w_mid[mask4] + w2[mask4]) * (self.conduit_lengths[mask4]/2)
-                )
-            
-            else:
-                w1[mask4] = np.where(
-                    self.is_full_y1[mask4],
-                    slot_w1[mask4],
-                    conduit_w1[mask4],
-                )
-                
-                w2[mask4] = conduit_w2[mask4]
-                
-                w_mid[mask4] = np.where(
-                    self.is_full_y_mid[mask4],
-                    slot_w_mid[mask4],
-                    conduit_w_mid[mask4],
-                )
-                
-                surface_a1[mask4] = (
-                    0.5 * (w1[mask4] + w_mid[mask4]) * (self.conduit_lengths[mask4]/2)
-                )
-                
-                surface_a2[mask4] = (
-                    0.5 * (w_mid[mask4] + w2[mask4]) * (self.conduit_lengths[mask4]/2)
-                )
+            if np.any(y1_uses_slot):
+                w1[y1_uses_slot] = slot_w1[y1_uses_slot]
+            if np.any(y2_uses_slot):
+                w2[y2_uses_slot] = slot_w2[y2_uses_slot]
+            if np.any(y_mid_uses_slot):
+                w_mid[y_mid_uses_slot] = slot_w_mid[y_mid_uses_slot]
+
+        surface_a1[:] = 0.25 * (w1 + w_mid) * self.conduit_lengths
+        surface_a2[:] = 0.25 * (w_mid + w2) * self.conduit_lengths
     
         # Add contributing surface areas to each node
         np.add.at(n_surface_a, self.n_indices1, surface_a1)
@@ -1816,12 +1798,12 @@ class FlowSimulation:
 
         return a1, a2, self.a_mid_new
     
-    def _compute_new_dt(self, v_mid, froude):
+    def _compute_new_dt(self, v_mid, w_mid):
         """
-        Compute the new time step size based on the Froude number and velocity.
+        Compute the new time step size based on wave speed and water-depth change.
 
         This method calculates the new time step size (dt) based on two criteria:
-            1. The Froude number and velocity.
+            1. The Courant wave-speed criterion.
             2. The maximum allowable time step based on the change in nodal head over time (dydt)
                per maximum depths (max_depths) of conduits attached to a node.
             
@@ -1830,35 +1812,32 @@ class FlowSimulation:
 
         Args:
             v_mid (numpy.ndarray): Array of velocities at the middle of conduits.
-            froude (numpy.ndarray): Array of Froude numbers for the conduits.
+            w_mid (numpy.ndarray): Array of surface widths at the middle of conduits.
 
         Raises:
             ValueError: If the computed time step dt is not valid (NaN or Inf).
         """
  
-        # Check if any conduit is full and halve the Courant number
-        # Currently not used
-        if np.any(self.is_full_y_mid):
-            effective_courant = self.settings.simulation.courant #/ 2
-        else:
-            effective_courant = self.settings.simulation.courant
+        effective_courant = self.settings.simulation.courant
 
-        # 1. Courant–Froude criterion
-        v_mask = np.abs(v_mid) > 1e-8
-        dt_froude = np.full_like(v_mid, np.inf)
-        dt_froude[v_mask] = (
-            1 / np.abs(v_mid[v_mask]) * (froude[v_mask] / (1 + froude[v_mask])) * effective_courant
+        # 1. Courant wave-speed criterion:
+        # dt <= C * length / (|v| + sqrt(g * A / W)).
+        # For pressurized conduits, W is the Preissmann slot width.
+        wave_celerity = np.sqrt(
+            self.settings.physical.gravity * self.a_mid_new / w_mid
         )
-        max_dt1 = np.nanmin(dt_froude)
+        wave_speed = np.abs(v_mid) + wave_celerity
+        dt_wave = effective_courant * self.conduit_lengths / wave_speed
+        dt_wave_limit = np.nanmin(dt_wave)
 
         # 2. Storage (dydt) criterion
         dydt_mask = self.dydt > 1e-10
         dt_dydt = np.full_like(self.dydt, np.inf)
         dt_dydt[dydt_mask] = self.max_depths[dydt_mask] / self.dydt[dydt_mask]
-        max_dt2 = np.nanmin(dt_dydt)
+        dt_storage_limit = np.nanmin(dt_dydt)
 
         # Choose conservative dt
-        dt_new = min(max_dt1, max_dt2)
+        dt_new = min(dt_wave_limit, dt_storage_limit)
 
         # Fallback logic
         if not np.isfinite(dt_new) or dt_new <= 0.0:
@@ -2002,9 +1981,125 @@ class FlowSimulation:
                                      )
         
         return a_mid_upwtd
+
+    def _compute_flow_update(self, a1, a2, r1, r2, r_mid, h1, h2, w_mid):
+        """Compute the conduit flow update with the active NumPy or Numba backend."""
+        self._w_mid_last = w_mid
+        flow_update_start = time.perf_counter()
+        if self._uses_numba_flow_update():
+            self._compute_flow_update_numba(a1, a2, r1, r2, r_mid, h1, h2, w_mid)
+        else:
+            self._compute_flow_update_numpy(a1, a2, r1, r2, r_mid, h1, h2, w_mid)
+        self.flow_update_runtime += time.perf_counter() - flow_update_start
+        self.flow_update_calls += 1
+
+    def _compute_flow_update_numba(self, a1, a2, r1, r2, r_mid, h1, h2, w_mid):
+        """Compute velocity, Froude, upstream weighting, and flows with Numba."""
+        if self.settings.physical.geometry_channel:
+            # Channel geometry does not use these closed-conduit arrays in the kernel.
+            full_conduit_areas = self.a_mid_new
+            full_hydraulic_diameters = self.D_eff
+            conduit_epsilon = self.D_eff
+        else:
+            full_conduit_areas = self.full_conduit_areas
+            full_hydraulic_diameters = self.full_hydraulic_diameters
+            conduit_epsilon = self.conduit_epsilon
+
+        numba_flow_kernels.compute_flow_update_numba(
+            # Discharge state
+            self.Q_new,
+            self.Q_old_t,
+            self.Q_prev_i,
+
+            # Areas and radii
+            a1,
+            a2,
+            self.a_mid_new,
+            self.a_mid_old_t,
+            r1,
+            r2,
+            r_mid,
+
+            # Hydraulic heads and midpoint state
+            h1,
+            h2,
+            self._flow_v_mid,
+            self._flow_froude,
+            self._flow_alpha,
+            w_mid,
+            self.is_full_y_mid,
+
+            # Conduit properties
+            full_conduit_areas,
+            full_hydraulic_diameters,
+            conduit_epsilon,
+            self.conduit_manning,
+            self.bc_flux_node,
+            self.n_indices1,
+            self.n_indices2,
+
+            # Output buffers
+            self.f,
+            self.dQ_friction,
+            self.q_correction,
+            self.D_eff,
+            self.Re_conduit,
+            self.conduit_lengths,
+
+            # Physical and solver settings
+            self.settings.physical.gravity,
+            self.settings.physical.water_density,
+            self.settings.physical.dynamic_viscosity,
+            self.dt,
+            self.settings.solver.relaxation_factor,
+            self.settings.physical.geometry_channel,
+            self.settings.physical.friction_model == "churchill",
+        )
+
+        self._v_mid_last = self._flow_v_mid
+        self._froude_last = self._flow_froude
+
+    def _compute_flow_update_numpy(self, a1, a2, r1, r2, r_mid, h1, h2, w_mid):
+        """Compute velocity, Froude, upstream weighting, and flows with NumPy."""
+        if self.settings.physical.geometry_channel:
+            v_mid = self.Q_prev_i / self.a_mid_new
+        else:
+            v_mid = np.where(
+                self.is_full_y_mid,
+                self.Q_prev_i / self.full_conduit_areas,
+                self.Q_prev_i / self.a_mid_new,
+            )
+
+        froude = np.abs(v_mid) / np.sqrt(
+            self.settings.physical.gravity * self.a_mid_new / w_mid
+        )
+
+        self._v_mid_last = v_mid
+        self._froude_last = froude
+
+        alpha = compute_upstream_weight_alpha(froude, self.is_full_y_mid)
+
+        r_mid_upwtd = self._compute_upstream_weighted_radii(
+            r1, r2, r_mid, h1, h2, alpha
+        )
+        a_mid_upwtd = self._compute_upstream_weighted_areas(
+            a1, a2, self.a_mid_new, h1, h2, alpha
+        )
+        self._compute_flows_numpy(
+            a1,
+            a2,
+            a_mid_upwtd,
+            r_mid_upwtd,
+            r_mid,
+            h1,
+            h2,
+            alpha,
+            v_mid,
+            w_mid,
+        )
                   
-    def _compute_flows(self, a1, a2, a_mid_upwtd, r_mid_upwtd, r_mid,
-                      h1, h2, alpha, v_mid, w_mid):
+    def _compute_flows_numpy(self, a1, a2, a_mid_upwtd, r_mid_upwtd, r_mid,
+                             h1, h2, alpha, v_mid, w_mid):
         """
         Compute the flow rates in conduits based on various physical parameters.
 
@@ -2187,8 +2282,13 @@ class FlowSimulation:
             n_surface_a (numpy.ndarray): Array of surface areas for each node.
 
         """
-        
-        # Set dQ to zero as this is summed each iteration
+        self._compute_spring_outflows()
+        self._accumulate_node_flow_balance()
+        self._apply_node_source_terms()
+        self._update_node_water_depths(n_surface_a)
+
+    def _accumulate_node_flow_balance(self):
+        """Accumulate conduit flow contributions into nodal flow balance."""
         self.dQ_new.fill(0.0)
             
         # Subtract flow from source node (n1) and add to target node (n2); sign handled by weights
@@ -2198,27 +2298,27 @@ class FlowSimulation:
         np.add(self.dQ_new,
                +np.bincount(self.n_indices2, weights=self.Q_new, minlength=self.network.Np),
                out=self.dQ_new)
- 
-        # Add nodal inflows from BCs (direct volumetric or converted from flux)
-        #self.dQ_new += self.bc_inflow_vol_node
-        #if isinstance(self.bc_flux_to_vol_node, np.ndarray) or self.bc_flux_to_vol_node != 0.0:
-        #    self.dQ_new += self.bc_flux_to_vol_node
 
+    def _apply_node_source_terms(self):
+        """Apply nodal boundary-condition, reservoir, and spring source terms."""
         self.dQ_new += self.bc_inflow_vol_node
         self.dQ_new += self.bc_flux_to_vol_node
         self.dQ_new += self.bc_reservoir_exchange_node
-        self._compute_spring_outflows()
         self.dQ_new -= self.bc_spring_outflow_node
+
+    def _update_node_water_depths(self, n_surface_a):
+        """Update node water depths from the completed nodal flow balance."""
+        waterdepth_update_start = time.perf_counter()
 
         # Compute the change in volume at each node (dV)
         dV = 0.5 * (self.dQ_old_t + self.dQ_new) * self.dt
 
         # Save change in nodal volume for transport
-        self._dV_last = dV
+        self._dV_last[:] = dV
         
         # Compute change in flow depths and new depths
         dy = dV / n_surface_a
-        self.y_new = self.y_old_t + dy
+        self.y_new[:] = self.y_old_t + dy
                  
         # Update water depths using under-relaxation
         self.y_new[:] = (
@@ -2234,8 +2334,11 @@ class FlowSimulation:
         
         # Compute change in water depths
         self.dydt[:] = np.abs(self.y_new - self.y_old_t) / self.dt
-        
-        return
+
+        self.waterdepth_update_runtime += (
+            time.perf_counter() - waterdepth_update_start
+        )
+        self.waterdepth_update_calls += 1
 
     def _compute_spring_outflows(self):
         """Compute spring outflows for the current Picard iteration."""

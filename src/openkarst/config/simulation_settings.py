@@ -14,7 +14,7 @@ from typing import Optional
 class SimulationSettings:
     min_waterdepth: float = 1e-10
     min_flowrate: float = 1e-10
-    courant: float = 0.5
+    courant: float = 0.8
     adaptive_timesteps: bool = False
     dt_init: Optional[float] = None
     dt_max: Optional[float] = None

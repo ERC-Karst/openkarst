@@ -115,6 +115,52 @@ def test_validate_settings_rejects_unknown_interpolation_method():
         )
 
 
+def test_validate_settings_rejects_pchip_interpolation_method():
+    physical_properties, geometry_settings, solver_settings, simulation_settings, transport_settings, logger = _valid_settings()
+    geometry_settings.interpolation_method = "pchip"
+
+    with pytest.raises(ValueError, match="interpolation_method"):
+        validate_settings(
+            physical_properties,
+            geometry_settings,
+            solver_settings,
+            simulation_settings,
+            transport_settings,
+            logger,
+        )
+
+
+def test_validate_settings_rejects_nonboolean_parallelization_flag():
+    physical_properties, geometry_settings, solver_settings, simulation_settings, transport_settings, logger = _valid_settings()
+    solver_settings.parallelization = "yes"
+
+    with pytest.raises(ValueError, match="parallelization"):
+        validate_settings(
+            physical_properties,
+            geometry_settings,
+            solver_settings,
+            simulation_settings,
+            transport_settings,
+            logger,
+        )
+
+
+@pytest.mark.parametrize("num_threads", [0, -1, 1.5, True, "4"])
+def test_validate_settings_rejects_invalid_num_threads(num_threads):
+    physical_properties, geometry_settings, solver_settings, simulation_settings, transport_settings, logger = _valid_settings()
+    solver_settings.num_threads = num_threads
+
+    with pytest.raises(ValueError, match="num_threads"):
+        validate_settings(
+            physical_properties,
+            geometry_settings,
+            solver_settings,
+            simulation_settings,
+            transport_settings,
+            logger,
+        )
+
+
 def test_validate_settings_rejects_missing_constant_timestep():
     physical_properties, geometry_settings, solver_settings, simulation_settings, transport_settings, logger = _valid_settings()
     simulation_settings.dt_init = None

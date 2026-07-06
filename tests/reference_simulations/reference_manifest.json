@@ -1,0 +1,79 @@
+{
+  "description": "Small deterministic hydraulic simulations used to detect unintended behavioral changes during refactoring.",
+  "generated_on": "2026-07-02",
+  "generator": "tests/reference_simulations/regenerate_reference_outputs.py",
+  "name": "openKARST reference simulations",
+  "scenarios": [
+    {
+      "description": "Five-node closed conduit with fixed inflow and downstream water depth.",
+      "file": "linear_closed_conduit_v1.npz",
+      "name": "linear_closed_conduit_v1",
+      "outputs": [
+        "Q_l2_norms",
+        "flowrates",
+        "picard_iterations",
+        "picard_iterations_total",
+        "reynolds_numbers",
+        "time",
+        "velocities",
+        "water_depths",
+        "y_l2_norms"
+      ]
+    },
+    {
+      "description": "Five-node closed conduit with time-series upstream inflow.",
+      "file": "timeseries_inflow_v1.npz",
+      "name": "timeseries_inflow_v1",
+      "outputs": [
+        "Q_l2_norms",
+        "flowrates",
+        "picard_iterations",
+        "picard_iterations_total",
+        "reynolds_numbers",
+        "time",
+        "velocities",
+        "water_depths",
+        "y_l2_norms"
+      ]
+    },
+    {
+      "description": "Five-node closed conduit with an upstream inflow and downstream spring outflow.",
+      "file": "spring_outflow_v1.npz",
+      "name": "spring_outflow_v1",
+      "outputs": [
+        "Q_l2_norms",
+        "flowrates",
+        "picard_iterations",
+        "picard_iterations_total",
+        "reynolds_numbers",
+        "time",
+        "velocities",
+        "water_depths",
+        "y_l2_norms"
+      ]
+    },
+    {
+      "description": "Five-node closed conduit coupled to one stateful upstream reservoir.",
+      "file": "reservoir_exchange_v1.npz",
+      "name": "reservoir_exchange_v1",
+      "outputs": [
+        "Q_l2_norms",
+        "flowrates",
+        "picard_iterations",
+        "picard_iterations_total",
+        "reservoir_exchange",
+        "reservoir_heads",
+        "reservoir_nodes",
+        "reservoir_recharge",
+        "reservoir_storage",
+        "reservoir_water_depths",
+        "reynolds_numbers",
+        "time",
+        "velocities",
+        "water_depths",
+        "y_l2_norms"
+      ]
+    }
+  ],
+  "transport_included": false
+}

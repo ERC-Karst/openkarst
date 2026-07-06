@@ -31,6 +31,23 @@ def _write_normalized_circular_table(path, n_points=2001):
     )
 
 
+def _write_physical_circular_table(path, n_points=2001, diameter=1.0):
+    depth = np.linspace(0.0, diameter, n_points)
+    width = 2.0 * np.sqrt(np.maximum(diameter * depth - depth**2, 0.0))
+
+    width[0] = 0.0
+    width[-1] = 0.0
+
+    table = np.column_stack((depth, width))
+    np.savetxt(
+        path,
+        table,
+        delimiter=",",
+        header="depth,width",
+        comments="",
+    )
+
+
 def _small_flow_simulation(
     tmp_path,
     geometry_backend="circular_analytical",
@@ -38,6 +55,8 @@ def _small_flow_simulation(
     table_file=None,
     scale_by_diameter=True,
     interpolation_method=None,
+    parallelization=False,
+    num_threads=None,
 ):
     geometry_settings = {"backend": geometry_backend}
     if table_points is not None:
@@ -48,13 +67,18 @@ def _small_flow_simulation(
         geometry_settings["table_file"] = str(table_file)
         geometry_settings["scale_by_diameter"] = scale_by_diameter
 
+    solver_settings = {
+        "parallelization": parallelization,
+        "max_iterations": 20,
+        "picard_depth_tol": 1e-7,
+    }
+    if num_threads is not None:
+        solver_settings["num_threads"] = num_threads
+
     return FlowSimulation(
         _small_network(),
         geometry_settings=geometry_settings,
-        solver_settings={
-            "max_iterations": 20,
-            "picard_depth_tol": 1e-7,
-        },
+        solver_settings=solver_settings,
         simulation_settings={
             "adaptive_timesteps": False,
             "dt_init": 0.1,
@@ -128,12 +152,36 @@ def test_flow_simulation_runs_on_small_linear_network(tmp_path):
     assert np.isfinite(results["water_depths"]).all()
 
 
+def test_adaptive_timestep_uses_conduit_length_at_zero_velocity(tmp_path):
+    flow = _small_flow_simulation(tmp_path)
+    flow.settings.simulation.courant = 0.8
+    flow.settings.simulation.dt_init = 0.01
+    flow.settings.simulation.dt_max = 100.0
+    flow.dt = 1.0
+
+    flow.conduit_lengths[:] = np.array([2.0, 3.0, 4.0, 5.0])
+    flow.a_mid_new[:] = 1.0
+    flow.dydt.fill(0.0)
+
+    v_mid = np.zeros(flow.network.Nt, dtype=float)
+    w_mid = np.ones(flow.network.Nt, dtype=float)
+
+    flow._compute_new_dt(v_mid, w_mid)
+
+    expected_dt = (
+        flow.settings.simulation.courant
+        * np.min(flow.conduit_lengths)
+        / np.sqrt(flow.settings.physical.gravity)
+    )
+    assert flow.dt == pytest.approx(expected_dt)
+
+
 def test_flow_simulation_defaults_to_analytical_geometry_backend(tmp_path):
     flow = _small_flow_simulation_with_default_geometry_settings(tmp_path)
 
     assert flow.settings.geometry.backend == "circular_analytical"
     assert flow.settings.geometry.table_points == 100
-    assert flow.settings.geometry.interpolation_method == "pchip"
+    assert flow.settings.geometry.interpolation_method == "linear"
     assert not hasattr(flow, "geometry_backend")
 
 
@@ -243,6 +291,100 @@ def test_flow_simulation_user_tabulated_csv_matches_analytical(tmp_path):
         rtol=2e-3,
         atol=1e-9,
     )
+
+
+@pytest.mark.parametrize(
+    (
+        "case_name",
+        "geometry_backend",
+        "geometry_kwargs",
+        "table_kind",
+    ),
+    [
+        ("circular_analytical", "circular_analytical", {}, None),
+        ("circular_tabulated", "circular_tabulated", {"table_points": 2001}, None),
+        ("tabulated_scaled", "tabulated", {"scale_by_diameter": True}, "normalized"),
+        ("tabulated_physical", "tabulated", {"scale_by_diameter": False}, "physical"),
+    ],
+)
+def test_parallelized_geometry_backends_match_numpy(
+    tmp_path,
+    case_name,
+    geometry_backend,
+    geometry_kwargs,
+    table_kind,
+):
+    pytest.importorskip("numba")
+
+    def run_backend(parallelization):
+        kwargs = dict(geometry_kwargs)
+        if table_kind == "normalized":
+            table_file = tmp_path / f"{case_name}.csv"
+            _write_normalized_circular_table(table_file)
+            kwargs["table_file"] = table_file
+        elif table_kind == "physical":
+            table_file = tmp_path / f"{case_name}.csv"
+            _write_physical_circular_table(table_file)
+            kwargs["table_file"] = table_file
+
+        flow = _small_flow_simulation(
+            tmp_path / case_name / ("numba" if parallelization else "numpy"),
+            geometry_backend=geometry_backend,
+            parallelization=parallelization,
+            **kwargs,
+        )
+        geometry = flow.network
+        flow.set_initial_conditions(
+            initial_Q=np.zeros(geometry.Nt, dtype=float),
+            initial_y=np.full(geometry.Np, 0.01, dtype=float),
+        )
+        flow.set_inflow_BC(nodes=0, values=0.001)
+        flow.set_waterdepth_BC(nodes=4, values=0.01)
+        results = flow.run_simulation(
+            desired_outputs={
+                "output_interval": 0.1,
+                "time": True,
+                "flowrates": True,
+                "water_depths": True,
+            }
+        )
+        return flow, results
+
+    numpy_flow, numpy_results = run_backend(False)
+    numba_flow, numba_results = run_backend(True)
+
+    assert numba_flow.geometry_calls > 0
+    assert numba_flow.flow_update_calls > 0
+    np.testing.assert_allclose(numba_results["time"], numpy_results["time"])
+    np.testing.assert_allclose(
+        numba_results["flowrates"],
+        numpy_results["flowrates"],
+        rtol=1e-10,
+        atol=1e-12,
+    )
+    np.testing.assert_allclose(
+        numba_results["water_depths"],
+        numpy_results["water_depths"],
+        rtol=1e-10,
+        atol=1e-12,
+    )
+
+
+def test_parallelized_solver_uses_requested_num_threads(tmp_path):
+    numba = pytest.importorskip("numba")
+    previous_threads = numba.get_num_threads()
+
+    try:
+        flow = _small_flow_simulation(
+            tmp_path,
+            parallelization=True,
+            num_threads=1,
+        )
+
+        assert flow.numba_threads == 1
+        assert numba.get_num_threads() == 1
+    finally:
+        numba.set_num_threads(previous_threads)
 
 
 def test_scalar_flux_inflow_bc_preserves_flux_type(tmp_path):
