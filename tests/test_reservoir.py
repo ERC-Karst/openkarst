@@ -27,6 +27,22 @@ def test_compute_exchange_uses_connected_node_water_depth_difference():
     assert exchange_rate == pytest.approx(0.25)
 
 
+def test_compute_exchange_dupuit_uses_head_squared_difference():
+    reservoir = _reservoir(exchange_model="dupuit")
+
+    exchange_rate = reservoir.compute_exchange(
+        connected_node_water_depth=1.5,
+        dt=1.0,
+    )
+
+    assert exchange_rate == pytest.approx(0.875)
+
+
+def test_rejects_unknown_exchange_model():
+    with pytest.raises(ValueError, match="exchange_model"):
+        _reservoir(exchange_model="box")
+
+
 def test_compute_exchange_limits_positive_rate_by_available_storage():
     reservoir = _reservoir(
         area=1.0,

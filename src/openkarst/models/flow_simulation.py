@@ -937,6 +937,7 @@ class FlowSimulation:
         conductance,
         recharge=0.0,
         recharge_extrapolate='hold',
+        exchange_model='linear',
     ):
         """
         Create and register a reservoir connected to one network node.
@@ -950,13 +951,19 @@ class FlowSimulation:
             area (float): Reservoir plan area [m^2].
             specific_yield (float): Drainable specific yield [-].
             initial_water_depth (float): Initial depth above the node elevation [m].
-            conductance (float): Reservoir-node exchange conductance [m^3/s/m].
+            conductance (float): Reservoir-node exchange coefficient. For
+                ``exchange_model='linear'`` this is a conductance [m^3/s/m].
+                For ``exchange_model='dupuit'`` it is the coefficient for the
+                head^2 difference [m/s].
             recharge (float or tuple, optional): External reservoir recharge [m^3/s].
                 Supported formats:
                 - float or int: constant recharge.
                 - ('timeseries', times, values): interpolated recharge time series.
             recharge_extrapolate (str, optional): Extrapolation behavior for
                 time-series recharge. Use 'hold' or 'zero'.
+            exchange_model (str, optional): Reservoir-node exchange law.
+                Use 'linear' for the current head-difference model or 'dupuit'
+                for unconfined, thickness-dependent exchange.
 
         Returns:
             UnconfinedReservoir: The registered reservoir object.
@@ -1002,6 +1009,7 @@ class FlowSimulation:
             recharge=recharge_values,
             time=recharge_times,
             recharge_extrapolate=recharge_extrapolate,
+            exchange_model=exchange_model,
         )
         self.reservoirs.append(reservoir)
 
