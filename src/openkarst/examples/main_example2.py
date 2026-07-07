@@ -13,7 +13,7 @@ import numpy as np
 
 from openkarst.io import load_cave_data
 from openkarst.models import FlowSimulation
-from openkarst.visualization.openkarst_viewer import launch_openkarst_viewer
+from openkarst.visualization import launch_openkarst_viewer
 
 
 def main():
