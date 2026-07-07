@@ -7,6 +7,9 @@ from numbers import Real
 import numpy as np
 
 
+RESERVOIR_EXCHANGE_MODELS = {'linear', 'dupuit'}
+
+
 class UnconfinedReservoir:
     """
     Single-node unconfined reservoir with a base equal to the connected node height.
@@ -32,6 +35,7 @@ class UnconfinedReservoir:
         recharge=0.0,
         time=None,
         recharge_extrapolate='hold',
+        exchange_model='linear',
     ):
         self.node = int(node)
 
@@ -45,6 +49,10 @@ class UnconfinedReservoir:
         except (TypeError, ValueError) as error:
             raise ValueError("Reservoir parameters must be numeric values.") from error
 
+        if not isinstance(exchange_model, str):
+            raise ValueError("exchange_model must be a string.")
+        self.exchange_model = exchange_model.lower()
+
         parameters = (
             self.base_elevation,
             self.area,
@@ -56,6 +64,11 @@ class UnconfinedReservoir:
             raise ValueError("Reservoir parameters must be finite values.")
         if self.recharge_extrapolate not in {'hold', 'zero'}:
             raise ValueError("recharge_extrapolate must be 'hold' or 'zero'.")
+        if self.exchange_model not in RESERVOIR_EXCHANGE_MODELS:
+            valid_models = ", ".join(sorted(RESERVOIR_EXCHANGE_MODELS))
+            raise ValueError(
+                f"exchange_model must be one of: {valid_models}."
+            )
         if self.area <= 0.0:
             raise ValueError("area must be greater than zero.")
         if self.specific_yield <= 0.0:
@@ -139,12 +152,19 @@ class UnconfinedReservoir:
         if not np.isfinite(dt) or dt <= 0.0:
             raise ValueError("dt must be a finite value greater than zero.")
 
-        # We assume that the reservoir base is equal to the connected node elevation.
-        # This means the hydraulic head difference reduces to a water depth difference.
-        # We can later extend this to introduce a base elevation for each reservoir
-        # different from the connected node height.
-        head_difference = self.reservoir_water_depth - connected_node_water_depth
-        exchange_rate = self.conductance * head_difference
+        if self.exchange_model == 'linear':
+            # Base elevation is currently tied to the connected node elevation,
+            # so the hydraulic head difference reduces to a water-depth difference.
+            head_difference = self.reservoir_water_depth - connected_node_water_depth
+            exchange_rate = self.conductance * head_difference
+        else:
+            # New Dupuit-style unconfined exchange: transmissivity scales with
+            # saturated thickness, i.e, a head^2 control term.
+            reservoir_thickness = max(self.reservoir_water_depth, 0.0)
+            node_thickness = max(connected_node_water_depth, 0.0)
+            exchange_rate = self.conductance * (
+                reservoir_thickness**2 - node_thickness**2
+            )
 
         #  Limit the flow out of the reservoir to the maximum available volume
         if exchange_rate > 0.0:

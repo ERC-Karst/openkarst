@@ -22,7 +22,6 @@ from scipy.integrate import odeint
 os.environ["IMAGEIO_FFMPEG_EXE"] = "/Users/jkordil_idaea/Downloads/ffmpeg" 
 
 from openkarst.network_generation import compute_conduit_lengths
-from openkarst.visualization.animation_pyvista import animate_network
 from openkarst.models import FlowSimulation
 
 
