@@ -2,92 +2,97 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://erc-karst.github.io/openkarst/</loc>
-         <lastmod>2026-07-01</lastmod>
+         <lastmod>2026-07-08</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://erc-karst.github.io/openkarst/citation/</loc>
-         <lastmod>2026-07-01</lastmod>
+         <lastmod>2026-07-08</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://erc-karst.github.io/openkarst/contributing/</loc>
-         <lastmod>2026-07-01</lastmod>
+         <lastmod>2026-07-08</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://erc-karst.github.io/openkarst/concepts/networks/</loc>
-         <lastmod>2026-07-01</lastmod>
+         <lastmod>2026-07-08</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://erc-karst.github.io/openkarst/concepts/overview/</loc>
-         <lastmod>2026-07-01</lastmod>
+         <lastmod>2026-07-08</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://erc-karst.github.io/openkarst/concepts/results/</loc>
-         <lastmod>2026-07-01</lastmod>
+         <lastmod>2026-07-08</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://erc-karst.github.io/openkarst/concepts/simulation-workflow/</loc>
-         <lastmod>2026-07-01</lastmod>
+         <lastmod>2026-07-08</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://erc-karst.github.io/openkarst/getting-started/installation/</loc>
-         <lastmod>2026-07-01</lastmod>
+         <lastmod>2026-07-08</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://erc-karst.github.io/openkarst/getting-started/quick-start/</loc>
-         <lastmod>2026-07-01</lastmod>
+         <lastmod>2026-07-08</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://erc-karst.github.io/openkarst/how-to/export-vtk/</loc>
-         <lastmod>2026-07-01</lastmod>
+         <lastmod>2026-07-08</lastmod>
+         <changefreq>daily</changefreq>
+    </url>
+    <url>
+         <loc>https://erc-karst.github.io/openkarst/how-to/performance/</loc>
+         <lastmod>2026-07-08</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://erc-karst.github.io/openkarst/how-to/visualize-viewer/</loc>
-         <lastmod>2026-07-01</lastmod>
+         <lastmod>2026-07-08</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://erc-karst.github.io/openkarst/reference/glossary/</loc>
-         <lastmod>2026-07-01</lastmod>
+         <lastmod>2026-07-08</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://erc-karst.github.io/openkarst/reference/parameters/</loc>
-         <lastmod>2026-07-01</lastmod>
+         <lastmod>2026-07-08</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://erc-karst.github.io/openkarst/tutorials/analytical-validation/</loc>
-         <lastmod>2026-07-01</lastmod>
+         <lastmod>2026-07-08</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://erc-karst.github.io/openkarst/tutorials/boundary-conditions/</loc>
-         <lastmod>2026-07-01</lastmod>
+         <lastmod>2026-07-08</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://erc-karst.github.io/openkarst/tutorials/cave-network/</loc>
-         <lastmod>2026-07-01</lastmod>
+         <lastmod>2026-07-08</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://erc-karst.github.io/openkarst/tutorials/minimal-straight-conduit/</loc>
-         <lastmod>2026-07-01</lastmod>
+         <lastmod>2026-07-08</lastmod>
          <changefreq>daily</changefreq>
     </url>
     <url>
          <loc>https://erc-karst.github.io/openkarst/tutorials/observations-and-results/</loc>
-         <lastmod>2026-07-01</lastmod>
+         <lastmod>2026-07-08</lastmod>
          <changefreq>daily</changefreq>
     </url>
 </urlset>
