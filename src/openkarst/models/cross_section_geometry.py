@@ -147,6 +147,27 @@ class CircularAnalyticalGeometry(CrossSectionGeometry):
     def full_hydraulic_diameter(self):
         return self._full_hydraulic_diameter
 
+    def evaluate_state(self, depths, areas, top_widths, hydraulic_radii, is_full):
+        """Evaluate A(y), W(y), R(y), and full-state in one vectorized pass."""
+        depths = np.asarray(depths, dtype=float)
+        clipped_depths = np.clip(depths, 0.0, self.diameters)
+        theta = self._theta(clipped_depths)
+
+        np.greater_equal(depths, self.diameters, out=is_full)
+
+        areas[:] = 0.5 * self.radii**2 * (theta - np.sin(theta))
+        np.copyto(areas, self._full_area, where=is_full)
+
+        width_argument = self.diameters * clipped_depths - clipped_depths**2
+        top_widths[:] = 2.0 * np.sqrt(np.maximum(width_argument, 0.0))
+        top_widths[(depths <= 0.0) | is_full] = 0.0
+
+        perimeters = self.radii * theta
+        hydraulic_radii.fill(0.0)
+        wet = perimeters > 0.0
+        np.divide(areas, perimeters, out=hydraulic_radii, where=wet)
+        np.copyto(hydraulic_radii, self._full_hydraulic_radius, where=is_full)
+
     def _theta(self, depths):
         """Central angle of the wetted circular segment."""
         return 2.0 * np.arccos(np.clip((self.radii - depths) / self.radii, -1.0, 1.0))

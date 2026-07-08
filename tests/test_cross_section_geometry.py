@@ -154,6 +154,27 @@ def test_circular_geometry_backends_support_per_conduit_diameters():
         )
 
 
+def test_circular_analytical_evaluate_state_matches_separate_methods():
+    diameters = np.array([0.5, 1.0, 2.0, 3.0])
+    depths = np.array([0.0, 0.25, 2.0, 3.3])
+    geometry = CircularAnalyticalGeometry(diameters)
+
+    areas = np.empty_like(depths)
+    top_widths = np.empty_like(depths)
+    hydraulic_radii = np.empty_like(depths)
+    is_full = np.empty(depths.shape, dtype=bool)
+
+    geometry.evaluate_state(depths, areas, top_widths, hydraulic_radii, is_full)
+
+    np.testing.assert_allclose(areas, geometry.area(depths))
+    np.testing.assert_allclose(top_widths, geometry.top_width(depths))
+    np.testing.assert_allclose(
+        hydraulic_radii,
+        geometry.hydraulic_radius(depths, areas=geometry.area(depths)),
+    )
+    np.testing.assert_array_equal(is_full, geometry.is_full(depths))
+
+
 def test_geometry_factory_passes_table_points_to_tabulated_backend():
     geometry = create_cross_section_geometry(
         "circular_tabulated",
