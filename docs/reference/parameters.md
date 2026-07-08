@@ -34,6 +34,8 @@ solver_settings = {
     "max_iterations": 100,
     "picard_depth_tol": 1e-7,
     "ss_rel_l2tol": 1e-3,
+    "parallelization": False,
+    "num_threads": None,
 }
 ```
 
@@ -43,6 +45,8 @@ solver_settings = {
 | `max_iterations` | Maximum Picard iterations per time step. |
 | `picard_depth_tol` | Water-depth tolerance for Picard convergence. |
 | `ss_rel_l2tol` | Relative L2 tolerance for steady-state detection. |
+| `parallelization` | Use optional Numba kernels for geometry and flow updates. |
+| `num_threads` | Number of Numba worker threads; `None` uses the Numba default. |
 
 ## Simulation settings
 

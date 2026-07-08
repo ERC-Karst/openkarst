@@ -23,6 +23,7 @@ nav:
   - How-to guides:
       - Use the 3D viewer: how-to/visualize-viewer.md
       - Export to VTK: how-to/export-vtk.md
+      - Choose performance settings: how-to/performance.md
   - Reference:
       - Parameters: reference/parameters.md
       - Glossary: reference/glossary.md

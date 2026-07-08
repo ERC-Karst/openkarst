@@ -308,10 +308,15 @@ class FlowSimulation:
         self._geom_r1 = np.zeros(self.network.Nt, dtype=float)
         self._geom_r2 = np.zeros(self.network.Nt, dtype=float)
         self._geom_r_mid = np.zeros(self.network.Nt, dtype=float)
+        self._geom_w1 = np.zeros(self.network.Nt, dtype=float)
+        self._geom_w2 = np.zeros(self.network.Nt, dtype=float)
         self._geom_w_mid = np.zeros(self.network.Nt, dtype=float)
         self._geom_surface_a1 = np.zeros(self.network.Nt, dtype=float)
         self._geom_surface_a2 = np.zeros(self.network.Nt, dtype=float)
         self._geom_n_surface_a = np.zeros(self.network.Np, dtype=float)
+        self._geom_slot_w1 = np.zeros(self.network.Nt, dtype=float)
+        self._geom_slot_w2 = np.zeros(self.network.Nt, dtype=float)
+        self._geom_slot_w_mid = np.zeros(self.network.Nt, dtype=float)
         self.geometry_runtime = 0.0
         self.geometry_calls = 0
 
@@ -1553,6 +1558,16 @@ class FlowSimulation:
 
     def _compute_geometry_state_numpy(self, y1, y2, y_mid):
         """Compute conduit geometry quantities with the NumPy backend."""
+        if (
+            not self.settings.physical.geometry_channel
+            and self.settings.geometry.backend == "circular_analytical"
+        ):
+            return self._compute_circular_analytical_geometry_state_numpy(
+                y1,
+                y2,
+                y_mid,
+            )
+
         self._compute_conduit_state(y1, y2, y_mid)
 
         n_surface_a, slot_w1, slot_w2, slot_w_mid, w_mid = (
@@ -1563,16 +1578,99 @@ class FlowSimulation:
             y1, y2, y_mid, slot_w_mid
         )
 
-        r1 = self._compute_hydraulic_radius(y1, a1, slot_w1, self.is_full_y1)
-        r2 = self._compute_hydraulic_radius(y2, a2, slot_w2, self.is_full_y2)
+        r1 = self._compute_hydraulic_radius(
+            y1,
+            a1,
+            slot_w1,
+            self.is_full_y1,
+            out=self._geom_r1,
+        )
+        r2 = self._compute_hydraulic_radius(
+            y2,
+            a2,
+            slot_w2,
+            self.is_full_y2,
+            out=self._geom_r2,
+        )
         r_mid = self._compute_hydraulic_radius(
             y_mid,
             self.a_mid_new,
             slot_w_mid,
             self.is_full_y_mid,
+            out=self._geom_r_mid,
         )
 
         return n_surface_a, a1, a2, r1, r2, r_mid, w_mid
+
+    def _compute_circular_analytical_geometry_state_numpy(self, y1, y2, y_mid):
+        """Compute circular analytical geometry in a fused NumPy path."""
+        geometry = self.cross_section_geometry
+        geometry.evaluate_state(
+            y1,
+            self._geom_a1,
+            self._geom_w1,
+            self._geom_r1,
+            self.is_full_y1,
+        )
+        geometry.evaluate_state(
+            y2,
+            self._geom_a2,
+            self._geom_w2,
+            self._geom_r2,
+            self.is_full_y2,
+        )
+        geometry.evaluate_state(
+            y_mid,
+            self.a_mid_new,
+            self._geom_w_mid,
+            self._geom_r_mid,
+            self.is_full_y_mid,
+        )
+
+        min_waterdepth = self.settings.simulation.min_waterdepth
+        y1_uses_slot = (y1 > min_waterdepth) & self.is_full_y1
+        y2_uses_slot = (y2 > min_waterdepth) & self.is_full_y2
+        y_mid_uses_slot = (
+            ((y1 > min_waterdepth) | (y2 > min_waterdepth))
+            & self.is_full_y_mid
+        )
+
+        if np.any(y1_uses_slot):
+            self._geom_w1[y1_uses_slot] = compute_slot_width(
+                y1[y1_uses_slot],
+                geometry.full_depths[y1_uses_slot],
+            )
+        if np.any(y2_uses_slot):
+            self._geom_w2[y2_uses_slot] = compute_slot_width(
+                y2[y2_uses_slot],
+                geometry.full_depths[y2_uses_slot],
+            )
+        if np.any(y_mid_uses_slot):
+            self._geom_w_mid[y_mid_uses_slot] = compute_slot_width(
+                y_mid[y_mid_uses_slot],
+                geometry.full_depths[y_mid_uses_slot],
+            )
+
+        self._geom_surface_a1[:] = (
+            0.25 * (self._geom_w1 + self._geom_w_mid) * self.conduit_lengths
+        )
+        self._geom_surface_a2[:] = (
+            0.25 * (self._geom_w_mid + self._geom_w2) * self.conduit_lengths
+        )
+
+        self._geom_n_surface_a.fill(0.0)
+        np.add.at(self._geom_n_surface_a, self.n_indices1, self._geom_surface_a1)
+        np.add.at(self._geom_n_surface_a, self.n_indices2, self._geom_surface_a2)
+
+        return (
+            self._geom_n_surface_a,
+            self._geom_a1,
+            self._geom_a2,
+            self._geom_r1,
+            self._geom_r2,
+            self._geom_r_mid,
+            self._geom_w_mid,
+        )
 
     def _dynamic_wave(self):
         """
@@ -1693,9 +1791,21 @@ class FlowSimulation:
             self.is_full_y_mid.fill(False)
         
         else:
-            self.is_full_y1 = self.cross_section_geometry.is_full(y1)
-            self.is_full_y2 = self.cross_section_geometry.is_full(y2)
-            self.is_full_y_mid = self.cross_section_geometry.is_full(y_mid)
+            np.greater_equal(
+                y1,
+                self.cross_section_geometry.full_depths,
+                out=self.is_full_y1,
+            )
+            np.greater_equal(
+                y2,
+                self.cross_section_geometry.full_depths,
+                out=self.is_full_y2,
+            )
+            np.greater_equal(
+                y_mid,
+                self.cross_section_geometry.full_depths,
+                out=self.is_full_y_mid,
+            )
             
  
     def _compute_surface_area(self, y1, y2, y_mid):
@@ -1719,13 +1829,21 @@ class FlowSimulation:
                 - w_mid: Surface widths at the middle of the conduits.
         """
         
-        # Initialize surface areas and slot widths
-        surface_a1 = np.zeros(self.network.Nt, dtype=float)
-        surface_a2 = np.zeros(self.network.Nt, dtype=float)
-        n_surface_a = np.zeros(self.network.Np, dtype=float)
-        slot_w1 = np.zeros(self.network.Nt, dtype=float)
-        slot_w2 = np.zeros(self.network.Nt, dtype=float)
-        slot_w_mid = np.zeros(self.network.Nt, dtype=float)
+        # Reuse geometry scratch arrays to avoid per-Picard allocations.
+        surface_a1 = self._geom_surface_a1
+        surface_a2 = self._geom_surface_a2
+        n_surface_a = self._geom_n_surface_a
+        slot_w1 = self._geom_slot_w1
+        slot_w2 = self._geom_slot_w2
+        slot_w_mid = self._geom_slot_w_mid
+        w1 = self._geom_w1
+        w2 = self._geom_w2
+        w_mid = self._geom_w_mid
+
+        n_surface_a.fill(0.0)
+        slot_w1.fill(0.0)
+        slot_w2.fill(0.0)
+        slot_w_mid.fill(0.0)
 
         if np.any(self.is_full_y1):
             slot_w1[self.is_full_y1] = (
@@ -1755,13 +1873,13 @@ class FlowSimulation:
             else:
                 width = 1.0
 
-            w1 = np.full(self.network.Nt, width, dtype=float)
-            w2 = np.full(self.network.Nt, width, dtype=float)
-            w_mid = np.full(self.network.Nt, width, dtype=float)
+            w1.fill(width)
+            w2.fill(width)
+            w_mid.fill(width)
         else:
-            w1 = self.cross_section_geometry.top_width(y1)
-            w2 = self.cross_section_geometry.top_width(y2)
-            w_mid = self.cross_section_geometry.top_width(y_mid)
+            w1[:] = self.cross_section_geometry.top_width(y1)
+            w2[:] = self.cross_section_geometry.top_width(y2)
+            w_mid[:] = self.cross_section_geometry.top_width(y_mid)
 
             min_waterdepth = self.settings.simulation.min_waterdepth
             y1_uses_slot = (y1 > min_waterdepth) & self.is_full_y1
@@ -1792,19 +1910,31 @@ class FlowSimulation:
 
         if self.settings.physical.geometry_channel == True:
             if self.settings.physical.channel_type == 'finite':
-                a1 = self.settings.physical.channel_width * y1
-                a2 = self.settings.physical.channel_width * y2
-                self.a_mid_new = self.settings.physical.channel_width * y_mid
+                np.multiply(
+                    y1,
+                    self.settings.physical.channel_width,
+                    out=self._geom_a1,
+                )
+                np.multiply(
+                    y2,
+                    self.settings.physical.channel_width,
+                    out=self._geom_a2,
+                )
+                np.multiply(
+                    y_mid,
+                    self.settings.physical.channel_width,
+                    out=self.a_mid_new,
+                )
             else:
-                a1 = 1.0 * y1
-                a2 = 1.0 * y2
-                self.a_mid_new = 1.0 * y_mid
+                np.copyto(self._geom_a1, y1)
+                np.copyto(self._geom_a2, y2)
+                np.copyto(self.a_mid_new, y_mid)
         else:
-            a1 = self.cross_section_geometry.area(y1)
-            a2 = self.cross_section_geometry.area(y2)
-            self.a_mid_new = self.cross_section_geometry.area(y_mid)
+            self._geom_a1[:] = self.cross_section_geometry.area(y1)
+            self._geom_a2[:] = self.cross_section_geometry.area(y2)
+            self.a_mid_new[:] = self.cross_section_geometry.area(y_mid)
 
-        return a1, a2, self.a_mid_new
+        return self._geom_a1, self._geom_a2, self.a_mid_new
     
     def _compute_new_dt(self, v_mid, w_mid):
         """
@@ -1860,7 +1990,14 @@ class FlowSimulation:
         self.dt = min(dt_new, self.settings.simulation.dt_max)
 
                     
-    def _compute_hydraulic_radius(self, flow_depths, flow_areas, slot_width, is_full):
+    def _compute_hydraulic_radius(
+        self,
+        flow_depths,
+        flow_areas,
+        slot_width,
+        is_full,
+        out=None,
+    ):
         """
         Compute the hydraulic radius of conduits based on flow conditions.
 
@@ -1878,14 +2015,17 @@ class FlowSimulation:
             numpy.ndarray: Array of computed hydraulic radii for the conduits.
         """
         
+        if out is None:
+            out = np.empty_like(flow_areas, dtype=float)
+
         if self.settings.physical.geometry_channel:
             if self.settings.physical.channel_type == 'infinite':
-                hydraulic_radii = flow_depths
+                np.copyto(out, flow_depths)
             elif self.settings.physical.channel_type == 'finite':
-                hydraulic_radii = (
-                    self.settings.physical.channel_width * flow_depths
-                ) / (
-                    self.settings.physical.channel_width + 2 * flow_depths
+                np.divide(
+                    self.settings.physical.channel_width * flow_depths,
+                    self.settings.physical.channel_width + 2 * flow_depths,
+                    out=out,
                 )
             
         # else:
@@ -1897,12 +2037,12 @@ class FlowSimulation:
 
         # Slot is only taken into account for free-surface cases
         else:
-            hydraulic_radii = self.cross_section_geometry.hydraulic_radius(
+            out[:] = self.cross_section_geometry.hydraulic_radius(
                 flow_depths,
                 areas=flow_areas,
             )
             
-        return hydraulic_radii 
+        return out 
                        
     def _compute_upstream_weighted_radii(self, r1, r2, r_mid, h1, h2, alpha):
         """
