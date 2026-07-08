@@ -7,7 +7,7 @@ series.
 ## Launch the viewer
 
 ```python
-from openkarst.visualization.openkarst_viewer import launch_openkarst_viewer
+from openkarst.visualization import launch_openkarst_viewer
 
 flow.set_observation_points(
     nodes=[0, 19],
