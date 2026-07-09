@@ -148,8 +148,11 @@ class CircularAnalyticalGeometry(CrossSectionGeometry):
         return self._full_hydraulic_diameter
 
     def evaluate_state(self, depths, areas, top_widths, hydraulic_radii, is_full):
-        """Evaluate A(y), W(y), R(y), and full-state in one vectorized pass."""
+        """Evaluate A(y), W(y), R(y), and conduit full state (vectorized)."""
         depths = np.asarray(depths, dtype=float)
+
+        # Safe check but may be redundant as I always set depths to lower limit
+        # at the beginning of each time step.
         clipped_depths = np.clip(depths, 0.0, self.diameters)
         theta = self._theta(clipped_depths)
 
@@ -164,6 +167,8 @@ class CircularAnalyticalGeometry(CrossSectionGeometry):
 
         perimeters = self.radii * theta
         hydraulic_radii.fill(0.0)
+
+        # This may also be redundant, need to check
         wet = perimeters > 0.0
         np.divide(areas, perimeters, out=hydraulic_radii, where=wet)
         np.copyto(hydraulic_radii, self._full_hydraulic_radius, where=is_full)

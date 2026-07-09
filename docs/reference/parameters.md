@@ -103,3 +103,44 @@ outputs = {
 | `picard_iterations_total` | Cumulative Picard iterations. |
 
 Only keys set to `True` are stored.
+
+## Logging settings
+
+```python
+logging_settings = {
+    "base_dir": "runs/example_001",
+}
+```
+
+Pass `logging_settings` when creating a `FlowSimulation` object:
+
+```python
+flow = FlowSimulation(
+    network,
+    simulation_settings=simulation_settings,
+    logging_settings=logging_settings,
+)
+```
+
+| Parameter | Meaning |
+| --- | --- |
+| `base_dir` | Base directory where the `logs/` folder is created. Defaults to the current working directory. |
+| `log_file` | Optional log filename. If omitted, openKARST creates a timestamped file such as `simulation_20260709_091530_482317.log`. If provided, openKARST appends to that named file. |
+
+For most runs, set only `base_dir`. This creates one log file per simulation
+inside `<base_dir>/logs/`. Use `log_file` when several runs should append to a
+specific shared log:
+
+```python
+logging_settings = {
+    "base_dir": "runs/example_001",
+    "log_file": "simulation.log",
+}
+```
+
+The normal log records setup and run-level information: validated settings,
+network summary, boundary conditions, observation recorders, requested outputs,
+stop reason, final convergence totals, and stored result count. Timestep
+progress controlled by `print_info_interval` is printed to the console and is
+not written to the normal log. If the time history of convergence failures is
+needed, request `convergence_fails` in `outputs`.
