@@ -15,6 +15,10 @@ simulation_settings = {
     "dt_max": 0.5,
     "t_max": 100.0,
 }
+
+logging_settings = {
+    "base_dir": "runs/example_001",
+}
 ```
 
 ## 2. Create the `FlowSimulation` object
@@ -27,8 +31,13 @@ flow = FlowSimulation(
     physical_properties=physical_properties,
     solver_settings=solver_settings,
     simulation_settings=simulation_settings,
+    logging_settings=logging_settings,
 )
 ```
+
+If `log_file` is not set, openKARST writes a timestamped log file to
+`<base_dir>/logs/`. The log records setup and final run diagnostics without
+duplicating timestep progress output.
 
 ## 3. Set initial conditions
 

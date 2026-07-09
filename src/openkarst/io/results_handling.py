@@ -87,9 +87,7 @@ def initialize_results_container(desired_outputs: Dict[str, bool], logger):
         raise ValueError(f"Invalid keys in desired_outputs: {invalid_keys}. "
                          f"Allowed keys are: {sorted(allowed_keys)}")
 
-    results_container = {key: [] for key in desired_outputs if desired_outputs.get(key, False) and key in allowed_keys}
-    logger.info('Results container created for: %s', list(results_container.keys()))
-    return results_container
+    return {key: [] for key in desired_outputs if desired_outputs.get(key, False) and key in allowed_keys}
 
 def store_results(simulation_instance, results_container):
     """

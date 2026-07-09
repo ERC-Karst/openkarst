@@ -197,18 +197,183 @@ class FlowSimulation:
         self._initialize_arrays()
         
         self._initialize_conduit_properties()
-        
-        self.logger.info('FlowSimulation initialized with physical properties: %s',
-                         self.settings.physical)
-        self.logger.info('FlowSimulation initialized with geometry settings: %s',
-                         self.settings.geometry)
-        self.logger.info('FlowSimulation initialized with solver settings: %s',
-                         self.settings.solver)
-        self.logger.info('FlowSimulation initialized with simulation settings: %s',
-                         self.settings.simulation)
-        self.logger.info('FlowSimulation initialized with transport settings: %s',
-                         self.settings.transport)
-        
+
+        self.logger.info('FlowSimulation initialized')
+        self._log_settings()
+        self._log_network_summary()
+
+
+    def _format_range(self, values):
+        arr = np.asarray(values, dtype=float)
+        finite = arr[np.isfinite(arr)]
+        if finite.size == 0:
+            return 'none'
+        return f'{np.min(finite):.6g}..{np.max(finite):.6g}'
+
+
+    def _format_number(self, value):
+        return f'{float(value):.6g}'
+
+
+    def _format_nodes(self, nodes, max_items=12):
+        nodes = [int(node) for node in nodes]
+        if len(nodes) <= max_items:
+            return str(nodes)
+        return f'{nodes[:max_items]}... (n={len(nodes)})'
+
+
+    def _boundary_value_kind(self, value):
+        if isinstance(value, np.ndarray) and value.ndim == 0:
+            value = value.item()
+        if isinstance(value, Real):
+            return 'constant'
+        if isinstance(value, tuple) and value:
+            if value[0] == 'box':
+                return 'box'
+            if value[0] == 'timeseries':
+                return 'timeseries'
+        return type(value).__name__
+
+
+    def _boundary_value_summary(self, values):
+        kinds = sorted({self._boundary_value_kind(value) for value in values})
+        if len(kinds) != 1:
+            return [f'value_type=[{", ".join(kinds)}]']
+
+        kind = kinds[0]
+        parts = [f'value_type={kind}']
+        if kind == 'constant':
+            constants = [float(np.asarray(value).item()) for value in values]
+            if np.allclose(constants, constants[0]):
+                parts.append(f'value={self._format_number(constants[0])}')
+            else:
+                parts.append(f'value_range={self._format_range(constants)}')
+        elif kind == 'timeseries':
+            point_counts = []
+            time_values = []
+            for value in values:
+                times = np.asarray(value[1], dtype=float)
+                point_counts.append(len(times))
+                time_values.extend(times[np.isfinite(times)])
+            unique_counts = sorted(set(point_counts))
+            if len(unique_counts) == 1:
+                parts.append(f'points={unique_counts[0]}')
+            else:
+                parts.append(f'points={unique_counts}')
+            if time_values:
+                parts.append(f'time_range={self._format_range(time_values)}')
+        elif kind == 'box':
+            box_values = [float(value[1]) for value in values]
+            t0_values = [float(value[2]) for value in values]
+            t1_values = [float(value[3]) for value in values]
+            if np.allclose(box_values, box_values[0]):
+                parts.append(f'value={self._format_number(box_values[0])}')
+            else:
+                parts.append(f'value_range={self._format_range(box_values)}')
+            if np.allclose(t0_values, t0_values[0]) and np.allclose(t1_values, t1_values[0]):
+                parts.append(
+                    f'time_window={self._format_number(t0_values[0])}..'
+                    f'{self._format_number(t1_values[0])}'
+                )
+            else:
+                parts.append(
+                    f'time_window_start_range={self._format_range(t0_values)}'
+                )
+                parts.append(f'time_window_end_range={self._format_range(t1_values)}')
+        return parts
+
+
+    def _log_settings(self):
+        self.logger.info('Settings:')
+        self._log_settings_group('physical', self.settings.physical)
+        self._log_settings_group('geometry', self.settings.geometry)
+        self._log_settings_group('solver', self.settings.solver)
+        self._log_settings_group('simulation', self.settings.simulation)
+        self._log_settings_group('transport', self.settings.transport)
+
+
+    def _log_settings_group(self, group_name, settings_group):
+        for key, value in vars(settings_group).items():
+            self.logger.info('  %s.%s=%r', group_name, key, value)
+
+
+    def _log_network_summary(self):
+        parts = [
+            f'nodes={self.network.Np}',
+            f'conduits={self.network.Nt}',
+            f'length_range={self._format_range(self.conduit_lengths)}',
+        ]
+        if self.settings.physical.geometry_channel:
+            parts.append(f'channel_manning={self.settings.physical.channel_manning}')
+        else:
+            parts.append(f'diameter_range={self._format_range(self.conduit_diameters)}')
+            parts.append(f'epsilon_range={self._format_range(self.conduit_epsilon)}')
+        self.logger.info('Network summary: %s', ', '.join(parts))
+
+
+    def _log_boundary_condition(self, bc_type, mode, nodes, values=None, **extra):
+        parts = [
+            f'type={bc_type}',
+            f'mode={mode}',
+            f'nodes={self._format_nodes(nodes)}',
+        ]
+        if values is not None:
+            parts.extend(self._boundary_value_summary(values))
+        for key, value in extra.items():
+            if value is not None:
+                parts.append(f'{key}={value}')
+        self.logger.info('Boundary condition configured: %s', ', '.join(parts))
+
+
+    def _log_requested_outputs(self, output_interval, output_keys):
+        self.logger.info('Requested outputs:')
+        self.logger.info('  output_interval=%s', output_interval)
+        if not output_keys:
+            self.logger.info('  none')
+            return
+        for key in output_keys:
+            self.logger.info('  %s=True', key)
+
+
+    def _log_run_started(self):
+        self.logger.info(
+            'Run started: steady_state=%s, t_max=%s, adaptive_timesteps=%s, '
+            'dt_init=%s, dt_max=%s',
+            self.settings.simulation.steady_state,
+            self.settings.simulation.t_max,
+            self.settings.simulation.adaptive_timesteps,
+            self.settings.simulation.dt_init,
+            self.settings.simulation.dt_max,
+        )
+
+
+    def _convergence_failure_percent(self):
+        if self.current_timestep <= 0:
+            return 0.0
+        return 100 * self.convergence_fails / self.current_timestep
+
+
+    def _log_run_finished(self, stop_reason, elapsed_seconds, results_container, stop_detail=None):
+        detail = f', {stop_detail}' if stop_detail else ''
+        self.logger.info(
+            'Run finished: stop_reason=%s, final_time=%.6g, timesteps=%s, '
+            'elapsed_seconds=%.3f%s',
+            stop_reason,
+            self.current_time,
+            self.current_timestep,
+            elapsed_seconds,
+            detail,
+        )
+        self.logger.info(
+            'Convergence: failures=%s, failure_percent=%.2f, final_y_l2=%.6g, '
+            'final_Q_l2=%.6g, picard_iterations_total=%s',
+            self.convergence_fails,
+            self._convergence_failure_percent(),
+            self.relative_y_l2_norm,
+            self.relative_Q_l2_norm,
+            self.picard_iterations_total,
+        )
+        self.logger.info('Results stored: count=%s\n', len(results_container))
         
     def _initialize_arrays(self):
         """
@@ -461,6 +626,11 @@ class FlowSimulation:
         results_container = initialize_results_container(desired_outputs, self.logger)
         output_interval = desired_outputs.get('output_interval', 1.0)
         next_output_time = output_interval
+        self._log_requested_outputs(output_interval, list(results_container.keys()))
+        self._log_run_started()
+        stop_reason = 'unknown'
+        stop_detail = None
+        run_start = time.perf_counter()
         
         with time_this('run_simulation'):
 
@@ -542,12 +712,13 @@ class FlowSimulation:
                             print(f'Outflow rate = {100 * (total_flowrate / flowrate_value):.2f}%')
                                         
                         if total_flowrate > self.flowrate_threshold * flowrate_value:
-                            self.logger.info(
-                                f'Flowrate threshold reached at node {node_index}: Simulation finished at time = {self.current_time:.2f}s'
+                            stop_reason = 'flowrate_threshold'
+                            stop_detail = (
+                                f'node={node_index}, threshold={self.flowrate_threshold}, '
+                                f'target_flowrate={flowrate_value:.6g}, '
+                                f'total_flowrate={total_flowrate:.6g}'
                             )
-                           
-                            percentage_fails = 100 * self.convergence_fails / self.current_timestep
-                            self.logger.info('Percentage convergence fails: {:.2f}'.format(percentage_fails))
+                            percentage_fails = self._convergence_failure_percent()
                             print(f'[run_simulation] Percentage convergence fails = {percentage_fails:.2f}%')
                             print(colored('[run_simulation] Flowrate threshold reached (99% of flow rate)', 'green'))
                            
@@ -562,12 +733,8 @@ class FlowSimulation:
                 # Check if steady-state achieved and exit (only if stop condition not set)
                 if not self.stop_condition_set and self.settings.simulation.steady_state:
                     if self._has_reached_steady_state() and self.current_timestep > 10:
-                        self.logger.info(
-                            f'Steady state reached: Simulation finished at time = {self.current_time:.2f}s'
-                        )
-                       
-                        percentage_fails = 100 * self.convergence_fails / self.current_timestep
-                        self.logger.info('Percentage convergence fails: {:.2f}'.format(percentage_fails))
+                        stop_reason = 'steady_state'
+                        percentage_fails = self._convergence_failure_percent()
                         print(f'[run_simulation] Percentage convergence fails = {percentage_fails:.2f}%')
                         print(colored('[run_simulation] Steady state reached', 'green'))
                        
@@ -583,13 +750,8 @@ class FlowSimulation:
                     and not self.settings.simulation.steady_state
                     and self.current_time > self.settings.simulation.t_max
                 ):
-                    
-                    self.logger.info(
-                        f'Maximum time reached: Simulation finished at time = {self.current_time:.2f}s'
-                    )
-                    
-                    percentage_fails = 100 * self.convergence_fails / self.current_timestep
-                    self.logger.info('Percentage convergence fails: {:.2f}'.format(percentage_fails))
+                    stop_reason = 't_max'
+                    percentage_fails = self._convergence_failure_percent()
                     print(colored('[run_simulation] t_max reached', 'green'))
                     print(f'[run_simulation] Percentage convergence fails = {percentage_fails:.2f}%')
                     
@@ -598,7 +760,13 @@ class FlowSimulation:
         # Convert lists to numpy arrays
         for key in results_container:
             results_container[key] = np.array(results_container[key])
-        self.logger.info('Results stored.')
+        elapsed_seconds = time.perf_counter() - run_start
+        self._log_run_finished(
+            stop_reason,
+            elapsed_seconds,
+            results_container,
+            stop_detail=stop_detail,
+        )
      
         return results_container
     
@@ -610,10 +778,12 @@ class FlowSimulation:
         are properly closed when the object is deleted.
         """
     
-        self.logger.info('Logger closed. Object deleted.\n')
-        for handler in self.logger.handlers[:]:
+        logger = getattr(self, 'logger', None)
+        if logger is None:
+            return
+        for handler in logger.handlers[:]:
             handler.close()
-            self.logger.removeHandler(handler)
+            logger.removeHandler(handler)
     
     def set_initial_conditions(self, initial_Q, initial_y):
         """
@@ -629,6 +799,11 @@ class FlowSimulation:
         
         np.copyto(self.Q, initial_Q)
         np.copyto(self.y, initial_y)
+        self.logger.info(
+            'Initial conditions set: Q_range=%s, y_range=%s',
+            self._format_range(self.Q),
+            self._format_range(self.y),
+        )
 
 
     def set_waterdepth_BC(self, nodes, values, mode='add', extrapolate='hold'):
@@ -690,6 +865,7 @@ class FlowSimulation:
                 bc for bc in self.boundary_conditions['waterdepth']
                 if all(n not in nodes for n in bc.target_ids)
             ]
+            self._log_boundary_condition('waterdepth', mode, nodes)
             return
 
         # Loop over each node-value pair
@@ -719,6 +895,8 @@ class FlowSimulation:
                 raise ValueError(f"Unrecognized value for BC at node {node}: {val}")
 
             self.boundary_conditions['waterdepth'].append(bc)
+
+        self._log_boundary_condition('waterdepth', mode, nodes, values)
 
 
     def set_inflow_BC(self, nodes, values, mode='add', inflow_type='volumetric', extrapolate='hold'):
@@ -781,6 +959,7 @@ class FlowSimulation:
                 bc for bc in self.boundary_conditions['inflow']
                 if all(n not in nodes for n in bc.target_ids)
             ]
+            self._log_boundary_condition('inflow', mode, nodes, inflow_type=inflow_type)
             return
 
         # Loop over each node-value pair
@@ -811,6 +990,14 @@ class FlowSimulation:
                 raise ValueError(f"Unrecognized inflow BC format at node {node}: {val}")
 
             self.boundary_conditions['inflow'].append(bc)
+
+        self._log_boundary_condition(
+            'inflow',
+            mode,
+            nodes,
+            values,
+            inflow_type=inflow_type,
+        )
 
  
     def set_spring_BC(
@@ -878,6 +1065,7 @@ class FlowSimulation:
                 bc for bc in self.boundary_conditions['spring']
                 if all(n not in nodes for n in bc.target_ids)
             ]
+            self._log_boundary_condition('spring', mode, nodes)
             return
 
         if mode not in ('add', 'overwrite'):
@@ -913,6 +1101,15 @@ class FlowSimulation:
                 rating_curve=rating_curve,
             )
             self.boundary_conditions['spring'].append(bc)
+
+        spring_model = 'rating_curve' if rating_curve is not None else 'power_law'
+        self._log_boundary_condition(
+            'spring',
+            mode,
+            nodes,
+            outlet_elevations,
+            spring_model=spring_model,
+        )
 
 
     def set_reservoir_BC(self, nodes, fixed_exchange_rate, mode='add'):
@@ -958,6 +1155,7 @@ class FlowSimulation:
                 bc for bc in self.boundary_conditions['reservoir']
                 if all(n not in nodes for n in bc.target_ids)
             ]
+            self._log_boundary_condition('reservoir', mode, nodes)
             return
 
         if mode not in ('add', 'overwrite'):
@@ -979,6 +1177,13 @@ class FlowSimulation:
 
             bc = ConstantBC([node], value=float(rate), bc_type='volumetric')
             self.boundary_conditions['reservoir'].append(bc)
+
+        self._log_boundary_condition(
+            'reservoir',
+            mode,
+            nodes,
+            fixed_exchange_rate,
+        )
 
 
     def add_reservoir(
@@ -1065,6 +1270,18 @@ class FlowSimulation:
             exchange_model=exchange_model,
         )
         self.reservoirs.append(reservoir)
+        self.logger.info(
+            'Reservoir added: node=%s, area=%.6g, specific_yield=%.6g, '
+            'initial_water_depth=%.6g, conductance=%.6g, recharge_type=%s, '
+            'exchange_model=%s',
+            node,
+            area,
+            specific_yield,
+            initial_water_depth,
+            conductance,
+            self._boundary_value_kind(recharge),
+            exchange_model,
+        )
 
         if not hasattr(self, 'boundary_conditions'):
             self.boundary_conditions = {}
@@ -1078,8 +1295,14 @@ class FlowSimulation:
             self.flowrate_condition = flowrate_condition
             self.flowrate_threshold = flowrate_threshold
             self.stop_condition_set = True
+            self.logger.info(
+                'Stop condition set: type=flowrate_threshold, nodes=%s, threshold=%s',
+                self._format_nodes(flowrate_condition.keys()),
+                flowrate_threshold,
+            )
         else:
             self.stop_condition_set = False
+            self.logger.info('Stop condition cleared')
         
     def set_observation_points(self, nodes, variables, interval=1.0, name=None):
         """Record selected node-based time series during transient simulations.
@@ -1143,6 +1366,14 @@ class FlowSimulation:
         self.observation_recorders.append(
             ObservationRecorder(nodes, variables, interval, name=name)
         )
+        self.logger.info(
+            'Observation recorder added: name=%s, nodes=%s, interval=%s',
+            name,
+            self._format_nodes(nodes),
+            interval,
+        )
+        for variable in variables:
+            self.logger.info('  variable=%s', variable)
     
     def get_observation_dataframe(self):
         """Return all observation records as one wide dataframe.
@@ -2823,6 +3054,12 @@ class FlowSimulation:
         # Set initial concentration and mass
         self.C[:] = C0
         self.M[:] = self.C * self.V_node
+        self.logger.info(
+            'Initial concentrations set: C_range=%s, M_range=%s, V_node_range=%s',
+            self._format_range(self.C),
+            self._format_range(self.M),
+            self._format_range(self.V_node),
+        )
 
 
 
@@ -2899,6 +3136,7 @@ class FlowSimulation:
                 bc for bc in self.boundary_conditions['inflow_concentration']
                 if all(n not in nodes for n in bc.target_ids)
             ]
+            self._log_boundary_condition('inflow_concentration', mode, nodes)
             return
 
         for node, val in zip(nodes, values):
@@ -2930,6 +3168,13 @@ class FlowSimulation:
                 raise ValueError(f"Unrecognized inflow concentration format at node {node}: {val}")
 
             self.boundary_conditions['inflow_concentration'].append(bc)
+
+        self._log_boundary_condition(
+            'inflow_concentration',
+            mode,
+            nodes,
+            values,
+        )
 
 
     def set_waterdepth_concentration_BC(self, nodes, values, mode='add', extrapolate='hold'):
@@ -2993,6 +3238,7 @@ class FlowSimulation:
                 bc for bc in self.boundary_conditions['waterdepth_concentration']
                 if all(n not in nodes for n in bc.target_ids)
             ]
+            self._log_boundary_condition('waterdepth_concentration', mode, nodes)
             return
 
         for node, val in zip(nodes, values):
@@ -3026,6 +3272,13 @@ class FlowSimulation:
                 )
 
             self.boundary_conditions['waterdepth_concentration'].append(bc)
+
+        self._log_boundary_condition(
+            'waterdepth_concentration',
+            mode,
+            nodes,
+            values,
+        )
 
 
     def set_mass_injection_BC(self, nodes, values, mode='add', extrapolate='hold'):
@@ -3093,6 +3346,7 @@ class FlowSimulation:
                 bc for bc in self.boundary_conditions['mass_injection']
                 if all(n not in nodes for n in bc.target_ids)
             ]
+            self._log_boundary_condition('mass_injection', mode, nodes)
             return
 
         for node, val in zip(nodes, values):
@@ -3132,6 +3386,8 @@ class FlowSimulation:
                 raise ValueError(f"Unrecognized mass-injection format at node {node}: {val}")
 
             self.boundary_conditions['mass_injection'].append(bc)
+
+        self._log_boundary_condition('mass_injection', mode, nodes, values)
 
 
     def _advance_transport(self):
