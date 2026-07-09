@@ -49,6 +49,25 @@ def compute_upstream_weight_alpha(froude_number, is_full):
     return alpha
 
 
+def compute_conduit_slope_cosines(z1, z2, conduit_lengths):
+    """
+    Compute cos(theta) for each conduit from endpoint elevations and 3D length.
+
+    Values are clipped to [0, 1] to avoid small numerical overshoots when the
+    vertical elevation difference is close to the conduit length.
+    """
+    z1 = np.asarray(z1, dtype=float)
+    z2 = np.asarray(z2, dtype=float)
+    conduit_lengths = np.asarray(conduit_lengths, dtype=float)
+    vertical_fraction = np.divide(
+        z2 - z1,
+        conduit_lengths,
+        out=np.zeros_like(conduit_lengths, dtype=float),
+        where=conduit_lengths != 0.0,
+    )
+    return np.sqrt(np.clip(1.0 - vertical_fraction**2, 0.0, 1.0))
+
+
 def circular_segment_area(depth, diameter):
     """Calculate flow area in a circular conduit at a given depth."""
     radius = diameter / 2

@@ -10,6 +10,9 @@ from openkarst.models.numba_support import (
 )
 
 
+_MIN_MANNING_SLOPE_PROJECTION = 1e-6
+
+
 if NUMBA_AVAILABLE:
 
     @njit(cache=True)
@@ -47,6 +50,8 @@ if NUMBA_AVAILABLE:
         r_mid,
         h1,
         h2,
+        z1,
+        z2,
         v_mid,
         froude,
         alpha,
@@ -56,12 +61,14 @@ if NUMBA_AVAILABLE:
         full_hydraulic_diameters,
         conduit_epsilon,
         conduit_manning,
+        conduit_slope_cosines,
         bc_flux_node,
         n_indices1,
         n_indices2,
         f,
         dQ_friction,
         q_correction,
+        slope_projection,
         D_eff,
         Re_conduit,
         conduit_lengths,
@@ -72,6 +79,7 @@ if NUMBA_AVAILABLE:
         relaxation_factor,
         geometry_channel,
         friction_model_churchill,
+        steep_slope_correction,
     ):
         for k in prange(Q_new.size):
             # Midpoint velocity
@@ -83,10 +91,18 @@ if NUMBA_AVAILABLE:
                 velocity = _divide_like_numpy(Q_prev_i[k], a_mid_new[k])
             v_mid[k] = velocity
 
+            projection_factor = 1.0
+            if steep_slope_correction:
+                if geometry_channel or not is_full_y_mid[k]:
+                    projection_factor = conduit_slope_cosines[k]
+            slope_projection[k] = projection_factor
+
             # Froude number and upstream-weighting factor
             abs_velocity = abs(velocity)
             froude_denominator = math.sqrt(
-                gravity * _divide_like_numpy(a_mid_new[k], w_mid[k])
+                gravity
+                * projection_factor
+                * _divide_like_numpy(a_mid_new[k], w_mid[k])
             )
             froude_value = _divide_like_numpy(abs_velocity, froude_denominator)
             froude[k] = froude_value
@@ -118,9 +134,11 @@ if NUMBA_AVAILABLE:
 
             # Pressure and inertia terms
             length = conduit_lengths[k]
+            dz = z2[k] - z1[k]
+            dy = (h2[k] - h1[k]) - dz
             dQ_pressure = (
                 _divide_like_numpy(
-                    -gravity * a_pressure * (h2[k] - h1[k]),
+                    -gravity * a_pressure * (projection_factor * dy + dz),
                     length,
                 )
                 * dt
@@ -149,10 +167,15 @@ if NUMBA_AVAILABLE:
                 d_eff = 4.0 * r_mid[k]
                 D_eff[k] = d_eff
                 Re_conduit[k] = water_density * abs_velocity * d_eff / dynamic_viscosity
+                manning_projection = max(
+                    projection_factor,
+                    _MIN_MANNING_SLOPE_PROJECTION,
+                )
                 dQ_friction[k] = (
                     _divide_like_numpy(
                         gravity * conduit_manning[k] ** 2.0 * abs_velocity,
-                        r_mid_upwtd ** (4.0 / 3.0),
+                        (r_mid_upwtd ** (4.0 / 3.0))
+                        * (manning_projection ** (4.0 / 3.0)),
                     )
                     * dt
                 )
@@ -198,10 +221,15 @@ if NUMBA_AVAILABLE:
                             * dt
                         )
                     else:
+                        manning_projection = max(
+                            projection_factor,
+                            _MIN_MANNING_SLOPE_PROJECTION,
+                        )
                         dQ_friction[k] = (
                             _divide_like_numpy(
                                 gravity * conduit_manning[k] ** 2.0 * abs_velocity,
-                                r_mid_upwtd ** (4.0 / 3.0),
+                                (r_mid_upwtd ** (4.0 / 3.0))
+                                * (manning_projection ** (4.0 / 3.0)),
                             )
                             * dt
                         )

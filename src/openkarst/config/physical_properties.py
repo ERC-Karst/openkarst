@@ -19,3 +19,4 @@ class PhysicalProperties:
     channel_width: float = 1.0
     channel_manning: float = 0.03
     friction_model: str = 'churchill'
+    steep_slope_correction: bool = False

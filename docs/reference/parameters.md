@@ -12,6 +12,7 @@ physical_properties = {
     "dynamic_viscosity": 0.001,
     "geometry_channel": False,
     "friction_model": "churchill",
+    "steep_slope_correction": False,
 }
 ```
 
@@ -25,6 +26,7 @@ physical_properties = {
 | `channel_width` | Width for finite channel geometry. | `1.0` |
 | `channel_manning` | Manning coefficient for channel geometry. | `0.03` |
 | `friction_model` | Closed-conduit friction model. | `churchill` or `hybrid` |
+| `steep_slope_correction` | Apply free-surface steep-slope pressure projection and Manning friction scaling using conduit slope angles. | `False` |
 
 ## Solver settings
 

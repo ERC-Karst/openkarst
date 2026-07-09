@@ -5,6 +5,7 @@ from openkarst.models.hydraulics import (
     circular_segment_area,
     circular_wetted_perimeter,
     compute_churchill_friction_factor,
+    compute_conduit_slope_cosines,
     compute_slot_width,
     compute_upstream_weight_alpha,
     critical_depth_residual,
@@ -52,6 +53,16 @@ def test_compute_upstream_weight_alpha_uses_froude_ranges_and_pressurization():
     result = compute_upstream_weight_alpha(froude_number, is_full)
 
     np.testing.assert_allclose(result, np.array([1.0, 1.0, 0.5, 0.0, 0.0, 0.0]))
+
+
+def test_compute_conduit_slope_cosines_from_endpoint_elevations():
+    z1 = np.array([0.0, 1.0, 0.0])
+    z2 = np.array([0.0, 2.0, 2.0])
+    lengths = np.array([3.0, np.sqrt(2.0), 2.0])
+
+    result = compute_conduit_slope_cosines(z1, z2, lengths)
+
+    np.testing.assert_allclose(result, np.array([1.0, 1.0 / np.sqrt(2.0), 0.0]))
 
 
 def test_circular_geometry_helpers_at_half_full_depth():

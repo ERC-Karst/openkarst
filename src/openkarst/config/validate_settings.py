@@ -23,6 +23,9 @@ def validate_settings(physical_properties, geometry_settings, solver_settings,
             physical_properties.dynamic_viscosity > 0):
         raise ValueError("Error: 'dynamic_viscosity' must be type int/float and greater than 0 "
                          "(kg m^-1 s^-1).")
+
+    if not isinstance(physical_properties.steep_slope_correction, bool):
+        raise ValueError("Error: 'steep_slope_correction' must be a boolean True or False.")
         
     if physical_properties.geometry_channel:
         if not (physical_properties.channel_type in ['finite', 'infinite']):

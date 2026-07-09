@@ -40,6 +40,21 @@ def test_validate_settings_rejects_invalid_physical_properties():
         )
 
 
+def test_validate_settings_rejects_nonboolean_steep_slope_correction():
+    physical_properties, geometry_settings, solver_settings, simulation_settings, transport_settings, logger = _valid_settings()
+    physical_properties.steep_slope_correction = "yes"
+
+    with pytest.raises(ValueError, match="steep_slope_correction"):
+        validate_settings(
+            physical_properties,
+            geometry_settings,
+            solver_settings,
+            simulation_settings,
+            transport_settings,
+            logger,
+        )
+
+
 def test_validate_settings_rejects_unknown_geometry_backend():
     physical_properties, geometry_settings, solver_settings, simulation_settings, transport_settings, logger = _valid_settings()
     geometry_settings.backend = "unknown"

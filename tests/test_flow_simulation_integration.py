@@ -14,6 +14,15 @@ def _small_network():
     return geometry
 
 
+def _small_sloping_network(vertical_step=1.0):
+    geometry = op.network.Cubic(shape=[5, 1, 1], connectivity=6, spacing=1.0)
+    geometry["pore.coords"][:, 2] = np.arange(geometry.Np, dtype=float) * vertical_step
+    geometry = compute_conduit_lengths(geometry)
+    geometry["throat.epsilon"] = 0.03
+    geometry["throat.diameters"] = 1.0
+    return geometry
+
+
 def _write_normalized_circular_table(path, n_points=2001):
     eta = np.linspace(0.0, 1.0, n_points)
     width_norm = 2.0 * np.sqrt(np.maximum(eta - eta**2, 0.0))
@@ -57,6 +66,8 @@ def _small_flow_simulation(
     interpolation_method=None,
     parallelization=False,
     num_threads=None,
+    physical_properties=None,
+    network=None,
 ):
     geometry_settings = {"backend": geometry_backend}
     if table_points is not None:
@@ -76,7 +87,8 @@ def _small_flow_simulation(
         solver_settings["num_threads"] = num_threads
 
     return FlowSimulation(
-        _small_network(),
+        _small_network() if network is None else network,
+        physical_properties=physical_properties,
         geometry_settings=geometry_settings,
         solver_settings=solver_settings,
         simulation_settings={
@@ -183,6 +195,255 @@ def test_flow_simulation_defaults_to_analytical_geometry_backend(tmp_path):
     assert flow.settings.geometry.table_points == 100
     assert flow.settings.geometry.interpolation_method == "linear"
     assert not hasattr(flow, "geometry_backend")
+
+
+def test_steep_slope_correction_projects_free_surface_depth_gradient_only(tmp_path):
+    flow = _small_flow_simulation(
+        tmp_path,
+        physical_properties={"steep_slope_correction": True},
+        network=_small_sloping_network(vertical_step=1.0),
+    )
+    flow.dt = 1.0
+    flow.settings.solver.relaxation_factor = 1.0
+    flow.Q_old_t.fill(0.0)
+    flow.Q_prev_i.fill(0.0)
+    flow.a_mid_new.fill(1.0)
+    flow.a_mid_old_t.fill(1.0)
+    flow.is_full_y_mid.fill(False)
+
+    ones = np.ones(flow.network.Nt, dtype=float)
+    y1 = np.full(flow.network.Nt, 1.0, dtype=float)
+    y2 = np.full(flow.network.Nt, 1.25, dtype=float)
+    h1 = flow.z1 + y1
+    h2 = flow.z2 + y2
+
+    flow._compute_flow_update_numpy(
+        ones,
+        ones,
+        ones,
+        ones,
+        ones,
+        h1,
+        h2,
+        ones,
+    )
+
+    dy = y2 - y1
+    dz = flow.z2 - flow.z1
+    expected = (
+        -flow.settings.physical.gravity
+        * (flow.conduit_slope_cosines * dy + dz)
+        / flow.conduit_lengths
+    )
+    np.testing.assert_allclose(flow.Q_new, expected)
+    np.testing.assert_allclose(flow._flow_slope_projection, flow.conduit_slope_cosines)
+
+
+def test_steep_slope_correction_keeps_uniform_depth_bed_gradient_unprojected(tmp_path):
+    flow = _small_flow_simulation(
+        tmp_path,
+        physical_properties={"steep_slope_correction": True},
+        network=_small_sloping_network(vertical_step=1.0),
+    )
+    flow.dt = 1.0
+    flow.settings.solver.relaxation_factor = 1.0
+    flow.Q_old_t.fill(0.0)
+    flow.Q_prev_i.fill(0.0)
+    flow.a_mid_new.fill(1.0)
+    flow.a_mid_old_t.fill(1.0)
+    flow.is_full_y_mid.fill(False)
+
+    ones = np.ones(flow.network.Nt, dtype=float)
+    h1 = flow.z1 + 1.0
+    h2 = flow.z2 + 1.0
+
+    flow._compute_flow_update_numpy(
+        ones,
+        ones,
+        ones,
+        ones,
+        ones,
+        h1,
+        h2,
+        ones,
+    )
+
+    expected = (
+        -flow.settings.physical.gravity
+        * (flow.z2 - flow.z1)
+        / flow.conduit_lengths
+    )
+    np.testing.assert_allclose(flow.Q_new, expected)
+    np.testing.assert_allclose(flow._flow_slope_projection, flow.conduit_slope_cosines)
+
+
+def test_steep_slope_correction_keeps_pressurized_head_gradient_unprojected(tmp_path):
+    flow = _small_flow_simulation(
+        tmp_path,
+        physical_properties={"steep_slope_correction": True},
+        network=_small_sloping_network(vertical_step=1.0),
+    )
+    flow.dt = 1.0
+    flow.settings.solver.relaxation_factor = 1.0
+    flow.Q_old_t.fill(0.0)
+    flow.Q_prev_i.fill(0.0)
+    flow.a_mid_new[:] = flow.full_conduit_areas
+    flow.a_mid_old_t[:] = flow.full_conduit_areas
+    flow.is_full_y_mid.fill(True)
+
+    ones = np.ones(flow.network.Nt, dtype=float)
+    h1 = flow.z1 + 2.0
+    h2 = flow.z2 + 2.0
+
+    flow._compute_flow_update_numpy(
+        flow.full_conduit_areas,
+        flow.full_conduit_areas,
+        ones,
+        ones,
+        ones,
+        h1,
+        h2,
+        ones,
+    )
+
+    expected = (
+        -flow.settings.physical.gravity
+        * flow.full_conduit_areas
+        * (h2 - h1)
+        / flow.conduit_lengths
+    )
+    np.testing.assert_allclose(flow.Q_new, expected)
+    np.testing.assert_allclose(flow._flow_slope_projection, np.ones(flow.network.Nt))
+
+
+def _zero_pressure_friction_state(flow):
+    flow.dt = 1.0
+    flow.settings.solver.relaxation_factor = 1.0
+    flow.Q_old_t.fill(2.0)
+    flow.Q_prev_i.fill(2.0)
+    flow.a_mid_new.fill(1.0)
+    flow.a_mid_old_t.fill(1.0)
+    flow.is_full_y_mid.fill(False)
+
+    ones = np.ones(flow.network.Nt, dtype=float)
+    dz = flow.z2 - flow.z1
+    dy = np.divide(
+        -dz,
+        flow.conduit_slope_cosines,
+        out=np.zeros_like(dz, dtype=float),
+        where=flow.conduit_slope_cosines != 0.0,
+    )
+    h1 = flow.z1 + 2.0
+    h2 = flow.z2 + 2.0 + dy
+    return ones, h1, h2
+
+
+def _expected_steep_slope_manning_friction(flow):
+    manning_projection = np.clip(flow.conduit_slope_cosines, 1e-6, 1.0)
+    return (
+        flow.settings.physical.gravity
+        * flow.conduit_manning**2
+        * 2.0
+        / manning_projection**(4 / 3)
+        * flow.dt
+    )
+
+
+def test_steep_slope_correction_scales_channel_manning_friction(tmp_path):
+    flow = _small_flow_simulation(
+        tmp_path,
+        physical_properties={
+            "geometry_channel": True,
+            "steep_slope_correction": True,
+        },
+        network=_small_sloping_network(vertical_step=1.0),
+    )
+    ones, h1, h2 = _zero_pressure_friction_state(flow)
+
+    flow._compute_flow_update_numpy(
+        ones,
+        ones,
+        ones,
+        ones,
+        ones,
+        h1,
+        h2,
+        ones,
+    )
+
+    expected_friction = _expected_steep_slope_manning_friction(flow)
+    np.testing.assert_allclose(flow.dQ_friction, expected_friction)
+    np.testing.assert_allclose(flow.Q_new, flow.Q_old_t / (1.0 + expected_friction))
+
+
+def test_steep_slope_correction_scales_hybrid_free_surface_manning_friction(
+    tmp_path,
+):
+    flow = _small_flow_simulation(
+        tmp_path,
+        physical_properties={
+            "friction_model": "hybrid",
+            "steep_slope_correction": True,
+        },
+        network=_small_sloping_network(vertical_step=1.0),
+    )
+    ones, h1, h2 = _zero_pressure_friction_state(flow)
+
+    flow._compute_flow_update_numpy(
+        ones,
+        ones,
+        ones,
+        ones,
+        ones,
+        h1,
+        h2,
+        ones,
+    )
+
+    expected_friction = _expected_steep_slope_manning_friction(flow)
+    np.testing.assert_allclose(flow.dQ_friction, expected_friction)
+    np.testing.assert_allclose(flow.Q_new, flow.Q_old_t / (1.0 + expected_friction))
+
+
+@pytest.mark.parametrize(
+    "physical_properties",
+    [
+        {"geometry_channel": True, "steep_slope_correction": True},
+        {"friction_model": "hybrid", "steep_slope_correction": True},
+    ],
+)
+def test_parallelized_steep_slope_manning_friction_matches_numpy(
+    tmp_path,
+    physical_properties,
+):
+    pytest.importorskip("numba")
+
+    def run_backend(parallelization):
+        flow = _small_flow_simulation(
+            tmp_path / ("numba" if parallelization else "numpy"),
+            physical_properties=dict(physical_properties),
+            network=_small_sloping_network(vertical_step=1.0),
+            parallelization=parallelization,
+        )
+        ones, h1, h2 = _zero_pressure_friction_state(flow)
+        flow._compute_flow_update(
+            ones,
+            ones,
+            ones,
+            ones,
+            ones,
+            h1,
+            h2,
+            ones,
+        )
+        return flow
+
+    numpy_flow = run_backend(False)
+    numba_flow = run_backend(True)
+
+    assert numba_flow.flow_update_calls == 1
+    np.testing.assert_allclose(numba_flow.Q_new, numpy_flow.Q_new)
+    np.testing.assert_allclose(numba_flow.dQ_friction, numpy_flow.dQ_friction)
 
 
 def test_flow_simulation_applies_geometry_table_points(tmp_path):

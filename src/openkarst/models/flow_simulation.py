@@ -36,6 +36,7 @@ from openkarst.models.boundary_conditions import (
 )
 from openkarst.models.hydraulics import (
     compute_churchill_friction_factor,
+    compute_conduit_slope_cosines,
     compute_slot_width,
     compute_upstream_weight_alpha,
 )
@@ -50,6 +51,9 @@ from openkarst.models.numba_support import (
 )
 from openkarst.models.cross_section_geometry import create_cross_section_geometry
 from openkarst.models.reservoir import UnconfinedReservoir
+
+
+_MIN_MANNING_SLOPE_PROJECTION = 1e-6
 
 
 class FlowSimulation:
@@ -109,7 +113,7 @@ class FlowSimulation:
             Computes the upstream weighted areas.
         _compute_flow_update(self, a1, a2, r1, r2, r_mid, h1, h2, w_mid):
             Computes the conduit flow update with the active NumPy or Numba backend.
-        _compute_flows_numpy(self, a1, a2, a_mid_upwtd, r_mid_upwtd, r_mid, h1, h2, alpha, v_mid, w_mid):
+        _compute_flows_numpy(self, a1, a2, a_mid_upwtd, r_mid_upwtd, r_mid, h1, h2, alpha, v_mid, w_mid, slope_projection):
             Computes the NumPy flow-rate update for the conduits.
         _compute_water_depths(self, n_surface_a):
             Computes the water depths at each node.
@@ -468,6 +472,7 @@ class FlowSimulation:
         self._flow_v_mid = np.zeros(self.network.Nt, dtype=float)
         self._flow_froude = np.zeros(self.network.Nt, dtype=float)
         self._flow_alpha = np.zeros(self.network.Nt, dtype=float)
+        self._flow_slope_projection = np.ones(self.network.Nt, dtype=float)
         self._geom_a1 = np.zeros(self.network.Nt, dtype=float)
         self._geom_a2 = np.zeros(self.network.Nt, dtype=float)
         self._geom_r1 = np.zeros(self.network.Nt, dtype=float)
@@ -598,6 +603,12 @@ class FlowSimulation:
         self.half_lengths_sum_per_node = 0.5 * (
             np.bincount(self.n_indices1, weights=self.conduit_lengths, minlength=self.network.Np) +
             np.bincount(self.n_indices2, weights=self.conduit_lengths, minlength=self.network.Np)
+        )
+
+        self.conduit_slope_cosines = compute_conduit_slope_cosines(
+            self.z1,
+            self.z2,
+            self.conduit_lengths,
         )
             
         self.logger.info('Conduit properties initialized')
@@ -2193,7 +2204,10 @@ class FlowSimulation:
         # dt <= C * length / (|v| + sqrt(g * A / W)).
         # For pressurized conduits, W is the Preissmann slot width.
         wave_celerity = np.sqrt(
-            self.settings.physical.gravity * self.a_mid_new / w_mid
+            self.settings.physical.gravity
+            * self._flow_slope_projection
+            * self.a_mid_new
+            / w_mid
         )
         wave_speed = np.abs(v_mid) + wave_celerity
         dt_wave = effective_courant * self.conduit_lengths / wave_speed
@@ -2361,6 +2375,26 @@ class FlowSimulation:
         
         return a_mid_upwtd
 
+    def _update_flow_slope_projection(self):
+        """
+        Update the free-surface steep-slope projection factor for each conduit.
+
+        Pressurized conduits use the standard hydraulic-head gradient along the
+        conduit centerline. For free-surface flow, the Ni et al. (2019) pressure
+        projection contributes cos(theta) because openKARST gradients are
+        discretized over conduit length rather than horizontal distance.
+        """
+
+        projection = self._flow_slope_projection
+        if not self.settings.physical.steep_slope_correction:
+            projection.fill(1.0)
+            return projection
+
+        projection[:] = self.conduit_slope_cosines
+        if not self.settings.physical.geometry_channel:
+            projection[self.is_full_y_mid] = 1.0
+        return projection
+
     def _compute_flow_update(self, a1, a2, r1, r2, r_mid, h1, h2, w_mid):
         """Compute the conduit flow update with the active NumPy or Numba backend."""
         self._w_mid_last = w_mid
@@ -2402,6 +2436,8 @@ class FlowSimulation:
             # Hydraulic heads and midpoint state
             h1,
             h2,
+            self.z1,
+            self.z2,
             self._flow_v_mid,
             self._flow_froude,
             self._flow_alpha,
@@ -2413,6 +2449,7 @@ class FlowSimulation:
             full_hydraulic_diameters,
             conduit_epsilon,
             self.conduit_manning,
+            self.conduit_slope_cosines,
             self.bc_flux_node,
             self.n_indices1,
             self.n_indices2,
@@ -2421,6 +2458,7 @@ class FlowSimulation:
             self.f,
             self.dQ_friction,
             self.q_correction,
+            self._flow_slope_projection,
             self.D_eff,
             self.Re_conduit,
             self.conduit_lengths,
@@ -2433,6 +2471,7 @@ class FlowSimulation:
             self.settings.solver.relaxation_factor,
             self.settings.physical.geometry_channel,
             self.settings.physical.friction_model == "churchill",
+            self.settings.physical.steep_slope_correction,
         )
 
         self._v_mid_last = self._flow_v_mid
@@ -2449,8 +2488,9 @@ class FlowSimulation:
                 self.Q_prev_i / self.a_mid_new,
             )
 
+        slope_projection = self._update_flow_slope_projection()
         froude = np.abs(v_mid) / np.sqrt(
-            self.settings.physical.gravity * self.a_mid_new / w_mid
+            self.settings.physical.gravity * slope_projection * self.a_mid_new / w_mid
         )
 
         self._v_mid_last = v_mid
@@ -2475,10 +2515,11 @@ class FlowSimulation:
             alpha,
             v_mid,
             w_mid,
+            slope_projection,
         )
                   
     def _compute_flows_numpy(self, a1, a2, a_mid_upwtd, r_mid_upwtd, r_mid,
-                             h1, h2, alpha, v_mid, w_mid):
+                             h1, h2, alpha, v_mid, w_mid, slope_projection):
         """
         Compute the flow rates in conduits based on various physical parameters.
 
@@ -2501,6 +2542,8 @@ class FlowSimulation:
             alpha (numpy.ndarray): Alpha values for upstream weighting.
             v_mid (numpy.ndarray): Velocities at the middle of the conduits.
             w_mid (numpy.ndarray): Water widths at the middle of the conduits.
+            slope_projection (numpy.ndarray): Per-conduit steep-slope projection
+                factor used by free-surface pressure and Manning terms.
 
         Returns:
             None: This method updates the instance attribute `self.Q_new` directly.
@@ -2515,16 +2558,25 @@ class FlowSimulation:
         q_correction = self.q_correction
         D_eff = self.D_eff
 
-        # Pressure term (upstream weighting)
-        #dQ_pressure = -self.settings.physical.gravity * a_mid_upwtd * (h2 - h1) / self.conduit_lengths * self.dt
+        # Pressure and bed-slope gravity terms (upstream weighting).
+        # The new dQ split form preserves the existing behavior when
+        # projection=1, but applies the steep-slope projection only to the
+        # free-surface pressure/depth gradient.
         ### 14.4.26, slot not taken into account for pressurized flows
         if self.settings.physical.geometry_channel:
             a_pressure = a_mid_upwtd
         else:
             a_pressure = np.where(self.is_full_y_mid, self.full_conduit_areas, a_mid_upwtd)
 
+        dz = self.z2 - self.z1
+        dy = (h2 - h1) - dz
+
         dQ_pressure = (
-            -self.settings.physical.gravity * a_pressure * (h2 - h1) / self.conduit_lengths * self.dt
+            -self.settings.physical.gravity
+            * a_pressure
+            * (slope_projection * dy + dz)
+            / self.conduit_lengths
+            * self.dt
         )
     
         # Add correction term. This is currently only applied for flux BCs
@@ -2552,10 +2604,21 @@ class FlowSimulation:
    
             # Compute friction term using Manning's equation for free-surface flow
             # Manning n is provided directly via physical properties
-            dQ_friction[~self.is_full_y_mid] = (
-                self.settings.physical.gravity * self.conduit_manning[~self.is_full_y_mid]**2 *
-                np.abs(v_mid[~self.is_full_y_mid]) /
-                (r_mid_upwtd[~self.is_full_y_mid]**(4/3)) * self.dt
+            free_surface = ~self.is_full_y_mid
+            manning_projection = np.clip(
+                slope_projection[free_surface],
+                _MIN_MANNING_SLOPE_PROJECTION,
+                1.0,
+            )
+            dQ_friction[free_surface] = (
+                self.settings.physical.gravity
+                * self.conduit_manning[free_surface]**2
+                * np.abs(v_mid[free_surface])
+                / (
+                    r_mid_upwtd[free_surface]**(4/3)
+                    * manning_projection**(4/3)
+                )
+                * self.dt
             )
 
         # Case: Circular conduits
@@ -2623,10 +2686,21 @@ class FlowSimulation:
                 )
 
                 # Compute Manning-based friction dQ for free-surface flow in circular conduits
-                dQ_friction[~self.is_full_y_mid] = (
-                    self.settings.physical.gravity * self.conduit_manning[~self.is_full_y_mid]**2 *
-                    np.abs(v_mid[~self.is_full_y_mid]) /
-                    (r_mid_upwtd[~self.is_full_y_mid]**(4/3)) * self.dt
+                free_surface = ~self.is_full_y_mid
+                manning_projection = np.clip(
+                    slope_projection[free_surface],
+                    _MIN_MANNING_SLOPE_PROJECTION,
+                    1.0,
+                )
+                dQ_friction[free_surface] = (
+                    self.settings.physical.gravity
+                    * self.conduit_manning[free_surface]**2
+                    * np.abs(v_mid[free_surface])
+                    / (
+                        r_mid_upwtd[free_surface]**(4/3)
+                        * manning_projection**(4/3)
+                    )
+                    * self.dt
                 )
         
         # Compute dQ components and new flows Q_new
