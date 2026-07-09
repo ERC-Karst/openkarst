@@ -3,6 +3,7 @@ import openpnm as op
 import pytest
 
 from openkarst.models import FlowSimulation, UnconfinedReservoir
+from openkarst.models.hydraulics import compute_churchill_friction_factor
 from openkarst.network_generation import compute_conduit_lengths
 
 
@@ -57,6 +58,8 @@ def _small_flow_simulation(
     interpolation_method=None,
     parallelization=False,
     num_threads=None,
+    physical_properties=None,
+    network=None,
 ):
     geometry_settings = {"backend": geometry_backend}
     if table_points is not None:
@@ -76,7 +79,8 @@ def _small_flow_simulation(
         solver_settings["num_threads"] = num_threads
 
     return FlowSimulation(
-        _small_network(),
+        _small_network() if network is None else network,
+        physical_properties=physical_properties,
         geometry_settings=geometry_settings,
         solver_settings=solver_settings,
         simulation_settings={
@@ -183,6 +187,30 @@ def test_flow_simulation_defaults_to_analytical_geometry_backend(tmp_path):
     assert flow.settings.geometry.table_points == 100
     assert flow.settings.geometry.interpolation_method == "linear"
     assert not hasattr(flow, "geometry_backend")
+
+
+def test_hybrid_conduit_manning_uses_full_hydraulic_radius(tmp_path):
+    network = _small_network()
+    network["throat.diameters"] = np.array([0.5, 1.0, 2.0, 4.0])
+
+    flow = _small_flow_simulation(
+        tmp_path,
+        physical_properties={"friction_model": "hybrid"},
+        network=network,
+    )
+
+    reynolds_infinity = 1e7
+    f = compute_churchill_friction_factor(
+        reynolds_infinity,
+        flow.conduit_epsilon,
+        flow.conduit_diameters,
+    )
+    expected = np.sqrt(
+        f * flow.full_hydraulic_radii**(1 / 3)
+        / (8 * flow.settings.physical.gravity)
+    )
+
+    np.testing.assert_allclose(flow.conduit_manning, expected)
 
 
 def test_flow_simulation_applies_geometry_table_points(tmp_path):

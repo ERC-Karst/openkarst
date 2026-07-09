@@ -586,10 +586,9 @@ class FlowSimulation:
                     self.conduit_epsilon,
                     self.conduit_diameters,
                 )
-                self.conduit_manning = (
-                1 / (np.sqrt(8 * self.settings.physical.gravity)) 
-                * np.sqrt(f) 
-                * (0.5 * self.conduit_diameters)**(1 / 3)
+                self.conduit_manning = np.sqrt(
+                    f * self.full_hydraulic_radii**(1 / 3)
+                    / (8 * self.settings.physical.gravity)
                 )
             else:
                 self.conduit_manning = np.zeros(self.network.Nt, dtype=float)
