@@ -914,6 +914,15 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#logging-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Logging settings
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1048,6 +1057,15 @@
   <a href="#output-settings" class="md-nav__link">
     <span class="md-ellipsis">
       Output settings
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#logging-settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Logging settings
     </span>
   </a>
   
@@ -1301,6 +1319,50 @@ to a <code>FlowSimulation</code> object or <code>run_simulation()</code>.</p>
 </tbody>
 </table>
 <p>Only keys set to <code>True</code> are stored.</p>
+<h2 id="logging-settings">Logging settings<a class="headerlink" href="#logging-settings" title="Permanent link">&para;</a></h2>
+<div class="language-python highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">logging_settings</span> <span class="o">=</span> <span class="p">{</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>    <span class="s2">&quot;base_dir&quot;</span><span class="p">:</span> <span class="s2">&quot;runs/example_001&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="p">}</span>
+</code></pre></div>
+<p>Pass <code>logging_settings</code> when creating a <code>FlowSimulation</code> object:</p>
+<div class="language-python highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">flow</span> <span class="o">=</span> <span class="n">FlowSimulation</span><span class="p">(</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>    <span class="n">network</span><span class="p">,</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>    <span class="n">simulation_settings</span><span class="o">=</span><span class="n">simulation_settings</span><span class="p">,</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>    <span class="n">logging_settings</span><span class="o">=</span><span class="n">logging_settings</span><span class="p">,</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="p">)</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>base_dir</code></td>
+<td>Base directory where the <code>logs/</code> folder is created. Defaults to the current working directory.</td>
+</tr>
+<tr>
+<td><code>log_file</code></td>
+<td>Optional log filename. If omitted, openKARST creates a timestamped file such as <code>simulation_20260709_091530_482317.log</code>. If provided, openKARST appends to that named file.</td>
+</tr>
+</tbody>
+</table>
+<p>For most runs, set only <code>base_dir</code>. This creates one log file per simulation
+inside <code>&lt;base_dir&gt;/logs/</code>. Use <code>log_file</code> when several runs should append to a
+specific shared log:</p>
+<div class="language-python highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">logging_settings</span> <span class="o">=</span> <span class="p">{</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>    <span class="s2">&quot;base_dir&quot;</span><span class="p">:</span> <span class="s2">&quot;runs/example_001&quot;</span><span class="p">,</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>    <span class="s2">&quot;log_file&quot;</span><span class="p">:</span> <span class="s2">&quot;simulation.log&quot;</span><span class="p">,</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="p">}</span>
+</code></pre></div>
+<p>The normal log records setup and run-level information: validated settings,
+network summary, boundary conditions, observation recorders, requested outputs,
+stop reason, final convergence totals, and stored result count. Timestep
+progress controlled by <code>print_info_interval</code> is printed to the console and is
+not written to the normal log. If the time history of convergence failures is
+needed, request <code>convergence_fails</code> in <code>outputs</code>.</p>
 
 
 

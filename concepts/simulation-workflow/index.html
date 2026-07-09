@@ -1119,6 +1119,10 @@ runs.</p>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="s2">&quot;dt_max&quot;</span><span class="p">:</span> <span class="mf">0.5</span><span class="p">,</span>
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="s2">&quot;t_max&quot;</span><span class="p">:</span> <span class="mf">100.0</span><span class="p">,</span>
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="p">}</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="n">logging_settings</span> <span class="o">=</span> <span class="p">{</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="s2">&quot;base_dir&quot;</span><span class="p">:</span> <span class="s2">&quot;runs/example_001&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="p">}</span>
 </code></pre></div>
 <h2 id="2-create-the-flowsimulation-object">2. Create the <code>FlowSimulation</code> object<a class="headerlink" href="#2-create-the-flowsimulation-object" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span> <span class="nn">openkarst.models</span> <span class="kn">import</span> <span class="n">FlowSimulation</span>
@@ -1128,8 +1132,12 @@ runs.</p>
 <a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">physical_properties</span><span class="o">=</span><span class="n">physical_properties</span><span class="p">,</span>
 <a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="n">solver_settings</span><span class="o">=</span><span class="n">solver_settings</span><span class="p">,</span>
 <a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="n">simulation_settings</span><span class="o">=</span><span class="n">simulation_settings</span><span class="p">,</span>
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="p">)</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    <span class="n">logging_settings</span><span class="o">=</span><span class="n">logging_settings</span><span class="p">,</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="p">)</span>
 </code></pre></div>
+<p>If <code>log_file</code> is not set, openKARST writes a timestamped log file to
+<code>&lt;base_dir&gt;/logs/</code>. The log records setup and final run diagnostics without
+duplicating timestep progress output.</p>
 <h2 id="3-set-initial-conditions">3. Set initial conditions<a class="headerlink" href="#3-set-initial-conditions" title="Permanent link">&para;</a></h2>
 <p>The initial flow-rate array has one entry per conduit. The initial water-depth
 array has one entry per node.</p>
