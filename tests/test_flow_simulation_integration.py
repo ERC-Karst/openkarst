@@ -3,6 +3,7 @@ import openpnm as op
 import pytest
 
 from openkarst.models import FlowSimulation, UnconfinedReservoir
+from openkarst.models.hydraulics import compute_churchill_friction_factor
 from openkarst.network_generation import compute_conduit_lengths
 
 
@@ -195,6 +196,37 @@ def test_flow_simulation_defaults_to_analytical_geometry_backend(tmp_path):
     assert flow.settings.geometry.table_points == 100
     assert flow.settings.geometry.interpolation_method == "linear"
     assert not hasattr(flow, "geometry_backend")
+
+
+def test_hybrid_equivalent_manning_uses_full_hydraulic_radius(tmp_path):
+    network = _small_network()
+    network["throat.diameters"] = np.array([0.5, 1.0, 2.0, 4.0], dtype=float)
+    network["throat.epsilon"] = np.full(network.Nt, 0.003, dtype=float)
+
+    flow = _small_flow_simulation(
+        tmp_path,
+        physical_properties={"friction_model": "hybrid"},
+        network=network,
+    )
+
+    f = compute_churchill_friction_factor(
+        1e7,
+        flow.conduit_epsilon,
+        flow.full_hydraulic_diameters,
+    )
+    expected = np.sqrt(
+        f
+        * flow.full_hydraulic_radii**(1 / 3)
+        / (8 * flow.settings.physical.gravity)
+    )
+    old_formula = (
+        np.sqrt(f)
+        / np.sqrt(8 * flow.settings.physical.gravity)
+        * (0.5 * flow.conduit_diameters)**(1 / 3)
+    )
+
+    np.testing.assert_allclose(flow.conduit_manning, expected)
+    assert not np.allclose(flow.conduit_manning, old_formula)
 
 
 def test_steep_slope_correction_projects_free_surface_depth_gradient_only(tmp_path):

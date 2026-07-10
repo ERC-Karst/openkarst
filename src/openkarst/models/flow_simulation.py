@@ -583,18 +583,18 @@ class FlowSimulation:
             self.Re_conduit = np.zeros(self.network.Nt, dtype=float)
             
             # Compute equivalent Manning coefficient at f(epsilon, Re->infty)
-            # This is the equivalent Manning coefficient used for pressurized conduits
+            # for the free-surface Manning branch used by the hybrid model.
             if self.settings.physical.friction_model == 'hybrid':
                 RE_INFTY = 1e7
                 f = compute_churchill_friction_factor(
                     RE_INFTY,
                     self.conduit_epsilon,
-                    self.conduit_diameters,
+                    self.full_hydraulic_diameters,
                 )
-                self.conduit_manning = (
-                1 / (np.sqrt(8 * self.settings.physical.gravity)) 
-                * np.sqrt(f) 
-                * (0.5 * self.conduit_diameters)**(1 / 3)
+                self.conduit_manning = np.sqrt(
+                    f
+                    * self.full_hydraulic_radii**(1 / 3)
+                    / (8 * self.settings.physical.gravity)
                 )
             else:
                 self.conduit_manning = np.zeros(self.network.Nt, dtype=float)
