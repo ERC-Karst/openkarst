@@ -23,10 +23,25 @@ def _server_url(host, port):
     return f"http://{browser_host}:{port}/"
 
 
-def _run_dash_server(app, host, port):
+def _run_dash_server(app, host, port, suppress_jupyter_display=False):
     """Run a Dash server with options that work in background threads."""
     run = app.run if hasattr(app, "run") else app.run_server
-    run(host=host, port=port, debug=False, use_reloader=False)
+    kwargs = {
+        "host": host,
+        "port": port,
+        "debug": False,
+        "use_reloader": False,
+    }
+
+    if suppress_jupyter_display:
+        try:
+            run(**kwargs, jupyter_mode="external")
+        except TypeError as exc:
+            if "jupyter_mode" not in str(exc):
+                raise
+            run(**kwargs)
+    else:
+        run(**kwargs)
 
 
 def _show_colab_iframe(port, iframe_height):
@@ -114,7 +129,7 @@ def launch_openkarst_viewer(
 
     thread = threading.Thread(
         target=_run_dash_server,
-        args=(app, host, port),
+        args=(app, host, port, mode == "colab"),
         daemon=True,
     )
     thread.start()
